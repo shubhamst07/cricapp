@@ -91,25 +91,21 @@ class CricketDataService
     public function getCurrentMatches(): array
     {
         if ($this->provider === 'local') {
-            $raw = Cache::remember($this->cacheKey('current_matches'), $this->currentMatchesTtl, function () {
-                try {
-                    $response = Http::timeout(5)->get("{$this->localUrl}/matches");
-                    if ($response->successful()) {
-                        return $response->json();
+            try {
+                $response = Http::timeout(2)->get("{$this->localUrl}/matches");
+                if ($response->successful()) {
+                    $raw = $response->json();
+                    if ($raw && isset($raw['data']) && is_array($raw['data']) && !empty($raw['data'])) {
+                        return $this->normalizeMatches($raw);
                     }
-                } catch (\Throwable $e) {
-                    // ignore and try fallback
                 }
-                return null;
-            });
-
-            if ($raw && isset($raw['data']) && is_array($raw['data']) && !empty($raw['data'])) {
-                return $this->normalizeMatches($raw);
+            } catch (\Throwable $e) {
+                // ignore and try fallback
             }
         }
 
-        // CricAPI fallback
-        $raw = $this->get('currentMatches', ['offset' => 0], $this->currentMatchesTtl, $this->cacheKey('current_matches'));
+        // CricAPI provider or fallback
+        $raw = $this->get('currentMatches', ['offset' => 0], $this->currentMatchesTtl, $this->cacheKey('cricapi_current_matches'));
         return $this->normalizeMatches($raw);
     }
 
