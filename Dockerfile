@@ -6,7 +6,7 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Stage 2: PHP Application
+# Stage 2: PHP Application + Python Cricbuzz Score Engine
 FROM richarvey/nginx-php-fpm:latest
 
 WORKDIR /var/www/html
@@ -16,6 +16,10 @@ COPY --from=node-builder /app/public/build ./public/build
 # Copy Nginx configuration directly
 RUN cp conf/nginx/nginx-site.conf /etc/nginx/sites-available/default.conf && \
     cp conf/nginx/nginx-site.conf /etc/nginx/sites-enabled/default.conf
+
+# Install Python & Cricbuzz Engine dependencies
+RUN apk add --no-cache python3 py3-pip py3-lxml py3-beautifulsoup4 py3-requests py3-pydantic && \
+    pip install --no-cache-dir --break-system-packages fastapi uvicorn httpx
 
 # Image configuration variables
 ENV SKIP_COMPOSER 0
