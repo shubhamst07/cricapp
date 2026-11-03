@@ -131,8 +131,11 @@ export default function LiveScoresApp({
             const teamsMatch = Array.isArray(match.teams)
                 ? match.teams.some(t => (t || '').toLowerCase().includes(searchQuery.toLowerCase()))
                 : false;
+            const playersMatch = Array.isArray(match.players)
+                ? match.players.some(p => (p || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                : false;
 
-            const matchesSearch = !searchQuery || nameMatch || venueMatch || seriesMatch || teamsMatch;
+            const matchesSearch = !searchQuery || nameMatch || venueMatch || seriesMatch || teamsMatch || playersMatch;
             if (!matchesSearch) return false;
 
             if (selectedFormat !== 'all') {
@@ -222,7 +225,7 @@ export default function LiveScoresApp({
                         <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                         <input
                             type="text"
-                            placeholder="Search team, tournament, venue..."
+                            placeholder="Search team, tournament, player, or venue..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-10 pr-9 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition"
@@ -660,7 +663,22 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
             <div className="p-5">
                 {/* Header Tag Row */}
                 <div className="flex items-center justify-between mb-2.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {match.is_network_match && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                ⭐ My Network
+                            </span>
+                        )}
+                        {match.is_local && !match.is_network_match && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200">
+                                🏏 Community
+                            </span>
+                        )}
+                        {match.stream_url && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                                🎥 Live Stream
+                            </span>
+                        )}
                         {isLive && (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black bg-rose-50 text-rose-700 border border-rose-200">
                                 <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
@@ -790,10 +808,10 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                 </button>
 
                 <a
-                    href={`/live-scores/${match.id}`}
+                    href={match.is_local ? (match.match_url || `/matches/${match.local_id || match.id.replace('local_', '')}`) : `/live-scores/${match.id}`}
                     className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-xs font-bold transition group-hover:bg-indigo-600 group-hover:text-white"
                 >
-                    Match Center
+                    <span>{match.is_local ? 'View Scorecard 📊' : 'Match Center'}</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                 </a>
             </div>

@@ -3,11 +3,14 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\MatchController;
 use App\Http\Controllers\LiveScoreController;
+use App\Http\Controllers\GroundController;
+use App\Http\Controllers\UmpireController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LiveScoreController::class, 'index'])->name('home');
 Route::get('/live-scores', [LiveScoreController::class, 'index'])->name('live-scores.index');
 Route::get('/live-scores/{matchId}', [LiveScoreController::class, 'show'])->name('live-scores.show');
+Route::view('/offline', 'offline')->name('offline');
 
 Route::get('/dashboard', [MatchController::class, 'dashboard'])->name('dashboard');
 
@@ -17,6 +20,10 @@ Route::get('/profile/{id}', [ProfileController::class, 'show'])->name('profile.u
 
 // Public CricHeroes Matches Arena (Index)
 Route::get('/matches', [MatchController::class, 'index'])->name('matches.index');
+
+// Public Grounds & Umpires Hub
+Route::get('/grounds', [GroundController::class, 'index'])->name('grounds.index');
+Route::get('/umpires', [UmpireController::class, 'index'])->name('umpires.index');
 
 Route::middleware('auth')->group(function () {
     Route::post('/profile/update', [ProfileController::class, 'update'])->name('profile.update');
@@ -37,9 +44,28 @@ Route::middleware('auth')->group(function () {
     Route::post('/matches/{match}/scores', [MatchController::class, 'storeScore'])->name('matches.scores.store');
     Route::put('/matches/{match}/scores/{score}', [MatchController::class, 'updateScore'])->name('matches.scores.update');
     Route::delete('/matches/{match}/scores/{score}', [MatchController::class, 'destroyScore'])->name('matches.scores.destroy');
+    Route::post('/matches/{match}/rematch', [MatchController::class, 'rematch'])->name('matches.rematch');
+
+    // Grounds Management & Booking
+    Route::get('/grounds/create', [GroundController::class, 'create'])->name('grounds.create');
+    Route::post('/grounds', [GroundController::class, 'store'])->name('grounds.store');
+    Route::post('/grounds/{ground}/book', [GroundController::class, 'book'])->name('grounds.book');
+    Route::patch('/ground-bookings/{booking}/status', [GroundController::class, 'updateBookingStatus'])->name('grounds.bookings.status');
+
+    // Umpires Official Registration & Booking
+    Route::get('/umpires/register', [UmpireController::class, 'register'])->name('umpires.register');
+    Route::post('/umpires/profile', [UmpireController::class, 'storeProfile'])->name('umpires.profile.store');
+    Route::post('/umpires/{umpire}/book', [UmpireController::class, 'book'])->name('umpires.book');
+    Route::patch('/umpire-bookings/{booking}/status', [UmpireController::class, 'updateBookingStatus'])->name('umpires.bookings.status');
 });
+
+// Show individual ground & umpire (Must be after create/register)
+Route::get('/grounds/{ground}', [GroundController::class, 'show'])->name('grounds.show');
+Route::get('/umpires/{umpire}', [UmpireController::class, 'show'])->name('umpires.show');
 
 // Show individual match (MUST be after /matches/create so 'create' is not treated as a wildcard ID)
 Route::get('/matches/{match}', [MatchController::class, 'show'])->name('matches.show');
+Route::get('/matches/{match}/broadcast', [MatchController::class, 'broadcast'])->name('matches.broadcast');
+Route::get('/matches/{match}/broadcast/state', [MatchController::class, 'broadcastState'])->name('matches.broadcast.state');
 
 require __DIR__.'/auth.php';

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CricketMatch;
+use App\Models\MatchPlayer;
 use App\Models\MatchPost;
 use App\Models\PostComment;
 use App\Models\Score;
@@ -17,18 +18,61 @@ use Illuminate\View\View;
 class MatchController extends Controller
 {
     /**
-     * CricHeroes-style My Matches Center.
+     * CricHeroes-style Matches Center & Community Arena.
      */
     public function index(Request $request): View
     {
-        $userId = $request->user()?->id ?? Auth::id();
+        $user = $request->user() ?: Auth::user();
+        $userId = $user?->id;
 
-        $query = CricketMatch::with(['scores']);
-        if ($userId) {
-            $query->where('user_id', $userId);
+        // 1. Identify User's Associated & Network Matches (Creator, Squad Player, Followed Creators)
+        $userOwnedIds = [];
+        $userPlayingIds = [];
+        $followingMatchIds = [];
+        $networkMatchIds = [];
+
+        if ($user) {
+            $userOwnedIds = CricketMatch::where('user_id', $userId)->pluck('id')->toArray();
+
+            $userPlayingIds = MatchPlayer::where('user_id', $userId)
+                ->when($user->phone, fn($q) => $q->orWhere('player_phone', $user->phone))
+                ->orWhere('player_name', $user->name)
+                ->pluck('match_id')
+                ->unique()
+                ->toArray();
+
+            $followingIds = $user->following()->pluck('users.id')->toArray();
+            if (!empty($followingIds)) {
+                $followingMatchIds = CricketMatch::whereIn('user_id', $followingIds)->pluck('id')->toArray();
+            }
+
+            $networkMatchIds = array_values(array_unique(array_merge($userOwnedIds, $userPlayingIds, $followingMatchIds)));
         }
 
-        // Status tab filter
+        // 2. Query Builder with Eager Loading
+        $query = CricketMatch::with(['scores', 'user', 'players']);
+
+        // Scope filter: 'my' (only user network) vs 'all' (all matches across community)
+        $scope = $request->get('scope', 'all');
+        if ($scope === 'my' && $user) {
+            $query->whereIn('id', !empty($networkMatchIds) ? $networkMatchIds : [0]);
+        }
+
+        // 3. Search Filter: Tournament, Player Name, Ground/Venue, or Teams
+        $search = trim((string) $request->get('search', ''));
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('tournament_name', 'LIKE', "%{$search}%")
+                    ->orWhere('venue', 'LIKE', "%{$search}%")
+                    ->orWhere('team1_name', 'LIKE', "%{$search}%")
+                    ->orWhere('team2_name', 'LIKE', "%{$search}%")
+                    ->orWhereHas('players', function ($pq) use ($search) {
+                        $pq->where('player_name', 'LIKE', "%{$search}%");
+                    });
+            });
+        }
+
+        // 4. Status tab filter
         $tab = $request->get('tab', 'all');
         if ($tab === 'live') {
             $query->where('status', 'live');
@@ -38,20 +82,51 @@ class MatchController extends Controller
             $query->where('status', 'completed');
         }
 
+        // 5. Smart Hierarchy Ordering:
+        // Priority 1: User's owned matches
+        // Priority 2: User's squad matches & network matches
+        // Priority 3: Other community matches
+        // Within each tier: recent match_date and created_at
+        if ($user && !empty($networkMatchIds)) {
+            $ownedList = !empty($userOwnedIds) ? implode(',', $userOwnedIds) : '0';
+            $networkList = implode(',', $networkMatchIds);
+            $query->orderByRaw("CASE 
+                WHEN id IN ({$ownedList}) THEN 1 
+                WHEN id IN ({$networkList}) THEN 2 
+                ELSE 3 
+            END ASC");
+        }
+
         $matches = $query->orderByDesc('match_date')
             ->orderByDesc('created_at')
-            ->paginate(12);
+            ->paginate(12)
+            ->withQueryString();
 
-        // Overall stats for CricHeroes player/manager snapshot
-        $allUserMatches = $userId ? CricketMatch::where('user_id', $userId)->get() : collect([]);
+        // 6. Overall stats snapshot
+        $baseStatsQuery = CricketMatch::query();
+        if ($scope === 'my' && $user) {
+            $baseStatsQuery->whereIn('id', !empty($networkMatchIds) ? $networkMatchIds : [0]);
+        }
+
         $stats = [
-            'total' => $allUserMatches->count(),
-            'live' => $allUserMatches->where('status', 'live')->count(),
-            'upcoming' => $allUserMatches->where('status', 'scheduled')->count(),
-            'completed' => $allUserMatches->where('status', 'completed')->count(),
+            'total' => (clone $baseStatsQuery)->count(),
+            'live' => (clone $baseStatsQuery)->where('status', 'live')->count(),
+            'upcoming' => (clone $baseStatsQuery)->where('status', 'scheduled')->count(),
+            'completed' => (clone $baseStatsQuery)->where('status', 'completed')->count(),
+            'my_network_count' => count($networkMatchIds),
         ];
 
-        return view('matches.index', compact('matches', 'stats', 'tab'));
+        return view('matches.index', compact(
+            'matches',
+            'stats',
+            'tab',
+            'scope',
+            'search',
+            'userOwnedIds',
+            'userPlayingIds',
+            'followingMatchIds',
+            'networkMatchIds'
+        ));
     }
 
     /**
@@ -87,6 +162,7 @@ class MatchController extends Controller
             'team2_overs' => 'nullable|string|max:10',
             'match_result' => 'nullable|string|max:255',
             'player_of_match' => 'nullable|string|max:255',
+            'stream_url' => 'nullable|string|max:500',
         ]);
 
         $userId = $request->user()?->id ?? Auth::id();
@@ -108,6 +184,7 @@ class MatchController extends Controller
             'toss_decision' => $validated['toss_decision'] ?? null,
             'match_result' => $validated['match_result'] ?? null,
             'player_of_match' => $validated['player_of_match'] ?? null,
+            'stream_url' => $validated['stream_url'] ?? null,
         ]);
 
         // Create initial scores if provided or if match is live/completed
@@ -242,6 +319,72 @@ class MatchController extends Controller
     }
 
     /**
+     * In-App Live Camera Broadcast with TV Scoreboard Overlay (CricHeroes Signature Live).
+     */
+    public function broadcast(CricketMatch $match): View
+    {
+        $match->load(['scores', 'players.user']);
+        $isOwner = auth()->check() && (auth()->id() === $match->user_id);
+
+        $state = $match->live_state ?: [
+            'inning' => 1,
+            'batting_team_number' => 1,
+            'bowling_team_number' => 2,
+            'striker_id' => null,
+            'non_striker_id' => null,
+            'bowler_id' => null,
+            'this_over' => [],
+            'history' => [],
+        ];
+        $this->ensureActiveMatchStateValid($state, $match);
+
+        $striker = ($state['striker_id'] ?? null) ? \App\Models\MatchPlayer::find($state['striker_id']) : null;
+        $nonStriker = ($state['non_striker_id'] ?? null) ? \App\Models\MatchPlayer::find($state['non_striker_id']) : null;
+        $bowler = ($state['bowler_id'] ?? null) ? \App\Models\MatchPlayer::find($state['bowler_id']) : null;
+
+        $activeInningNum = $state['batting_team_number'] ?? 1;
+        $score1 = $match->getScoreForTeam($match->team1_name);
+        $score2 = $match->getScoreForTeam($match->team2_name);
+        $currentScoreObj = $activeInningNum == 1 ? $score1 : $score2;
+
+        return view('matches.broadcast', compact('match', 'state', 'striker', 'nonStriker', 'bowler', 'score1', 'score2', 'currentScoreObj', 'activeInningNum', 'isOwner'));
+    }
+
+    /**
+     * Real-time Broadcast State API for dynamic overlay sync.
+     */
+    public function broadcastState(CricketMatch $match): JsonResponse
+    {
+        $match->load(['scores', 'players.user']);
+        $state = $match->live_state ?: [];
+        $striker = ($state['striker_id'] ?? null) ? \App\Models\MatchPlayer::find($state['striker_id']) : null;
+        $nonStriker = ($state['non_striker_id'] ?? null) ? \App\Models\MatchPlayer::find($state['non_striker_id']) : null;
+        $bowler = ($state['bowler_id'] ?? null) ? \App\Models\MatchPlayer::find($state['bowler_id']) : null;
+
+        $activeInningNum = $state['batting_team_number'] ?? 1;
+        $score1 = $match->getScoreForTeam($match->team1_name);
+        $score2 = $match->getScoreForTeam($match->team2_name);
+        $currentScore = $activeInningNum == 1 ? $score1 : $score2;
+
+        return response()->json([
+            'status' => 'success',
+            'match_status' => $match->status,
+            'match_result' => $match->match_result,
+            'active_inning' => $activeInningNum,
+            'team1_name' => $match->team1_name,
+            'team2_name' => $match->team2_name,
+            'total_overs' => $match->total_overs,
+            'score1' => $score1,
+            'score2' => $score2,
+            'current_score' => $currentScore,
+            'striker' => $striker,
+            'non_striker' => $nonStriker,
+            'bowler' => $bowler,
+            'this_over' => $state['this_over'] ?? [],
+        ]);
+    }
+
+    /**
      * Show the form for editing the specified match.
      */
     public function edit(CricketMatch $match): View
@@ -272,6 +415,7 @@ class MatchController extends Controller
             'toss_decision' => 'nullable|string|max:255',
             'match_result' => 'nullable|string|max:255',
             'player_of_match' => 'nullable|string|max:255',
+            'stream_url' => 'nullable|string|max:500',
         ]);
 
         $match->update($validated);
@@ -622,6 +766,75 @@ class MatchController extends Controller
             return $this->cricHeroesResponse($match, 'Nothing to undo.');
         }
 
+        // Action: Switch Innings (Move to 2nd Innings)
+        if ($action === 'switch_innings') {
+            $currentInning = $state['batting_team_number'] ?? 1;
+            $newInning = $currentInning == 1 ? 2 : 1;
+            $state['inning'] = $newInning;
+            $state['batting_team_number'] = $newInning;
+            $state['bowling_team_number'] = $newInning == 1 ? 2 : 1;
+            $state['striker_id'] = null;
+            $state['non_striker_id'] = null;
+            $state['bowler_id'] = null;
+            $state['this_over'] = [];
+            $state['needs_new_bowler'] = false;
+
+            $this->ensureActiveMatchStateValid($state, $match);
+
+            $match->update(['live_state' => $state]);
+
+            $battingTeamName = $newInning == 1 ? $match->team1_name : $match->team2_name;
+            $bowlingTeamName = $newInning == 1 ? $match->team2_name : $match->team1_name;
+
+            // Ensure current inning score completed
+            $prevScore = $match->scores()->where('inning_number', $currentInning)->first();
+            if ($prevScore && $prevScore->status !== 'completed') {
+                $prevScore->update(['status' => 'completed']);
+            }
+
+            // Ensure new inning score exists
+            $newScore = $match->scores()->firstOrCreate(
+                ['match_id' => $match->id, 'inning_number' => $newInning],
+                [
+                    'batting_team' => $battingTeamName,
+                    'runs' => 0,
+                    'wickets' => 0,
+                    'overs' => '0.0',
+                    'status' => 'live',
+                ]
+            );
+            if ($newScore->status !== 'live' && $match->status !== 'completed') {
+                $newScore->update(['status' => 'live']);
+            }
+
+            return $this->cricHeroesResponse($match, "Innings {$newInning} started! {$battingTeamName} batting 🏏");
+        }
+
+        // Match Overs & Completion checks
+        $totalMatchOvers = (int) ($match->total_overs ?: 20);
+        $maxBalls = $totalMatchOvers * 6;
+        $currentBalls = $this->getOversInBalls($score->overs);
+
+        // Check if match is already completed
+        if ($match->status === 'completed') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Match is already completed! 🏆',
+                'match_completed' => true,
+            ], 422);
+        }
+
+        // Check if current inning has already finished its total overs
+        if (!in_array($action, ['select_bowler', 'select_openers', 'switch_innings', 'undo'])) {
+            if ($currentBalls >= $maxBalls) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Innings {$score->inning_number} complete! Max overs limit ({$totalMatchOvers}.0 ov) reached.",
+                    'inning_completed' => true,
+                ], 422);
+            }
+        }
+
         // Validate state before scoring
         $this->ensureActiveMatchStateValid($state, $match);
 
@@ -630,11 +843,11 @@ class MatchController extends Controller
         $bowler = ($state['bowler_id'] ?? null) ? \App\Models\MatchPlayer::find($state['bowler_id']) : null;
 
         // CRITICAL SCORING VALIDATION: Reject scoring if bowler or batsmen are not selected
-        if (!in_array($action, ['select_bowler', 'select_openers', 'undo'])) {
+        if (!in_array($action, ['select_bowler', 'select_openers', 'switch_innings', 'undo'])) {
             if (!$bowler || $bowler->match_id !== $match->id || $bowler->team_number == $battingTeamNumber) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => '⚠️ Pehle bowling team se Bowler select karein!',
+                    'message' => '⚠️ Please select a Bowler from the bowling team first!',
                     'needs_new_bowler' => true,
                 ], 422);
             }
@@ -642,7 +855,7 @@ class MatchController extends Controller
             if (!empty($state['needs_new_bowler'])) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => '⚠️ Over pura ho gaya hai! Agle over ke liye Bowler select karein.',
+                    'message' => '⚠️ Over completed! Please select a Bowler for the next over.',
                     'needs_new_bowler' => true,
                 ], 422);
             }
@@ -650,7 +863,7 @@ class MatchController extends Controller
             if (!$striker || !$nonStriker || $striker->match_id !== $match->id || $nonStriker->match_id !== $match->id) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => '⚠️ Pehle Striker aur Non-Striker select karein!',
+                    'message' => '⚠️ Please select Striker and Non-Striker first!',
                     'needs_openers' => true,
                 ], 422);
             }
@@ -798,13 +1011,79 @@ class MatchController extends Controller
             }
         }
 
+        // Check for Innings Completion / Match Result
+        $newBalls = $this->getOversInBalls($score->overs);
+        $inningCompleted = false;
+        $matchCompleted = false;
+        $matchResultText = '';
+
+        $score1 = $match->scores()->where('inning_number', 1)->first();
+
+        if ($score->inning_number == 1) {
+            $isAllOut = $score->wickets >= 10 || !empty($state['all_out']);
+            if ($newBalls >= $maxBalls || $isAllOut) {
+                $inningCompleted = true;
+                $score->status = 'completed';
+                $score->save();
+            }
+        } elseif ($score->inning_number == 2) {
+            $target = ($score1 ? $score1->runs : 0) + 1;
+            $isAllOut = $score->wickets >= 10 || !empty($state['all_out']);
+
+            // Case A: Target Chased
+            if ($score->runs >= $target) {
+                $matchCompleted = true;
+                $wicketsLeft = max(1, 10 - $score->wickets);
+                $matchResultText = "{$match->team2_name} won by {$wicketsLeft} wickets";
+            }
+            // Case B: Overs Finished or All Out
+            elseif ($newBalls >= $maxBalls || $isAllOut) {
+                $matchCompleted = true;
+                if ($score->runs < ($score1 ? $score1->runs : 0)) {
+                    $margin = ($score1->runs) - $score->runs;
+                    $matchResultText = "{$match->team1_name} won by {$margin} runs";
+                } elseif ($score->runs == ($score1 ? $score1->runs : 0)) {
+                    $matchResultText = "Match Tied!";
+                }
+            }
+
+            if ($matchCompleted) {
+                $score->status = 'completed';
+                $score->save();
+                $match->status = 'completed';
+                $match->match_result = $matchResultText;
+                $match->save();
+            }
+        }
+
         $match->update(['live_state' => $state]);
+
+        $customMsg = $isWicket ? 'WICKET! ☝️' : ($runsScored == 6 ? 'SIX! 💥' : ($runsScored == 4 ? 'FOUR! 🏏' : 'Ball recorded! ⚡'));
+        if ($matchCompleted) {
+            $customMsg = "🏆 MATCH OVER! {$matchResultText}";
+        } elseif ($inningCompleted) {
+            $customMsg = "🏏 Innings 1 Complete! Target: " . (($score1 ? $score1->runs : 0) + 1);
+        }
 
         return $this->cricHeroesResponse(
             $match,
-            $isWicket ? 'WICKET! ☝️' : ($runsScored == 6 ? 'SIX! 💥' : ($runsScored == 4 ? 'FOUR! 🏏' : 'Ball recorded! ⚡')),
-            ['over_completed' => $overCompleted, 'wicket' => $isWicket]
+            $customMsg,
+            [
+                'over_completed' => $overCompleted,
+                'wicket' => $isWicket,
+                'inning_completed' => $inningCompleted,
+                'match_completed' => $matchCompleted,
+                'match_result' => $matchResultText,
+            ]
         );
+    }
+
+    public function getOversInBalls(string|float|null $overs): int
+    {
+        $parts = explode('.', (string) ($overs ?: '0.0'));
+        $ov = (int) ($parts[0] ?? 0);
+        $bl = (int) ($parts[1] ?? 0);
+        return ($ov * 6) + $bl;
     }
 
     protected function ensureActiveMatchStateValid(array &$state, CricketMatch $match): void
@@ -972,6 +1251,104 @@ class MatchController extends Controller
             'score' => $score,
             'match' => $match,
         ], $extra));
+    }
+
+    /**
+     * Create a fresh Rematch (copying teams, match settings, and both squads without stats).
+     */
+    public function rematch(Request $request, CricketMatch $match): RedirectResponse|JsonResponse
+    {
+        $this->authorizeMatch($match);
+        $match->load(['players']);
+
+        // 1. Create cloned match
+        $newMatch = CricketMatch::create([
+            'user_id' => Auth::id(),
+            'team1_name' => $match->team1_name,
+            'team2_name' => $match->team2_name,
+            'tournament_name' => $match->tournament_name ?? 'Friendly Match',
+            'match_type' => $match->match_type ?? 'T20',
+            'total_overs' => $match->total_overs ?? 20,
+            'ball_type' => $match->ball_type ?? 'Tennis Ball',
+            'venue' => $match->venue ?? 'Local Ground',
+            'match_date' => now()->toDateString(),
+            'status' => 'live',
+            'toss_decision' => null,
+            'match_result' => null,
+            'player_of_match' => null,
+            'stream_url' => $match->stream_url ?? null,
+        ]);
+
+        // 2. Create blank scores for Inning 1 and Inning 2
+        Score::create([
+            'match_id' => $newMatch->id,
+            'inning_number' => 1,
+            'batting_team' => $newMatch->team1_name,
+            'runs' => 0,
+            'wickets' => 0,
+            'overs' => '0.0',
+            'status' => 'live',
+        ]);
+
+        Score::create([
+            'match_id' => $newMatch->id,
+            'inning_number' => 2,
+            'batting_team' => $newMatch->team2_name,
+            'runs' => 0,
+            'wickets' => 0,
+            'overs' => '0.0',
+            'status' => 'scheduled',
+        ]);
+
+        // 3. Clone all squad players with reset match stats
+        foreach ($match->players as $p) {
+            MatchPlayer::create([
+                'match_id' => $newMatch->id,
+                'user_id' => $p->user_id,
+                'team_number' => $p->team_number,
+                'team_name' => $p->team_name,
+                'player_name' => $p->player_name,
+                'player_phone' => $p->player_phone,
+                'player_role' => $p->player_role,
+                'is_captain' => $p->is_captain,
+                'is_wicketkeeper' => $p->is_wicketkeeper,
+                'runs_scored' => 0,
+                'balls_faced' => 0,
+                'fours' => 0,
+                'sixes' => 0,
+                'dismissal' => 'not out',
+                'overs_bowled' => '0.0',
+                'maidens' => 0,
+                'runs_conceded' => 0,
+                'wickets_taken' => 0,
+            ]);
+        }
+
+        // 4. Initialize valid live state with openers & bowler for new match
+        $newMatch->load(['players']);
+        $state = [
+            'inning' => 1,
+            'batting_team_number' => 1,
+            'bowling_team_number' => 2,
+            'striker_id' => null,
+            'non_striker_id' => null,
+            'bowler_id' => null,
+            'this_over' => [],
+            'history' => [],
+        ];
+        $this->ensureActiveMatchStateValid($state, $newMatch);
+        $newMatch->update(['live_state' => $state]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Rematch created! Squads copied successfully 🏏',
+                'match' => $newMatch,
+                'redirect_url' => route('matches.show', $newMatch),
+            ]);
+        }
+
+        return redirect()->route('matches.show', $newMatch)->with('status', 'Rematch created! Both squads copied successfully 🏏');
     }
 
     /**

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#e11d48" />
+    </linearGradient>
+    <linearGradient id="ballGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000000" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Full bleed background for adaptive icon mask -->
+  <rect width="512" height="512" fill="url(#bgGrad)" />
+
+  <!-- Cricket Ball Circle inside safe zone -->
+  <g filter="url(#glow)">
+    <circle cx="256" cy="256" r="120" fill="url(#ballGrad)" />
+
+    <!-- Cricket Ball Seam Stitching (Curved) -->
+    <path d="M 195 160 C 240 215, 240 297, 195 352" fill="none" stroke="#e11d48" stroke-width="7" stroke-linecap="round" stroke-dasharray="7,5" />
+    <path d="M 317 160 C 272 215, 272 297, 317 352" fill="none" stroke="#e11d48" stroke-width="7" stroke-linecap="round" stroke-dasharray="7,5" />
+
+    <!-- Central Axis -->
+    <ellipse cx="256" cy="256" rx="45" ry="119" fill="none" stroke="#6366f1" stroke-width="5" stroke-dasharray="5,5" opacity="0.6" />
+    <line x1="137" y1="256" x2="375" y2="256" stroke="#6366f1" stroke-width="5" opacity="0.6" />
+  </g>
+
+  <!-- Live Pulse Dot in Top Right Safe Area -->
+  <circle cx="365" cy="145" r="18" fill="#22c55e" filter="url(#glow)" />
+  <circle cx="365" cy="145" r="26" fill="none" stroke="#22c55e" stroke-width="3" opacity="0.75" />
+</svg>

@@ -42,13 +42,106 @@
     searchedPlayer: null,
     searchNotFound: false,
     newPlayerName: '',
+    newPlayerPhone: '',
     newPlayerRole: 'All-Rounder',
     isCaptainTag: false,
     isWkTag: false,
+    selectedPlayerOfMatch: '{{ addslashes(old('player_of_match', $match->player_of_match ?? '')) }}',
+    customPlayerOfMatch: false,
+
+    init() {
+        this.$nextTick(() => {
+            this.syncPlayerOfMatchOptions();
+        });
+    },
+
+    syncPlayerOfMatchOptions() {
+        const select = this.$refs.playerOfMatchSelect;
+        if (!select) return;
+        const currentVal = (this.selectedPlayerOfMatch || '').trim();
+        
+        let html = '<option value="">-- Select Player of the Match (Optional) --</option>';
+        
+        const t1 = this.team1Squad || [];
+        if (t1.length > 0) {
+            html += `<optgroup label="${this.matchTeam1Name || 'Team 1'} Squad">`;
+            t1.forEach(p => {
+                const pName = (p.player_name || '').trim();
+                if (!pName) return;
+                const isSel = (pName.toLowerCase() === currentVal.toLowerCase()) ? 'selected' : '';
+                html += `<option value="${pName}" ${isSel}>${pName} (${this.matchTeam1Name || 'Team 1'} • ${p.player_role || 'Player'})</option>`;
+            });
+            html += `</optgroup>`;
+        }
+        
+        const t2 = this.team2Squad || [];
+        if (t2.length > 0) {
+            html += `<optgroup label="${this.matchTeam2Name || 'Team 2'} Squad">`;
+            t2.forEach(p => {
+                const pName = (p.player_name || '').trim();
+                if (!pName) return;
+                const isSel = (pName.toLowerCase() === currentVal.toLowerCase()) ? 'selected' : '';
+                html += `<option value="${pName}" ${isSel}>${pName} (${this.matchTeam2Name || 'Team 2'} • ${p.player_role || 'Player'})</option>`;
+            });
+            html += `</optgroup>`;
+        }
+
+        if (currentVal) {
+            const inT1 = t1.some(p => (p.player_name || '').trim().toLowerCase() === currentVal.toLowerCase());
+            const inT2 = t2.some(p => (p.player_name || '').trim().toLowerCase() === currentVal.toLowerCase());
+            if (!inT1 && !inT2) {
+                html += `<optgroup label="Other / Saved Player"><option value="${currentVal}" selected>${currentVal} (Selected)</option></optgroup>`;
+            }
+        }
+
+        select.innerHTML = html;
+        if (currentVal) {
+            select.value = currentVal;
+        }
+    },
+
+    get allSquadPlayers() {
+        const list = [];
+        const seen = new Set();
+        (this.team1Squad || []).forEach(p => {
+            const name = (p.player_name || '').trim();
+            if (name && !seen.has(name)) {
+                seen.add(name);
+                list.push({
+                    name: name,
+                    role: p.player_role || 'Batter',
+                    team: this.matchTeam1Name || 'Team 1',
+                    teamNum: 1
+                });
+            }
+        });
+        (this.team2Squad || []).forEach(p => {
+            const name = (p.player_name || '').trim();
+            if (name && !seen.has(name)) {
+                seen.add(name);
+                list.push({
+                    name: name,
+                    role: p.player_role || 'Batter',
+                    team: this.matchTeam2Name || 'Team 2',
+                    teamNum: 2
+                });
+            }
+        });
+        return list;
+    },
+
     toastMsg: '',
     showToast(msg) {
         this.toastMsg = msg;
         setTimeout(() => { this.toastMsg = ''; }, 3000);
+    },
+
+    openManualAdd(defaultName = '') {
+        this.searchedPlayer = null;
+        this.searchNotFound = true;
+        this.newPlayerName = defaultName || this.playerSearchQuery.trim();
+        this.newPlayerPhone = '';
+        this.newPlayerRole = 'All-Rounder';
     },
 
     // WhatsApp / Phone Player Lookup
@@ -71,9 +164,11 @@
                 this.searchedPlayer = data.player;
                 this.newPlayerName = data.player.name;
                 this.newPlayerRole = data.player.role || 'All-Rounder';
+                this.newPlayerPhone = data.player.phone || '';
             } else {
                 this.searchNotFound = true;
                 this.newPlayerName = isNaN(query) ? query : '';
+                this.newPlayerPhone = !isNaN(query) ? query : '';
             }
         } catch(e) {
             console.error(e);
@@ -90,9 +185,11 @@
             return;
         }
 
+        const phone = this.searchedPlayer ? this.searchedPlayer.phone : (this.newPlayerPhone.trim() || (!isNaN(this.playerSearchQuery.trim()) ? this.playerSearchQuery.trim() : null));
+
         const playerObj = {
             player_name: name,
-            player_phone: this.searchedPlayer ? this.searchedPlayer.phone : this.playerSearchQuery.trim(),
+            player_phone: phone,
             user_id: this.searchedPlayer ? this.searchedPlayer.user_id : null,
             player_role: this.searchedPlayer ? this.searchedPlayer.role : this.newPlayerRole,
             is_captain: this.isCaptainTag,
@@ -109,11 +206,14 @@
             this.showToast(name + ' added to ' + (this.matchTeam2Name || 'Team 2') + '! 🏏');
         }
 
+        this.syncPlayerOfMatchOptions();
+
         // Reset
         this.searchedPlayer = null;
         this.searchNotFound = false;
         this.playerSearchQuery = '';
         this.newPlayerName = '';
+        this.newPlayerPhone = '';
         this.isCaptainTag = false;
         this.isWkTag = false;
     },
@@ -124,6 +224,7 @@
         } else {
             this.team2Squad.splice(index, 1);
         }
+        this.syncPlayerOfMatchOptions();
     }
 }">
     <!-- Floating Toast -->
@@ -217,10 +318,95 @@
                            class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
                 </div>
 
+                <!-- Player of the Match Dropdown (Populated Dynamically from Both Teams) -->
                 <div>
-                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Player of the Match (Optional)</label>
-                    <input type="text" name="player_of_match" value="{{ old('player_of_match', $match->player_of_match) }}"
-                           class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                            🏆 Player of the Match (Optional)
+                        </label>
+                        <button type="button" 
+                                @click="customPlayerOfMatch = !customPlayerOfMatch"
+                                class="text-[11px] text-amber-400 hover:text-amber-300 font-semibold underline">
+                            <span x-text="customPlayerOfMatch ? '▾ Choose from Squads Dropdown' : '✍️ Type custom name'"></span>
+                        </button>
+                    </div>
+
+                    <!-- Dropdown Mode -->
+                    <div x-show="!customPlayerOfMatch">
+                        <div class="relative">
+                            <select name="player_of_match" 
+                                    x-ref="playerOfMatchSelect"
+                                    x-model="selectedPlayerOfMatch"
+                                    @change="selectedPlayerOfMatch = $event.target.value"
+                                    class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none appearance-none pr-10">
+                                <option value="">-- Select Player of the Match (Optional) --</option>
+
+                                @if($match->player_of_match && !$match->players->contains(fn($p) => strtolower($p->player_name) === strtolower($match->player_of_match)))
+                                    <optgroup label="Saved / Custom">
+                                        <option value="{{ $match->player_of_match }}" selected>{{ $match->player_of_match }} (Selected)</option>
+                                    </optgroup>
+                                @endif
+
+                                @if($match->team1Players->isNotEmpty())
+                                    <optgroup label="{{ $match->team1_name }} Squad">
+                                        @foreach($match->team1Players as $p)
+                                            <option value="{{ $p->player_name }}" {{ old('player_of_match', $match->player_of_match) === $p->player_name ? 'selected' : '' }}>
+                                                {{ $p->player_name }} ({{ $match->team1_name }} • {{ $p->player_role ?: 'Player' }})
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
+
+                                @if($match->team2Players->isNotEmpty())
+                                    <optgroup label="{{ $match->team2_name }} Squad">
+                                        @foreach($match->team2Players as $p)
+                                            <option value="{{ $p->player_name }}" {{ old('player_of_match', $match->player_of_match) === $p->player_name ? 'selected' : '' }}>
+                                                {{ $p->player_name }} ({{ $match->team2_name }} • {{ $p->player_role ?: 'Player' }})
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400 text-xs">
+                                ▼
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+                            <span>Players from both squads are available in the dropdown.</span>
+                            <span class="text-emerald-400 font-mono font-bold" x-text="((team1Squad.length + team2Squad.length)) + ' players in squads'"></span>
+                        </p>
+                    </div>
+
+                    <!-- Custom Text Input Mode -->
+                    <div x-show="customPlayerOfMatch" style="display: none;">
+                        <input type="text" 
+                               :name="customPlayerOfMatch ? 'player_of_match' : ''"
+                               x-model="selectedPlayerOfMatch" 
+                               placeholder="Enter custom Player of the Match name"
+                               class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Live Stream Link (YouTube / Facebook / Twitch) -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center justify-between">
+                        <span class="flex items-center gap-1.5">
+                            <span class="text-red-500">🔴</span>
+                            <span>Live Stream Link (YouTube Live / Facebook Live / Twitch)</span>
+                        </span>
+                        <span class="text-[10px] text-slate-400 lowercase font-normal">optional</span>
+                    </label>
+                    <div class="relative">
+                        <input type="url" name="stream_url" value="{{ old('stream_url', $match->stream_url) }}"
+                               placeholder="e.g. https://www.youtube.com/watch?v=... or https://facebook.com/.../videos/..."
+                               class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none pl-9">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-red-500 text-sm">
+                            🎥
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1">
+                        Paste YouTube Live or Facebook Live stream URL here. Viewers can watch the live stream with real-time scoreboard graphics.
+                    </p>
                 </div>
 
                 <!-- ============================================================== -->
@@ -266,9 +452,14 @@
                                    class="w-full bg-slate-950 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                         </div>
                         <button type="button" @click="searchPlayerWhatsApp()" 
-                                class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 transition flex items-center gap-1.5">
+                                class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 transition flex items-center gap-1.5 shadow-md">
                             <span x-show="!isSearchingPlayer">Fetch Record 🔍</span>
                             <span x-show="isSearchingPlayer" class="animate-spin text-xs">⏳</span>
+                        </button>
+                        <button type="button" @click="openManualAdd(playerSearchQuery)"
+                                title="Directly add a new player without searching directory"
+                                class="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white font-bold text-xs shrink-0 transition flex items-center gap-1 border border-white/10">
+                            <span>+ Manual Add</span>
                         </button>
                     </div>
 
@@ -326,19 +517,36 @@
                                     + Add to Playing XI
                                 </button>
                             </div>
+
+                            <!-- Option to add a fresh player instead of matched profile -->
+                            <div class="pt-2 border-t border-white/10 flex items-center justify-between text-xs">
+                                <span class="text-slate-400 text-[11px]">
+                                    Want to add a different "<span class="text-white font-bold" x-text="playerSearchQuery || searchedPlayer.name"></span>"?
+                                </span>
+                                <button type="button" 
+                                        @click="openManualAdd(playerSearchQuery || searchedPlayer.name)"
+                                        class="text-amber-400 hover:text-amber-300 font-bold underline text-[11px] flex items-center gap-1 transition">
+                                    <span>➕ Create new player instead</span>
+                                </button>
+                            </div>
                         </div>
                     </template>
 
-                    <!-- 2. Player Not Found in DB: Quick Add Card -->
+                    <!-- 2. Player Not Found in DB / Quick Manual Add Card -->
                     <template x-if="searchNotFound">
                         <div class="p-3.5 rounded-xl bg-white/5 border border-amber-500/30 animate-in fade-in space-y-2 text-xs">
-                            <div class="flex items-center gap-1.5 text-amber-300 font-bold">
-                                <span>⚡</span>
-                                <span>New Player! Not registered yet. Enter details to add to this squad:</span>
+                            <div class="flex items-center justify-between text-amber-300 font-bold">
+                                <div class="flex items-center gap-1.5">
+                                    <span>⚡</span>
+                                    <span>New Player: Enter details to add to this squad:</span>
+                                </div>
+                                <button type="button" @click="searchNotFound = false" class="text-slate-400 hover:text-white text-xs">✕ Cancel</button>
                             </div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <input type="text" x-model="newPlayerName" placeholder="Player Full Name" 
-                                       class="bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <input type="text" x-model="newPlayerName" placeholder="Player Full Name *" 
+                                       class="bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
+                                <input type="text" x-model="newPlayerPhone" placeholder="Phone/WhatsApp (Optional)" 
+                                       class="bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
                                 <select x-model="newPlayerRole" class="bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white">
                                     <option value="Top-Order Batter">Top-Order Batter</option>
                                     <option value="Middle-Order Batter">Middle-Order Batter</option>
@@ -349,6 +557,22 @@
                                 </select>
                             </div>
                             <div class="flex items-center justify-between pt-1">
+                                <div class="flex items-center gap-3 text-slate-300">
+                                    <label class="flex items-center gap-1 cursor-pointer">
+                                        <input type="checkbox" x-model="isCaptainTag" class="rounded bg-slate-900 border-white/20 text-red-600">
+                                        <span>Captain (C)</span>
+                                    </label>
+                                    <label class="flex items-center gap-1 cursor-pointer">
+                                        <input type="checkbox" x-model="isWkTag" class="rounded bg-slate-900 border-white/20 text-amber-500">
+                                        <span>WK</span>
+                                    </label>
+                                </div>
+                                <button type="button" @click="addPlayerToSquad()"
+                                        class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md transition">
+                                    + Add to Playing XI
+                                </button>
+                            </div>
+                        </div>
                                 <div class="flex items-center gap-3 text-slate-300">
                                     <label class="flex items-center gap-1 cursor-pointer">
                                         <input type="checkbox" x-model="isCaptainTag" class="rounded bg-slate-900 border-white/20 text-red-600">

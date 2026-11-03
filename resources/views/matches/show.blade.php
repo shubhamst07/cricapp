@@ -20,7 +20,17 @@
         </div>
 
         <div class="flex items-center gap-2">
+            <a href="{{ route('matches.broadcast', $match) }}" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-red-600/30">
+                <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                <span>{{ $isOwner ? 'Go Live 🎥' : 'Watch Broadcast 📺' }}</span>
+            </a>
             @if($isOwner)
+                <form method="POST" action="{{ route('matches.rematch', $match) }}" onsubmit="return confirm('Start Rematch with identical squads? 🏏');" class="inline">
+                    @csrf
+                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <span>Rematch 🔁</span>
+                    </button>
+                </form>
                 <a href="{{ route('matches.edit', $match) }}" class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition">
                     Match Settings
                 </a>
@@ -90,6 +100,13 @@
         return true;
     })->values();
     $defaultNewBowlerId = $availableBowlers->first()?->id ?? ($bowlingSquad->first()?->id ?? '');
+
+    $totalMatchOvers = (int) ($match->total_overs ?: 20);
+    $ov1Parts = explode('.', (string) ($score1 ? ($score1->overs ?? '0.0') : '0.0'));
+    $ballsIn1 = ((int) ($ov1Parts[0] ?? 0) * 6) + (int) ($ov1Parts[1] ?? 0);
+    $isInning1Done = ($score1 && ($score1->status === 'completed' || $ballsIn1 >= ($totalMatchOvers * 6) || $score1->wickets >= 10));
+
+    $isMatchDone = ($match->status === 'completed' || !empty($match->match_result));
 @endphp
 
 <div class="py-8 bg-slate-900 min-h-screen text-slate-100 font-sans" x-data="{
@@ -127,23 +144,23 @@
     // CricHeroes Ball-By-Ball Action Dispatcher
     async recordBallAction(action, payload = {}) {
         // Exclude setup/meta actions from active bowler and batsman requirement
-        const isSetupAction = ['select_bowler', 'select_openers', 'undo'].includes(action);
+        const isSetupAction = ['select_bowler', 'select_openers', 'switch_innings', 'undo'].includes(action);
 
         if (!isSetupAction) {
             // 1. Strict Bowler Check
             if (!this.liveBowler || !this.liveBowler.id) {
-                this.showToast('⚠️ Pehle Bowler select karein!');
+                this.showToast('⚠️ Please select a Bowler first!');
                 this.bowlerModalOpen = true;
                 return;
             }
             if (this.needsNewBowler) {
-                this.showToast('⚠️ Over pura ho gaya hai! Agle over ke liye Bowler select karein.');
+                this.showToast('⚠️ Over completed! Please select a Bowler for the next over.');
                 this.bowlerModalOpen = true;
                 return;
             }
             // 2. Strict Batsmen Check
             if (!this.liveStriker || !this.liveStriker.id || !this.liveNonStriker || !this.liveNonStriker.id) {
-                this.showToast('⚠️ Pehle Striker aur Non-Striker select karein!');
+                this.showToast('⚠️ Please select Striker and Non-Striker first!');
                 this.openersModalOpen = true;
                 return;
             }
@@ -431,7 +448,17 @@
             <div class="pt-4 border-t border-white/10 flex flex-wrap items-center justify-between text-xs gap-3">
                 <div class="font-bold text-amber-300 flex items-center gap-2">
                     <span>⚡</span>
-                    <span>{{ $match->match_result ?: ($match->toss_decision ?: 'Match in progress') }}</span>
+                    <span>
+                        @if(!empty($match->match_result))
+                            {{ $match->match_result }}
+                        @elseif($activeInningNum == 2)
+                            {{ $match->team2_name }} need {{ max(0, (($score1->runs ?? 0) + 1) - ($score2->runs ?? 0)) }} runs to win (Target: {{ ($score1->runs ?? 0) + 1 }})
+                        @elseif($isInning1Done)
+                            1st Innings completed • {{ $match->team2_name }} need {{ ($score1->runs ?? 0) + 1 }} runs to win
+                        @else
+                            {{ $match->toss_decision ?: 'Match in progress' }}
+                        @endif
+                    </span>
                 </div>
                 <div class="text-slate-400 flex items-center gap-1.5">
                     <span>📍</span>
@@ -446,6 +473,55 @@
                 </div>
             @endif
         </div>
+
+        <!-- ============================================== -->
+        <!-- LIVE STREAM BROADCAST (YOUTUBE / FACEBOOK) -->
+        <!-- ============================================== -->
+        @if($match->stream_url)
+            <div class="bg-[#131b2e] border border-red-500/30 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden" x-data="{ streamOpen: true }">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10 text-xs">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                        <span class="font-black text-red-500 uppercase tracking-wider">LIVE STREAM BROADCAST</span>
+                        <span class="text-slate-400">• YouTube / Facebook</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a href="{{ route('matches.broadcast', $match) }}" 
+                           class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow-md shadow-red-600/30">
+                            <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                            <span>TV Graphics Overlay 📺</span>
+                        </a>
+                        <button type="button" @click="streamOpen = !streamOpen" 
+                                class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-300 transition">
+                            <span x-text="streamOpen ? 'Hide Video 🔼' : 'Watch Stream 🔽'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div x-show="streamOpen" x-transition class="mt-4">
+                    @if($match->embed_stream_url)
+                        <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
+                            <iframe src="{{ $match->embed_stream_url }}" 
+                                    class="w-full h-full border-0" 
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                    allowfullscreen>
+                            </iframe>
+                        </div>
+                    @else
+                        <div class="p-4 rounded-xl bg-white/5 border border-white/10 flex flex-wrap items-center justify-between gap-3">
+                            <div class="text-xs text-slate-300">
+                                <span>Stream Link:</span>
+                                <a href="{{ $match->stream_url }}" target="_blank" class="text-blue-400 underline font-mono break-all ml-1.5">{{ $match->stream_url }}</a>
+                            </div>
+                            <a href="{{ $match->stream_url }}" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex items-center gap-1">
+                                <span>Watch on External App</span>
+                                <span>↗</span>
+                            </a>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        @endif
 
         <!-- ============================================================== -->
         <!-- CRICHEROES AUTHENTIC LIVE SCORING ARENA (PITCH & KEYPAD) -->
@@ -591,8 +667,69 @@
                     </div>
                 </div>
 
-                <!-- CricHeroes Signature Scorer Touch Keypad -->
-                <div class="space-y-3">
+                @if($isMatchDone)
+                    <!-- Match Completed Trophy Card -->
+                    <div class="p-6 sm:p-8 rounded-2xl bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-emerald-500/15 border-2 border-amber-500/40 text-center space-y-3 shadow-2xl">
+                        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/20 text-amber-300 text-3xl mb-1 shadow-inner">
+                            🏆
+                        </div>
+                        <h3 class="text-xl sm:text-2xl font-black text-white tracking-wide">MATCH COMPLETED</h3>
+                        <p class="text-base sm:text-lg font-bold text-amber-300">{{ $match->match_result ?: 'Match Finished' }}</p>
+                        <div class="pt-2 flex flex-wrap items-center justify-center gap-3">
+                            <span class="px-3.5 py-1.5 rounded-full bg-white/10 text-slate-300 text-xs font-semibold">Total Overs: {{ $match->total_overs }}</span>
+                            <span class="px-3.5 py-1.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30">Official Result Recorded</span>
+                        </div>
+                        @if($isOwner)
+                            <div class="pt-3">
+                                <form method="POST" action="{{ route('matches.rematch', $match) }}" onsubmit="return confirm('Start a fresh Rematch with identical squads? 🏏');">
+                                    @csrf
+                                    <button type="submit" 
+                                            class="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-xl shadow-emerald-500/25 transition inline-flex items-center gap-2">
+                                        <span>Start Rematch (Same Squads) 🔁</span>
+                                    </button>
+                                </form>
+                                <p class="text-[11px] text-slate-400 mt-1.5">No need to re-select players. A fresh match starts immediately with both squads ready.</p>
+                            </div>
+                        @endif
+                    </div>
+                @elseif($activeInningNum == 1 && $isInning1Done)
+                    <!-- Innings 1 Break Card with Target & Start 2nd Innings button -->
+                    <div class="p-6 sm:p-8 rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/40 to-slate-800/80 border-2 border-blue-500/50 text-center space-y-4 shadow-2xl">
+                        <div class="flex items-center justify-center gap-2">
+                            <span class="px-3.5 py-1.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-black uppercase tracking-wider">
+                                🔔 1st Innings Completed ({{ $score1->overs ?? '0.0' }} / {{ $match->total_overs }} Ov)
+                            </span>
+                        </div>
+
+                        <div>
+                            <div class="text-xs uppercase font-bold text-slate-400">{{ $match->team1_name }} Final Score</div>
+                            <div class="text-3xl sm:text-4xl font-black font-mono text-white mt-1">
+                                {{ $score1->runs ?? 0 }}/{{ $score1->wickets ?? 0 }}
+                                <span class="text-sm sm:text-base font-sans font-normal text-slate-400">({{ $score1->overs ?? '0.0' }} ov)</span>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-xl bg-black/40 border border-white/10 inline-block px-8">
+                            <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Target for {{ $match->team2_name }}</div>
+                            <div class="text-2xl sm:text-3xl font-black text-amber-400 font-mono mt-1">
+                                {{ ($score1->runs ?? 0) + 1 }} runs in {{ $match->total_overs }} overs
+                            </div>
+                        </div>
+
+                        <div class="pt-2">
+                            <button type="button" 
+                                    @click="recordBallAction('switch_innings')"
+                                    :disabled="isProcessingBall"
+                                    class="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-slate-950 font-black text-sm uppercase tracking-wider shadow-xl shadow-emerald-500/25 transition inline-flex items-center justify-center gap-2">
+                                <span>Start 2nd Innings</span>
+                                <span class="text-lg">➔</span>
+                            </button>
+                            <p class="text-xs text-slate-400 mt-2">Click to start {{ $match->team2_name }}'s batting and scorecard.</p>
+                        </div>
+                    </div>
+                @else
+                    <!-- CricHeroes Signature Scorer Touch Keypad -->
+                    <div class="space-y-3">
                     <!-- Missing Bowler Warning Banner -->
                     <div x-cloak x-show="!liveBowler || !liveBowler.id" 
                          @click="bowlerModalOpen = true"
@@ -601,7 +738,7 @@
                             <span class="text-xl animate-bounce">⚠️</span>
                             <div>
                                 <div class="text-white font-black text-sm">Bowler Not Selected!</div>
-                                <div class="text-amber-300/80 text-[11px]">Bina bowler chune ball score nahi ki ja sakti. Yaha click karke bowler chunein.</div>
+                                <div class="text-amber-300/80 text-[11px]">Cannot score ball without a bowler. Click here to select a bowler.</div>
                             </div>
                         </div>
                         <span class="px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs shadow-md">Select Bowler 🎯</span>
@@ -614,8 +751,8 @@
                         <div class="flex items-center gap-2.5">
                             <span class="text-xl animate-bounce">🎯</span>
                             <div>
-                                <div class="text-white font-black text-sm">Over Complete! Naya Bowler Chunein</div>
-                                <div class="text-blue-200/80 text-[11px]">Agle over ke liye bowling squad me se bowler select karein.</div>
+                                <div class="text-white font-black text-sm">Over Complete! Select Next Bowler</div>
+                                <div class="text-blue-200/80 text-[11px]">Select a bowler from the bowling squad for the next over.</div>
                             </div>
                         </div>
                         <span class="px-3.5 py-1.5 rounded-xl bg-blue-500 text-white font-black text-xs shadow-md">Choose Bowler 🎯</span>
@@ -688,6 +825,7 @@
                         </button>
                     </div>
                 </div>
+                @endif
             </div>
         @endif
 
@@ -1352,11 +1490,11 @@
                     </select>
                     @if($availableNextBatsmen->isNotEmpty())
                         <p class="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
-                            <span class="text-emerald-400 font-bold">✓</span> Agar select nahi karoge to automatically <strong class="text-white ml-0.5">{{ $availableNextBatsmen->first()->player_name }}</strong> aayega.
+                            <span class="text-emerald-400 font-bold">✓</span> If not selected, <strong class="text-white ml-0.5">{{ $availableNextBatsmen->first()->player_name }}</strong> will be selected automatically.
                         </p>
                     @else
                         <p class="text-[11px] text-rose-400 mt-1.5 font-medium">
-                            ⚠️ Team ke sabhi batsmen out ho chuke hain (All Out / Inning Complete).
+                            ⚠️ All batsmen in this team have been dismissed (All Out / Inning Complete).
                         </p>
                     @endif
                 </div>

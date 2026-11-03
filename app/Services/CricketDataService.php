@@ -103,7 +103,7 @@ class CricketDataService
                 return null;
             });
 
-            if ($raw && isset($raw['data']) && is_array($raw['data'])) {
+            if ($raw && isset($raw['data']) && is_array($raw['data']) && !empty($raw['data'])) {
                 return $this->normalizeMatches($raw);
             }
         }

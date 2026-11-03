@@ -30,6 +30,7 @@ class CricketMatch extends Model
         'toss_decision',
         'match_result',
         'player_of_match',
+        'stream_url',
         'live_state',
     ];
 
@@ -38,6 +39,33 @@ class CricketMatch extends Model
         'total_overs' => 'integer',
         'live_state' => 'array',
     ];
+
+    /**
+     * Convert YouTube / Facebook / Twitch link to standard responsive embed URL.
+     */
+    public function getEmbedStreamUrlAttribute(): ?string
+    {
+        if (empty($this->stream_url)) return null;
+        $url = trim($this->stream_url);
+
+        // YouTube: youtu.be/ID, youtube.com/watch?v=ID, youtube.com/live/ID, etc.
+        if (preg_match('/(?:youtube\.com\/(?:watch\?.*v=|live\/|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/i', $url, $matches)) {
+            return "https://www.youtube-nocookie.com/embed/{$matches[1]}?autoplay=1&mute=1&playsinline=1&rel=0";
+        }
+
+        // Facebook Video:
+        if (str_contains($url, 'facebook.com') || str_contains($url, 'fb.watch')) {
+            return "https://www.facebook.com/plugins/video.php?href=" . urlencode($url) . "&show_text=false&autoplay=true";
+        }
+
+        // Twitch:
+        if (preg_match('/twitch\.tv\/([a-zA-Z0-9_]+)/i', $url, $matches)) {
+            $host = request()->getHost() ?: 'localhost';
+            return "https://player.twitch.tv/?channel={$matches[1]}&parent={$host}";
+        }
+
+        return $url;
+    }
 
     public function user(): BelongsTo
     {
@@ -111,5 +139,88 @@ class CricketMatch extends Model
 
         $oversStr = $score->overs ? "({$score->overs} ov)" : '';
         return "{$score->runs}/{$score->wickets} {$oversStr}";
+    }
+
+    /**
+     * Format a CricketMatch instance for Live Scores Center (matching frontend expectations).
+     */
+    public function formatForLiveCenter(?int $currentUserId = null, ?string $currentUserPhone = null): array
+    {
+        $scores = [];
+        foreach ($this->scores as $sc) {
+            $scores[] = [
+                'r' => (int) $sc->runs,
+                'w' => (int) $sc->wickets,
+                'o' => (string) $sc->overs,
+                'inning' => $sc->batting_team,
+                'batting_team' => $sc->batting_team,
+                'runs' => (int) $sc->runs,
+                'wickets' => (int) $sc->wickets,
+                'overs' => (string) $sc->overs,
+                'display_score' => "{$sc->runs}/{$sc->wickets}",
+            ];
+        }
+
+        $allPlayerNames = $this->players->pluck('player_name')->filter()->map(fn($n) => trim($n))->values()->toArray();
+
+        $isNetworkMatch = false;
+        if ($currentUserId) {
+            $isNetworkMatch = ($this->user_id === $currentUserId)
+                || $this->players->contains(function ($p) use ($currentUserId, $currentUserPhone) {
+                    return ($p->user_id && $p->user_id === $currentUserId)
+                        || ($currentUserPhone && !empty($p->player_phone) && $p->player_phone === $currentUserPhone);
+                });
+        }
+
+        $status = $this->status === 'live' ? 'live' : ($this->status === 'completed' ? 'completed' : 'scheduled');
+        $statusText = $this->match_result ?: ($status === 'live' ? 'Live in progress' : ($status === 'completed' ? 'Match Finished' : 'Match Scheduled'));
+
+        return [
+            'id' => 'local_' . $this->id,
+            'local_id' => $this->id,
+            'is_local' => true,
+            'is_network_match' => $isNetworkMatch,
+            'name' => "{$this->team1_name} vs {$this->team2_name}",
+            'status' => $status,
+            'status_text' => $statusText,
+            'series' => $this->tournament_name ?: 'Corporate & Club Matches',
+            'series_name' => $this->tournament_name ?: 'Corporate & Club Matches',
+            'venue' => $this->venue ?: 'Ground Venue',
+            'matchType' => $this->match_type ?: ($this->total_overs ? "{$this->total_overs} Overs" : 'Match'),
+            'teams' => [$this->team1_name, $this->team2_name],
+            'score' => $scores,
+            'dateTimeGMT' => $this->match_date ? $this->match_date->format('Y-m-d') : '',
+            'matchStarted' => in_array($status, ['live', 'completed']),
+            'matchEnded' => $status === 'completed',
+            'match_url' => route('matches.show', $this->id),
+            'stream_url' => $this->stream_url,
+            'players' => $allPlayerNames,
+        ];
+    }
+
+    /**
+     * Get all local matches formatted for the Live Scores Center, sorted with user's network matches first.
+     */
+    public static function getAllFormattedForLiveCenter(?int $currentUserId = null, ?string $currentUserPhone = null): array
+    {
+        $matches = static::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])
+            ->latest('id')
+            ->get();
+
+        $formatted = $matches->map(function ($m) use ($currentUserId, $currentUserPhone) {
+            return $m->formatForLiveCenter($currentUserId, $currentUserPhone);
+        })->toArray();
+
+        // Sort so user associated / network matches appear on top
+        if ($currentUserId) {
+            usort($formatted, function ($a, $b) {
+                if ($a['is_network_match'] === $b['is_network_match']) {
+                    return 0;
+                }
+                return $a['is_network_match'] ? -1 : 1;
+            });
+        }
+
+        return $formatted;
     }
 }

@@ -320,6 +320,11 @@ class ScoreService:
             else:
                 venue = meta_info
 
+            # Normalize status_text for upcoming matches with no live score
+            if not scores:
+                if not status_text or (teams and all(t.lower() in status_text.lower() for t in teams)):
+                    status_text = "Match Scheduled"
+
             parsed.append({
                 "id": m_id,
                 "name": title,
@@ -344,11 +349,13 @@ class ScoreService:
         try:
             url_live = f"https://www.cricbuzz.com/cricket-match/live-scores?_={time.time_ns()}"
             url_recent = f"https://www.cricbuzz.com/cricket-match/live-scores/recent-matches?_={time.time_ns()}"
+            url_upcoming = f"https://www.cricbuzz.com/cricket-match/live-scores/upcoming-matches?_={time.time_ns()}"
 
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 resps = await asyncio.gather(
                     client.get(url_live, headers=cls.HEADERS),
                     client.get(url_recent, headers=cls.HEADERS),
+                    client.get(url_upcoming, headers=cls.HEADERS),
                     return_exceptions=True
                 )
 

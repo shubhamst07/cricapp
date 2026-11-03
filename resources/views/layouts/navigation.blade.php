@@ -30,6 +30,7 @@
                         </span>
                     </x-nav-link>
 
+                    @auth
                     <x-nav-link :href="route('profile.show')" :active="request()->routeIs('profile.*')">
                         <span class="inline-flex items-center gap-1.5 font-semibold">
                             <span>👤 {{ __('Profile') }}</span>
@@ -39,6 +40,25 @@
                     <x-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
                         <span class="inline-flex items-center gap-1.5 font-semibold">
                             <span>🏏 {{ __('My Matches') }}</span>
+                        </span>
+                    </x-nav-link>
+                    @else
+                    <x-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
+                        <span class="inline-flex items-center gap-1.5 font-semibold">
+                            <span>🏏 {{ __('Matches') }}</span>
+                        </span>
+                    </x-nav-link>
+                    @endauth
+
+                    <x-nav-link :href="route('grounds.index')" :active="request()->routeIs('grounds.*')">
+                        <span class="inline-flex items-center gap-1.5 font-semibold">
+                            <span>🏟️ {{ __('Grounds') }}</span>
+                        </span>
+                    </x-nav-link>
+
+                    <x-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
+                        <span class="inline-flex items-center gap-1.5 font-semibold">
+                            <span>⚖️ {{ __('Umpires') }}</span>
                         </span>
                     </x-nav-link>
                 </div>
@@ -82,11 +102,8 @@
                         </x-slot>
                     </x-dropdown>
                 @else
-                    <!-- Optional Guest Links: Login & Register -->
+                    <!-- Guest Links: Login & Register -->
                     <div class="flex items-center gap-2">
-                        <a href="{{ route('profile.show') }}" class="text-xs font-semibold text-gray-600 hover:text-indigo-600 px-2 py-2">
-                            Explore Profiles
-                        </a>
                         <a href="{{ route('login') }}" class="text-xs font-bold text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-lg hover:bg-gray-50 transition">
                             Log In
                         </a>
@@ -125,12 +142,26 @@
                 </span>
             </x-responsive-nav-link>
 
+            @auth
             <x-responsive-nav-link :href="route('profile.show')" :active="request()->routeIs('profile.*')">
                 {{ __('👤 Profile') }}
             </x-responsive-nav-link>
 
             <x-responsive-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
                 {{ __('🏏 My Matches') }}
+            </x-responsive-nav-link>
+            @else
+            <x-responsive-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
+                {{ __('🏏 Matches') }}
+            </x-responsive-nav-link>
+            @endauth
+
+            <x-responsive-nav-link :href="route('grounds.index')" :active="request()->routeIs('grounds.*')">
+                {{ __('🏟️ Grounds') }}
+            </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
+                {{ __('⚖️ Umpires') }}
             </x-responsive-nav-link>
         </div>
 

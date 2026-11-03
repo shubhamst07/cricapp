@@ -22,14 +22,9 @@ class ProfileController extends Controller
 
         if ($id === null) {
             if (!$viewer) {
-                // If not logged in and no user ID requested, show first user or redirect to login
-                $user = User::first();
-                if (!$user) {
-                    return redirect()->route('login');
-                }
-            } else {
-                $user = $viewer;
+                return redirect()->guest(route('login'));
             }
+            $user = $viewer;
         } else {
             $user = User::where('id', $id)
                 ->orWhere('username', $id)

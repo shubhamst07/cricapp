@@ -211,4 +211,24 @@ class User extends Authenticatable
             'economy_rate' => $economyRate > 0 ? $economyRate : $this->economy_rate,
         ]);
     }
+
+    public function grounds(): HasMany
+    {
+        return $this->hasMany(Ground::class);
+    }
+
+    public function groundBookings(): HasMany
+    {
+        return $this->hasMany(GroundBooking::class);
+    }
+
+    public function umpireProfile(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(UmpireProfile::class);
+    }
+
+    public function umpireBookings(): HasMany
+    {
+        return $this->hasMany(UmpireBooking::class);
+    }
 }
