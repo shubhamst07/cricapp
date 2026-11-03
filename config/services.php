@@ -40,9 +40,9 @@ return [
         'local_url' => env('CRICKET_LOCAL_URL', 'http://127.0.0.1:6020'),
         'api_key' => env('CRICKET_API_KEY', '1508e78a-cc6d-46ee-93c0-e80c0d86a60b'),
         'ttl' => [
-            'current_matches' => env('CRICKET_PROVIDER', 'cricapi') === 'local' ? 10 : 300,
-            'match_detail' => env('CRICKET_PROVIDER', 'cricapi') === 'local' ? 10 : 600,
-            'scorecard' => env('CRICKET_PROVIDER', 'cricapi') === 'local' ? 10 : 600,
+            'current_matches' => env('CRICKET_PROVIDER', 'cricapi') === 'local' ? 10 : 30,
+            'match_detail' => env('CRICKET_PROVIDER', 'cricapi') === 'local' ? 10 : 300,
+            'scorecard' => env('CRICKET_PROVIDER', 'cricapi') === 'local' ? 10 : 300,
         ],
     ],
 

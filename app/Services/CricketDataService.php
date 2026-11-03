@@ -323,7 +323,21 @@ class CricketDataService
             return 'abandoned';
         }
 
-        // 2. Active in-game / live text indicators
+        // 2. Definitive match completed indicators
+        $isCompletedText = str_contains($status, 'won by') ||
+            str_contains($status, 'won the match') ||
+            str_contains($status, ' won') ||
+            str_starts_with($status, 'won') ||
+            str_contains($status, 'beat') ||
+            str_contains($status, 'tied') ||
+            str_contains($status, 'drawn') ||
+            str_contains($status, 'conceded');
+
+        if ($isCompletedText || $matchEnded) {
+            return 'completed';
+        }
+
+        // 3. Active in-game / live text indicators
         $isLiveText = str_contains($status, 'need ') ||
             str_contains($status, 'opt to') ||
             str_contains($status, 'elected to') ||
@@ -342,45 +356,12 @@ class CricketDataService
             str_contains($status, 'innings break') ||
             str_contains($status, 'drinks');
 
-        // 3. Definitive match completed indicators
-        $isCompletedText = str_contains($status, 'won by') ||
-            str_contains($status, 'won the match') ||
-            str_contains($status, ' won') ||
-            str_starts_with($status, 'won') ||
-            str_contains($status, 'beat') ||
-            str_contains($status, 'tied') ||
-            str_contains($status, 'drawn') ||
-            str_contains($status, 'conceded');
-
-        if ($isCompletedText) {
-            return 'completed';
-        }
-
-        if ($isLiveText) {
+        // 4. If match has started (or in-game text active), it is Live!
+        if ($isLiveText || $matchStarted) {
             return 'live';
         }
 
-        // 4. Scheduled / Not started indicators
-        if (
-            str_contains($status, 'not start') ||
-            str_contains($status, 'upcoming') ||
-            str_contains($status, 'scheduled') ||
-            str_contains($status, 'starts at') ||
-            str_contains($status, 'preview')
-        ) {
-            return 'scheduled';
-        }
-
-        // 5. If the match ended flag is true
-        if ($matchEnded) {
-            return 'completed';
-        }
-
-        // 6. If match has started
-        if ($matchStarted) {
-            return 'live';
-        }
-
+        // 5. Otherwise it is Scheduled / Upcoming
         return 'scheduled';
     }
 
@@ -434,6 +415,7 @@ class CricketDataService
             Cache::forget($this->cacheKey("scorecard_{$matchId}"));
         } else {
             Cache::forget($this->cacheKey('current_matches'));
+            Cache::forget($this->cacheKey('cricapi_current_matches'));
             Cache::forget($this->cacheKey('all_matches'));
         }
     }
