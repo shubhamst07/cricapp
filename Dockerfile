@@ -19,6 +19,7 @@ ENV WEBROOT /var/www/html/public
 ENV PHP_ERRORS_STDERR 1
 ENV RUN_SCRIPTS 1
 ENV REAL_IP_HEADER 1
+ENV PHP_CATCHALL true
 
 # Laravel production flags
 ENV APP_ENV production
