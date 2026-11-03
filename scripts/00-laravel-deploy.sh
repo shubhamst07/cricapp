@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-echo "Running composer install..."
-composer install --no-dev --optimize-autoloader --working-dir=/var/www/html
-
 echo "Setting permissions..."
 chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache
 
@@ -19,5 +16,5 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-echo "Running database migrations..."
+echo "Running migrations..."
 php artisan migrate --force
