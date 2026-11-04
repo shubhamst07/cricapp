@@ -92,7 +92,7 @@ class CricketDataService
     {
         if ($this->provider === 'local') {
             try {
-                $response = Http::timeout(2)->get("{$this->localUrl}/matches");
+                $response = Http::timeout(10)->get("{$this->localUrl}/matches");
                 if ($response->successful()) {
                     $raw = $response->json();
                     if ($raw && isset($raw['data']) && is_array($raw['data']) && !empty($raw['data'])) {
@@ -379,7 +379,7 @@ class CricketDataService
     {
         if ($this->provider === 'local') {
             try {
-                $response = Http::timeout(3)->get("{$this->localUrl}/matches");
+                $response = Http::timeout(5)->get("{$this->localUrl}/matches");
                 if ($response->successful()) {
                     return [
                         'valid' => true,
