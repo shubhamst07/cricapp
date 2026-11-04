@@ -31,12 +31,6 @@
                     </x-nav-link>
 
                     @auth
-                    <x-nav-link :href="route('profile.show')" :active="request()->routeIs('profile.*')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>👤 {{ __('Profile') }}</span>
-                        </span>
-                    </x-nav-link>
-
                     <x-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
                         <span class="inline-flex items-center gap-1.5 font-semibold">
                             <span>🏏 {{ __('My Matches') }}</span>
@@ -83,7 +77,7 @@
 
                         <x-slot name="content">
                             <x-dropdown-link :href="route('profile.show')">
-                                {{ __('My Profile (Insta)') }}
+                                {{ __('My Profile') }}
                             </x-dropdown-link>
                             <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('Account Settings') }}
@@ -143,10 +137,6 @@
             </x-responsive-nav-link>
 
             @auth
-            <x-responsive-nav-link :href="route('profile.show')" :active="request()->routeIs('profile.*')">
-                {{ __('👤 Profile') }}
-            </x-responsive-nav-link>
-
             <x-responsive-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
                 {{ __('🏏 My Matches') }}
             </x-responsive-nav-link>
@@ -175,7 +165,7 @@
 
                 <div class="mt-3 space-y-1">
                     <x-responsive-nav-link :href="route('profile.show')">
-                        {{ __('My Profile (Insta)') }}
+                        {{ __('My Profile') }}
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('profile.edit')">
                         {{ __('Account Settings') }}
