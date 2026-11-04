@@ -28,7 +28,12 @@ export default function LiveScoresApp({
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
         if (['live', 'upcoming', 'recent'].includes(tabParam)) return tabParam;
-        return initialTab || (initialLive.length > 0 ? 'live' : (initialCompleted.length > 0 ? 'recent' : 'upcoming'));
+        if (initialTab && ['live', 'upcoming', 'recent'].includes(initialTab)) return initialTab;
+        try {
+            const saved = localStorage.getItem('last_cricket_tab');
+            if (['live', 'upcoming', 'recent'].includes(saved)) return saved;
+        } catch (e) {}
+        return (initialLive.length > 0 ? 'live' : (initialCompleted.length > 0 ? 'recent' : 'upcoming'));
     });
 
     const [liveMatches, setLiveMatches] = useState(initialLive);
@@ -47,13 +52,29 @@ export default function LiveScoresApp({
     const [scorecardData, setScorecardData] = useState(null);
     const [loadingScorecard, setLoadingScorecard] = useState(false);
 
-    // Sync tab to URL without reload
+    // Sync browser Back/Forward navigation with tab
+    useEffect(() => {
+        const handlePopState = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            if (['live', 'upcoming', 'recent'].includes(tabParam)) {
+                setActiveTab(tabParam);
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    // Sync tab to URL and localStorage
     const handleTabChange = (tab) => {
         setActiveTab(tab);
         setSelectedSeries('all');
+        try {
+            localStorage.setItem('last_cricket_tab', tab);
+        } catch (e) {}
         const url = new URL(window.location);
         url.searchParams.set('tab', tab);
-        window.history.replaceState({}, '', url);
+        window.history.pushState({}, '', url);
     };
 
     // Manual or Auto-fetch data from API
@@ -657,7 +678,7 @@ export default function LiveScoresApp({
                         {/* Modal Footer */}
                         <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
                             <a
-                                href={`/live-scores/${modalMatch.id}`}
+                                href={`/live-scores/${modalMatch.id}?tab=${activeTab || 'live'}`}
                                 className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition"
                             >
                                 Open Full Match Center & Scorecard →
@@ -830,7 +851,7 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                 </button>
 
                 <a
-                    href={match.is_local ? (match.match_url || `/matches/${match.local_id || match.id.replace('local_', '')}`) : `/live-scores/${match.id}`}
+                    href={match.is_local ? (match.match_url || `/matches/${match.local_id || match.id.replace('local_', '')}`) : `/live-scores/${match.id}?tab=${type || 'live'}`}
                     className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-xs font-bold transition group-hover:bg-indigo-600 group-hover:text-white"
                 >
                     <span>{match.is_local ? 'View Scorecard 📊' : 'Match Center'}</span>

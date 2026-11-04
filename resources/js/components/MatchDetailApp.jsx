@@ -260,12 +260,38 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
     // Current selected inning data (for Scorecard tab)
     const activeInning = innings[selectedInningIdx] || (innings.length > 0 ? innings[0] : null);
 
+    // Detect return tab (from URL ?tab= or ?fromTab=, localStorage, or inferred from match status)
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const tabParam = urlParams?.get('tab') || urlParams?.get('fromTab');
+    let fallbackTab = 'live';
+    if (typeof window !== 'undefined') {
+        try {
+            const saved = localStorage.getItem('last_cricket_tab');
+            if (['live', 'upcoming', 'recent'].includes(saved)) {
+                fallbackTab = saved;
+            }
+        } catch (e) {}
+    }
+    if (match.status === 'completed' || match.status === 'abandoned') {
+        fallbackTab = 'recent';
+    } else if (match.status === 'scheduled') {
+        fallbackTab = 'upcoming';
+    }
+    const returnTab = tabParam || fallbackTab;
+    const backUrl = `/live-scores?tab=${returnTab}`;
+
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
             {/* Top Navigation & Actions */}
             <div className="flex items-center justify-between">
                 <a
-                    href="/live-scores"
+                    href={backUrl}
+                    onClick={(e) => {
+                        if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes('/live-scores')) {
+                            e.preventDefault();
+                            window.history.back();
+                        }
+                    }}
                     className="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition"
                 >
                     <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Live Scores
