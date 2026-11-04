@@ -2,6 +2,7 @@
     <div class="insta-profile-root" x-data="{
         activeTab: 'posts',
         editModalOpen: false,
+        cropperModalOpen: false,
         selectedPost: null,
         isFollowing: {{ $isFollowing ? 'true' : 'false' }},
         followersCount: {{ $user->followers_count ?? 0 }},
@@ -13,6 +14,196 @@
             this.toastMsg = msg;
             setTimeout(() => { this.toastMsg = ''; }, 3000);
         },
+
+        // WhatsApp Profile Cropper State
+        cropImgObj: null,
+        cropScale: 1.0,
+        cropRotation: 0,
+        cropOffsetX: 0,
+        cropOffsetY: 0,
+        isDragging: false,
+        dragStartX: 0,
+        dragStartY: 0,
+        isSavingAvatar: false,
+        croppedAvatarBase64: '',
+
+        openCropper(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    this.cropImgObj = img;
+                    this.cropScale = 1.0;
+                    this.cropRotation = 0;
+                    this.cropOffsetX = 0;
+                    this.cropOffsetY = 0;
+                    this.cropperModalOpen = true;
+                    this.$nextTick(() => {
+                        this.renderCropCanvas();
+                    });
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        },
+
+        renderCropCanvas() {
+            const canvas = this.$refs.cropCanvas;
+            if (!canvas || !this.cropImgObj) return;
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.translate(width / 2 + this.cropOffsetX, height / 2 + this.cropOffsetY);
+            ctx.rotate((this.cropRotation * Math.PI) / 180);
+            ctx.scale(this.cropScale, this.cropScale);
+
+            const imgW = this.cropImgObj.naturalWidth || this.cropImgObj.width;
+            const imgH = this.cropImgObj.naturalHeight || this.cropImgObj.height;
+            const baseFit = Math.max(width / imgW, height / imgH);
+            const drawW = imgW * baseFit;
+            const drawH = imgH * baseFit;
+
+            ctx.drawImage(this.cropImgObj, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+
+            // WhatsApp Style Mask: dark overlay outside center circle
+            const radius = Math.min(width, height) * 0.42;
+            const centerX = width / 2;
+            const centerY = height / 2;
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(10, 15, 29, 0.75)';
+            ctx.beginPath();
+            ctx.rect(0, 0, width, height);
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2, true);
+            ctx.closePath();
+            ctx.fill();
+
+            // WhatsApp circular guideline border
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Subtle dashed circle guides
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.setLineDash([4, 4]);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        },
+
+        onCanvasMouseDown(e) {
+            this.isDragging = true;
+            this.dragStartX = e.clientX - this.cropOffsetX;
+            this.dragStartY = e.clientY - this.cropOffsetY;
+        },
+        onCanvasMouseMove(e) {
+            if (!this.isDragging) return;
+            this.cropOffsetX = e.clientX - this.dragStartX;
+            this.cropOffsetY = e.clientY - this.dragStartY;
+            this.renderCropCanvas();
+        },
+        onCanvasMouseUp() {
+            this.isDragging = false;
+        },
+        onTouchStart(e) {
+            if (e.touches.length === 1) {
+                this.isDragging = true;
+                this.dragStartX = e.touches[0].clientX - this.cropOffsetX;
+                this.dragStartY = e.touches[0].clientY - this.cropOffsetY;
+            }
+        },
+        onTouchMove(e) {
+            if (!this.isDragging || e.touches.length !== 1) return;
+            this.cropOffsetX = e.touches[0].clientX - this.dragStartX;
+            this.cropOffsetY = e.touches[0].clientY - this.dragStartY;
+            this.renderCropCanvas();
+        },
+        onTouchEnd() {
+            this.isDragging = false;
+        },
+        rotateClockwise() {
+            this.cropRotation = (this.cropRotation + 90) % 360;
+            this.renderCropCanvas();
+        },
+        resetCrop() {
+            this.cropScale = 1.0;
+            this.cropRotation = 0;
+            this.cropOffsetX = 0;
+            this.cropOffsetY = 0;
+            this.renderCropCanvas();
+        },
+        async saveCroppedAvatar() {
+            if (!this.cropImgObj || this.isSavingAvatar) return;
+            this.isSavingAvatar = true;
+
+            try {
+                const srcCanvas = this.$refs.cropCanvas;
+                const width = srcCanvas.width;
+                const height = srcCanvas.height;
+                const radius = Math.min(width, height) * 0.42;
+
+                const outCanvas = document.createElement('canvas');
+                const outSize = 400;
+                outCanvas.width = outSize;
+                outCanvas.height = outSize;
+                const outCtx = outCanvas.getContext('2d');
+
+                outCtx.beginPath();
+                outCtx.arc(outSize / 2, outSize / 2, outSize / 2, 0, Math.PI * 2);
+                outCtx.clip();
+
+                const scaleFactor = outSize / (radius * 2);
+                outCtx.translate(outSize / 2 + this.cropOffsetX * scaleFactor, outSize / 2 + this.cropOffsetY * scaleFactor);
+                outCtx.rotate((this.cropRotation * Math.PI) / 180);
+                outCtx.scale(this.cropScale * scaleFactor, this.cropScale * scaleFactor);
+
+                const imgW = this.cropImgObj.naturalWidth || this.cropImgObj.width;
+                const imgH = this.cropImgObj.naturalHeight || this.cropImgObj.height;
+                const baseFit = Math.max(width / imgW, height / imgH);
+                const drawW = imgW * baseFit;
+                const drawH = imgH * baseFit;
+
+                outCtx.drawImage(this.cropImgObj, -drawW / 2, -drawH / 2, drawW, drawH);
+
+                const dataUrl = outCanvas.toDataURL('image/jpeg', 0.88);
+                this.croppedAvatarBase64 = dataUrl;
+                this.avatarPreview = dataUrl;
+
+                const res = await fetch('{{ route('profile.avatar.update') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ cropped_avatar: dataUrl })
+                });
+
+                const json = await res.json();
+                if (json.status === 'success') {
+                    this.showToast('Profile picture saved successfully! 📸');
+                } else {
+                    this.showToast(json.message || 'Avatar saved');
+                }
+                this.cropperModalOpen = false;
+            } catch (err) {
+                console.error(err);
+                this.showToast('Failed to save profile picture');
+            } finally {
+                this.isSavingAvatar = false;
+            }
+        },
+
         async toggleFollow(targetUserId) {
             if (this.isFollowLoading) return;
             this.isFollowLoading = true;
@@ -116,14 +307,16 @@
                         </div>
                     </div>
                     @if($isOwner)
-                        <button @click="editModalOpen = true" 
-                                class="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-full shadow-lg border-2 border-[#090d16] transition transform hover:scale-110"
-                                title="Change Profile Picture">
+                        <button @click="$refs.avatarFileInput.click()" 
+                                class="absolute bottom-0 right-0 bg-emerald-600 hover:bg-emerald-500 text-white p-2.5 rounded-full shadow-lg border-2 border-[#090d16] transition transform hover:scale-110 cursor-pointer"
+                                title="Change Profile Picture (WhatsApp Style Crop)">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                         </button>
+                        <input type="file" x-ref="avatarFileInput" accept="image/jpeg,image/png,image/jpg,image/webp" class="hidden"
+                               @change="if($event.target.files[0]) { openCropper($event.target.files[0]); } $event.target.value = '';">
                     @endif
                 </div>
 
@@ -601,13 +794,15 @@
 
                         <!-- Profile Photo Picker -->
                         <div class="flex items-center gap-4 p-3 rounded-xl bg-white/5 border border-white/10">
-                            <img :src="avatarPreview" class="w-16 h-16 rounded-full object-cover ring-2 ring-blue-500">
+                            <img :src="avatarPreview" class="w-16 h-16 rounded-full object-cover ring-2 ring-emerald-500 shadow-md">
                             <div>
-                                <label class="cursor-pointer px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition inline-block">
-                                    <span>Change Photo</span>
-                                    <input type="file" name="avatar" accept="image/*" class="hidden" @change="previewAvatar">
+                                <input type="hidden" name="cropped_avatar" :value="croppedAvatarBase64">
+                                <label class="cursor-pointer px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition inline-flex items-center gap-1.5 shadow">
+                                    <span>📸 Crop Photo (WhatsApp Style)</span>
+                                    <input type="file" accept="image/jpeg,image/png,image/jpg,image/webp" class="hidden"
+                                           @change="if($event.target.files[0]) { openCropper($event.target.files[0]); } $event.target.value = '';">
                                 </label>
-                                <p class="text-[10px] text-slate-400 mt-1">JPG, PNG or WebP. Max 5MB.</p>
+                                <p class="text-[10px] text-slate-400 mt-1">Circle crop, pan, and zoom before saving.</p>
                             </div>
                         </div>
 
@@ -696,6 +891,135 @@
                             </button>
                         </div>
                     </form>
+
+                </div>
+            </div>
+        @endif
+
+        <!-- ==================================================== -->
+        <!-- WHATSAPP-STYLE CIRCULAR PROFILE PICTURE CROPPER MODAL -->
+        <!-- ==================================================== -->
+        @if($isOwner)
+            <div x-cloak x-show="cropperModalOpen"
+                 class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95">
+
+                <div class="relative bg-[#0d1322] border border-white/15 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col"
+                     @click.away="if(!isSavingAvatar) cropperModalOpen = false">
+
+                    <!-- Cropper Modal Header -->
+                    <div class="flex items-center justify-between p-4 border-b border-white/10 bg-[#090d16]">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-lg">
+                                ✂️
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-black text-white leading-tight">Crop Profile Picture</h3>
+                                <p class="text-[10px] text-slate-400">WhatsApp-style circular crop, pan & zoom</p>
+                            </div>
+                        </div>
+                        <button type="button" @click="cropperModalOpen = false" class="text-slate-400 hover:text-white p-1 rounded-lg text-sm font-bold">
+                            ✕
+                        </button>
+                    </div>
+
+                    <!-- Cropper Canvas Viewport -->
+                    <div class="p-4 sm:p-5 flex flex-col items-center justify-center bg-black/50">
+                        <div class="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl select-none touch-none cursor-grab active:cursor-grabbing bg-slate-950"
+                             style="width: 300px; height: 300px;">
+                            <canvas x-ref="cropCanvas"
+                                    width="300"
+                                    height="300"
+                                    class="w-full h-full block"
+                                    @mousedown="onCanvasMouseDown($event)"
+                                    @mousemove="onCanvasMouseMove($event)"
+                                    @mouseup="onCanvasMouseUp()"
+                                    @mouseleave="onCanvasMouseUp()"
+                                    @touchstart="onTouchStart($event)"
+                                    @touchmove="onTouchMove($event)"
+                                    @touchend="onTouchEnd()">
+                            </canvas>
+
+                            <!-- Hint Badge Floating -->
+                            <div class="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none">
+                                <span class="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-black/75 text-slate-300 backdrop-blur border border-white/10 shadow">
+                                    🖐️ Drag to reposition photo
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Zoom Slider Control -->
+                        <div class="w-full max-w-xs mt-4 space-y-1.5">
+                            <div class="flex items-center justify-between text-xs text-slate-300 font-bold">
+                                <span class="flex items-center gap-1.5 text-slate-400 text-[11px]">
+                                    <span>🔍</span> Zoom
+                                </span>
+                                <span class="text-emerald-400 text-[11px]" x-text="Math.round(cropScale * 100) + '%'">100%</span>
+                            </div>
+                            <div class="flex items-center gap-2.5">
+                                <button type="button"
+                                        @click="cropScale = Math.max(1, +(cropScale - 0.1).toFixed(2)); renderCropCanvas();"
+                                        class="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white font-black text-sm flex items-center justify-center transition">
+                                    -
+                                </button>
+                                <input type="range"
+                                       min="1.0"
+                                       max="3.5"
+                                       step="0.05"
+                                       x-model.number="cropScale"
+                                       @input="renderCropCanvas()"
+                                       class="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                                <button type="button"
+                                        @click="cropScale = Math.min(3.5, +(cropScale + 0.1).toFixed(2)); renderCropCanvas();"
+                                        class="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white font-black text-sm flex items-center justify-center transition">
+                                    +
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Rotate & Reset Action Buttons -->
+                        <div class="flex items-center gap-2 mt-3">
+                            <button type="button"
+                                    @click="rotateClockwise()"
+                                    class="px-3 py-1 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1 transition">
+                                <span>🔄 Rotate 90°</span>
+                            </button>
+                            <button type="button"
+                                    @click="resetCrop()"
+                                    class="px-3 py-1 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-400 hover:text-slate-200 transition">
+                                <span>↺ Reset</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Modal Actions Footer -->
+                    <div class="p-3.5 sm:p-4 border-t border-white/10 bg-[#090d16] flex items-center justify-between gap-3">
+                        <button type="button"
+                                @click="cropperModalOpen = false"
+                                :disabled="isSavingAvatar"
+                                class="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-bold transition">
+                            Cancel
+                        </button>
+
+                        <button type="button"
+                                @click="saveCroppedAvatar()"
+                                :disabled="isSavingAvatar"
+                                class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition transform active:scale-95 disabled:opacity-50">
+                            <span x-show="!isSavingAvatar">Done • Set DP 📸</span>
+                            <span x-show="isSavingAvatar" x-cloak class="flex items-center gap-2">
+                                <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                                </svg>
+                                <span>Saving to TiDB...</span>
+                            </span>
+                        </button>
+                    </div>
 
                 </div>
             </div>

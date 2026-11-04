@@ -91,7 +91,9 @@ class ProfileController extends Controller
 
         $validated = $request->validated();
 
-        if ($request->hasFile('avatar')) {
+        if ($request->filled('cropped_avatar')) {
+            $validated['avatar'] = $request->input('cropped_avatar');
+        } elseif ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
             $uploadDir = public_path('uploads/avatars');
             if (!file_exists($uploadDir)) {
@@ -119,6 +121,50 @@ class ProfileController extends Controller
         }
 
         return Redirect::route('profile.show', ['id' => $user->id])->with('status', 'profile-updated');
+    }
+
+    /**
+     * Update cropped avatar directly.
+     */
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $user = $request->user() ?: Auth::user();
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401);
+        }
+
+        $avatarData = $request->input('avatar') ?: $request->input('cropped_avatar');
+
+        if ($avatarData && str_starts_with($avatarData, 'data:image/')) {
+            $user->avatar = $avatarData;
+            $user->save();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Profile picture updated successfully! 📸',
+                'avatar_url' => $user->avatar_url,
+            ]);
+        }
+
+        if ($request->hasFile('avatar')) {
+            $file = $request->file('avatar');
+            $uploadDir = public_path('uploads/avatars');
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0775, true);
+            }
+            $filename = 'avatar_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $file->move($uploadDir, $filename);
+            $user->avatar = 'uploads/avatars/' . $filename;
+            $user->save();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Profile picture updated successfully! 📸',
+                'avatar_url' => $user->avatar_url,
+            ]);
+        }
+
+        return response()->json(['status' => 'error', 'message' => 'No image data received.'], 422);
     }
 
     /**

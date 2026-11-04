@@ -119,13 +119,56 @@ class GroundController extends Controller
             'phone' => 'required|string|max:30',
             'whatsapp' => 'nullable|string|max:30',
             'amenities' => 'nullable|array',
-            'image_url' => 'nullable|url|max:500',
+            'photos' => 'nullable|array|max:5',
+            'photos.*' => 'nullable|file|image|mimes:jpeg,png,jpg,webp,gif|max:5120',
+            'photos_base64' => 'nullable|array|max:5',
+            'image_url' => 'nullable|string|max:1000',
             'description' => 'nullable|string|max:2000',
         ]);
 
         $validated['user_id'] = Auth::id();
         $validated['amenities'] = $validated['amenities'] ?? [];
         $validated['whatsapp'] = $validated['whatsapp'] ?: $validated['phone'];
+
+        $images = [];
+
+        // 1. Process multiple uploaded files (up to 5)
+        if ($request->hasFile('photos')) {
+            $uploadDir = public_path('uploads/grounds');
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0775, true);
+            }
+
+            foreach ($request->file('photos') as $idx => $photoFile) {
+                if ($idx >= 5) break;
+                if ($photoFile && $photoFile->isValid()) {
+                    $ext = $photoFile->getClientOriginalExtension() ?: 'jpg';
+                    $filename = 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.' . $ext;
+                    $photoFile->move($uploadDir, $filename);
+                    $images[] = asset('uploads/grounds/' . $filename);
+                }
+            }
+        }
+
+        // 2. Process base64 photos (e.g. from drag & drop or client preview)
+        if (!empty($request->input('photos_base64')) && is_array($request->input('photos_base64'))) {
+            foreach ($request->input('photos_base64') as $b64) {
+                if (count($images) >= 5) break;
+                if (!empty($b64) && str_starts_with($b64, 'data:image/')) {
+                    $images[] = $b64;
+                }
+            }
+        }
+
+        // 3. Fallback to image_url if provided
+        if (!empty($validated['image_url']) && count($images) < 5) {
+            if (!in_array($validated['image_url'], $images)) {
+                $images[] = $validated['image_url'];
+            }
+        }
+
+        $validated['images'] = $images;
+        $validated['image_url'] = $images[0] ?? ($validated['image_url'] ?? null);
 
         $ground = Ground::create($validated);
 

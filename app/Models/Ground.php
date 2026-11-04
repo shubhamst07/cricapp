@@ -23,14 +23,40 @@ class Ground extends Model
         'whatsapp',
         'amenities',
         'image_url',
+        'images',
         'description',
         'status',
     ];
 
     protected $casts = [
         'amenities' => 'array',
+        'images' => 'array',
         'price_per_slot' => 'decimal:2',
     ];
+
+    /**
+     * Get all images list with fallback to image_url or default cricket turf image
+     */
+    public function getImagesListAttribute(): array
+    {
+        $list = [];
+        if (!empty($this->images) && is_array($this->images)) {
+            $list = array_values(array_filter($this->images));
+        } elseif (!empty($this->image_url)) {
+            $list = [$this->image_url];
+        }
+        return !empty($list) ? $list : [
+            'https://images.unsplash.com/photo-1531415074868-036b1c57e329?q=80&w=1200&auto=format&fit=crop'
+        ];
+    }
+
+    /**
+     * Primary preview image
+     */
+    public function getPrimaryImageAttribute(): string
+    {
+        return $this->images_list[0] ?? 'https://images.unsplash.com/photo-1531415074868-036b1c57e329?q=80&w=1200&auto=format&fit=crop';
+    }
 
     public function user(): BelongsTo
     {

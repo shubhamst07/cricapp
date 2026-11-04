@@ -39,6 +39,7 @@ class ProfileUpdateRequest extends FormRequest
             'bio' => ['nullable', 'string', 'max:500'],
             'favorite_team' => ['nullable', 'string', 'max:100'],
             'avatar' => ['nullable', 'file', 'image', 'mimes:jpeg,png,jpg,webp,gif', 'max:5120'],
+            'cropped_avatar' => ['nullable', 'string'],
             'player_role' => ['nullable', 'string', 'max:50'],
             'batting_style' => ['nullable', 'string', 'max:50'],
             'bowling_style' => ['nullable', 'string', 'max:50'],

@@ -343,12 +343,26 @@
 
                             <!-- Ground Media Header -->
                             <div class="relative h-48 bg-gradient-to-tr from-slate-950 to-slate-800 overflow-hidden">
-                                @if($ground->image_url)
-                                    <img src="{{ $ground->image_url }}" alt="{{ $ground->name }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                                @php
+                                    $allPhotos = $ground->images_list;
+                                    $coverPhoto = $ground->primary_image;
+                                @endphp
+                                @if($coverPhoto)
+                                    <img src="{{ $coverPhoto }}" alt="{{ $ground->name }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
                                 @else
                                     <div class="w-full h-full flex flex-col items-center justify-center text-slate-600">
                                         <span class="text-5xl">🏟️</span>
                                         <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mt-2">Cricket Ground</span>
+                                    </div>
+                                @endif
+
+                                <!-- Multi-photo count badge -->
+                                @if(count($allPhotos) > 1)
+                                    <div class="absolute bottom-2 right-3">
+                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-black/75 backdrop-blur-md text-white border border-white/20 flex items-center gap-1 shadow-md">
+                                            <span>📷</span>
+                                            <span>{{ count($allPhotos) }} Photos</span>
+                                        </span>
                                     </div>
                                 @endif
 

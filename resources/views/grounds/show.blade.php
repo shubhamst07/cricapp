@@ -31,7 +31,17 @@
     timeSlot: '06:00 AM - 09:00 AM',
     teamName: '',
     contactPhone: '',
-    notes: ''
+    notes: '',
+    photos: {{ json_encode($ground->images_list) }},
+    activePhotoIdx: 0,
+    prevPhoto() {
+        if (this.photos.length <= 1) return;
+        this.activePhotoIdx = (this.activePhotoIdx - 1 + this.photos.length) % this.photos.length;
+    },
+    nextPhoto() {
+        if (this.photos.length <= 1) return;
+        this.activePhotoIdx = (this.activePhotoIdx + 1) % this.photos.length;
+    }
 }">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
@@ -47,21 +57,24 @@
             </div>
         @endif
 
-        <!-- Ground Hero & Photo -->
+        <!-- Ground Hero & Multi-Photo Gallery -->
         <div class="relative rounded-3xl overflow-hidden bg-slate-950 border border-white/10 shadow-2xl">
-            <div class="relative h-72 sm:h-96 w-full overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-800">
-                @if($ground->image_url)
-                    <img src="{{ $ground->image_url }}" alt="{{ $ground->name }}" class="w-full h-full object-cover">
-                @else
+            <div class="relative h-72 sm:h-96 w-full overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-800 group">
+                <template x-if="photos.length > 0">
+                    <img :src="photos[activePhotoIdx]" :alt="'{{ $ground->name }} photo ' + (activePhotoIdx + 1)"
+                         class="w-full h-full object-cover transition-all duration-300">
+                </template>
+                <template x-if="photos.length === 0">
                     <div class="w-full h-full flex flex-col items-center justify-center text-slate-700">
                         <span class="text-7xl">🏟️</span>
                         <span class="text-sm font-bold uppercase tracking-wider text-slate-500 mt-2">Cricket Ground & Turf</span>
                     </div>
-                @endif
-                <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+                </template>
+
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent pointer-events-none"></div>
 
                 <!-- Floating Badges -->
-                <div class="absolute top-4 left-4 flex flex-wrap gap-2">
+                <div class="absolute top-4 left-4 flex flex-wrap gap-2 pointer-events-none">
                     <span class="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-black/60 backdrop-blur-md text-emerald-400 border border-emerald-500/40">
                         {{ $ground->pitch_type }}
                     </span>
@@ -70,7 +83,31 @@
                     </span>
                 </div>
 
-                <div class="absolute bottom-6 left-6 right-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <!-- Photo Counter Indicator -->
+                <div x-show="photos.length > 1" class="absolute top-4 right-4 z-10">
+                    <span class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-black/75 backdrop-blur-md text-white border border-white/20 shadow-lg flex items-center gap-1.5">
+                        <span>📸</span>
+                        <span x-text="(activePhotoIdx + 1) + ' / ' + photos.length"></span>
+                    </span>
+                </div>
+
+                <!-- Prev & Next Controls -->
+                <div x-show="photos.length > 1" class="absolute inset-y-0 left-3 flex items-center z-10">
+                    <button type="button" @click="prevPhoto()"
+                            class="w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 backdrop-blur text-white flex items-center justify-center border border-white/20 shadow-xl transition transform active:scale-95"
+                            title="Previous Photo">
+                        ‹
+                    </button>
+                </div>
+                <div x-show="photos.length > 1" class="absolute inset-y-0 right-3 flex items-center z-10">
+                    <button type="button" @click="nextPhoto()"
+                            class="w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 backdrop-blur text-white flex items-center justify-center border border-white/20 shadow-xl transition transform active:scale-95"
+                            title="Next Photo">
+                        ›
+                    </button>
+                </div>
+
+                <div class="absolute bottom-6 left-6 right-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4 z-10 pointer-events-auto">
                     <div>
                         <h1 class="text-2xl sm:text-4xl font-black text-white leading-tight drop-shadow-md">
                             {{ $ground->name }}
@@ -101,6 +138,19 @@
                         @endauth
                     </div>
                 </div>
+            </div>
+
+            <!-- Thumbnail Selector Strip (if > 1 photo) -->
+            <div x-show="photos.length > 1" class="p-3 bg-[#0d1322] border-t border-white/10 flex items-center gap-2.5 overflow-x-auto scrollbar-thin">
+                <span class="text-[11px] font-black uppercase tracking-wider text-slate-400 pl-2 shrink-0">Gallery:</span>
+                <template x-for="(photoUrl, pIndex) in photos" :key="pIndex">
+                    <button type="button"
+                            @click="activePhotoIdx = pIndex"
+                            class="relative shrink-0 w-16 h-12 rounded-xl overflow-hidden border-2 transition transform active:scale-95"
+                            :class="activePhotoIdx === pIndex ? 'border-emerald-500 ring-2 ring-emerald-500/50 scale-105' : 'border-white/10 opacity-60 hover:opacity-100'">
+                        <img :src="photoUrl" class="w-full h-full object-cover">
+                    </button>
+                </template>
             </div>
         </div>
 

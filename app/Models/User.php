@@ -118,7 +118,7 @@ class User extends Authenticatable
     public function getAvatarUrlAttribute(): string
     {
         if ($this->avatar) {
-            if (Str::startsWith($this->avatar, ['http://', 'https://'])) {
+            if (Str::startsWith($this->avatar, ['http://', 'https://', 'data:image/'])) {
                 return $this->avatar;
             }
             return asset($this->avatar);

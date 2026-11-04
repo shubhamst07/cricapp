@@ -57,6 +57,7 @@ Route::get('/umpires', [UmpireController::class, 'index'])->name('umpires.index'
 
 Route::middleware('auth')->group(function () {
     Route::post('/profile/update', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');
     Route::get('/profile-settings', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update.legacy');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

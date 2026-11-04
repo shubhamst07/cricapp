@@ -35,7 +35,36 @@
                 <p class="text-slate-400 text-xs mt-1">List your cricket ground, turf pitch, or box arena so local cricket teams can book match slots directly.</p>
             </div>
 
-            <form method="POST" action="{{ route('grounds.store') }}" class="space-y-5 text-xs">
+            <form method="POST" action="{{ route('grounds.store') }}" enctype="multipart/form-data" class="space-y-5 text-xs"
+                  x-data="{
+                      photos: [],
+                      urlMode: false,
+                      errorMessage: '',
+                      handleFiles(e) {
+                          const files = Array.from(e.target.files || []);
+                          if (this.photos.length + files.length > 5) {
+                              this.errorMessage = 'You can select a maximum of 5 photos.';
+                              setTimeout(() => this.errorMessage = '', 4000);
+                          }
+                          const allowed = files.slice(0, 5 - this.photos.length);
+                          allowed.forEach(file => {
+                              if (!file.type.startsWith('image/')) return;
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                  this.photos.push({
+                                      name: file.name,
+                                      size: (file.size / 1024).toFixed(0) + ' KB',
+                                      base64: event.target.result
+                                  });
+                              };
+                              reader.readAsDataURL(file);
+                          });
+                          e.target.value = '';
+                      },
+                      removePhoto(index) {
+                          this.photos.splice(index, 1);
+                      }
+                  }">
                 @csrf
 
                 <!-- Ground Name -->
@@ -132,11 +161,91 @@
                     </div>
                 </div>
 
-                <!-- Image URL -->
-                <div>
-                    <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1.5">Ground Photo / Image URL (Optional)</label>
-                    <input type="url" name="image_url" value="{{ old('image_url') }}" placeholder="https://images.unsplash.com/photo-..."
-                           class="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <!-- Ground Photos Upload (Up to 5 Photos) -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="block font-bold text-slate-300 uppercase tracking-wider">
+                                Ground Photos <span class="text-emerald-400 font-normal">(Select 4 to 5 Photos)</span>
+                            </label>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Upload pitch, pavilion, boundary, lights & turf photos for teams to inspect.</p>
+                        </div>
+                        <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg"
+                              x-text="photos.length + ' / 5 Selected'">0 / 5 Selected</span>
+                    </div>
+
+                    <!-- Hidden inputs to submit base64 data to backend -->
+                    <template x-for="(photo, idx) in photos" :key="idx">
+                        <input type="hidden" name="photos_base64[]" :value="photo.base64">
+                    </template>
+
+                    <!-- Error notification -->
+                    <div x-show="errorMessage" x-cloak class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2">
+                        <span>⚠️</span>
+                        <span x-text="errorMessage"></span>
+                    </div>
+
+                    <!-- Upload Drop Zone / Picker -->
+                    <div x-show="photos.length < 5"
+                         class="border-2 border-dashed border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-500/[0.03] hover:bg-emerald-500/[0.07] rounded-2xl p-6 text-center transition cursor-pointer group"
+                         @click="$refs.groundPhotosInput.click()">
+                        <input type="file"
+                               x-ref="groundPhotosInput"
+                               name="photos[]"
+                               multiple
+                               accept="image/jpeg,image/png,image/jpg,image/webp"
+                               class="hidden"
+                               @change="handleFiles($event)">
+
+                        <div class="flex flex-col items-center justify-center pointer-events-none">
+                            <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-2xl group-hover:scale-110 transition">
+                                📸
+                            </div>
+                            <span class="font-extrabold text-white text-sm mt-3">Click to Select Photos from Device</span>
+                            <span class="text-slate-400 text-xs mt-1">Select up to 5 photos (JPG, PNG, WebP)</span>
+                            <span class="inline-block mt-3 px-3 py-1 rounded-lg bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold">
+                                + Choose Ground Photos
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Thumbnail Preview Grid -->
+                    <div x-show="photos.length > 0" x-cloak class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 pt-2">
+                        <template x-for="(photo, index) in photos" :key="index">
+                            <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-white/10 group shadow-md">
+                                <img :src="photo.base64" class="w-full h-24 sm:h-28 object-cover">
+                                
+                                <!-- Cover / Primary Badge -->
+                                <div x-show="index === 0" class="absolute top-1.5 left-1.5 bg-emerald-600 text-white font-extrabold text-[9px] px-1.5 py-0.5 rounded shadow">
+                                    ⭐ Cover Photo
+                                </div>
+                                <div x-show="index > 0" class="absolute top-1.5 left-1.5 bg-black/70 backdrop-blur text-slate-300 font-bold text-[9px] px-1.5 py-0.5 rounded shadow"
+                                     x-text="'Photo #' + (index + 1)">
+                                </div>
+
+                                <!-- Remove Button -->
+                                <button type="button"
+                                        @click.stop="removePhoto(index)"
+                                        class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 text-white font-black text-xs flex items-center justify-center shadow-lg transition"
+                                        title="Remove photo">
+                                    ✕
+                                </button>
+
+                                <div class="p-1.5 bg-slate-900/90 text-[10px] text-slate-400 truncate text-center" x-text="photo.size"></div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Optional URL fallback toggle -->
+                    <div class="pt-1">
+                        <button type="button" @click="urlMode = !urlMode" class="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                            <span x-text="urlMode ? '▾ Hide Photo URL field' : '▸ Or add ground photo by URL'"></span>
+                        </button>
+                        <div x-show="urlMode" x-cloak class="mt-2">
+                            <input type="url" name="image_url" value="{{ old('image_url') }}" placeholder="https://images.unsplash.com/photo-..."
+                                   class="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Description -->
