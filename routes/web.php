@@ -8,6 +8,35 @@ use App\Http\Controllers\UmpireController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LiveScoreController::class, 'index'])->name('home');
+Route::get('/app-status', function () {
+    $engineResp = null;
+    $engineError = null;
+    try {
+        $r = \Illuminate\Support\Facades\Http::timeout(5)->get('http://127.0.0.1:6020/matches');
+        $data = $r->json('data') ?? [];
+        $engineResp = [
+            'status' => $r->status(),
+            'total_matches' => count($data),
+            'top_matches' => array_slice(array_map(fn($m) => [
+                'id' => $m['id'] ?? null,
+                'name' => $m['name'] ?? null,
+                'series' => $m['series'] ?? null,
+                'status_text' => $m['status_text'] ?? null,
+                'score' => $m['score'] ?? null,
+            ], $data), 0, 5)
+        ];
+    } catch (\Throwable $e) {
+        $engineError = $e->getMessage();
+    }
+
+    return response()->json([
+        'time' => date('Y-m-d H:i:s'),
+        'provider' => config('services.cricket.provider'),
+        'local_url' => config('services.cricket.local_url'),
+        'score_engine' => $engineResp,
+        'score_engine_error' => $engineError,
+    ]);
+});
 Route::get('/live-scores', [LiveScoreController::class, 'index'])->name('live-scores.index');
 Route::get('/live-scores/{matchId}', [LiveScoreController::class, 'show'])->name('live-scores.show');
 Route::view('/offline', 'offline')->name('offline');

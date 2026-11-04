@@ -62,8 +62,17 @@ class MatchesController extends Controller
         };
 
         $live = collect($matches)->where('status', 'live')->sortBy($sortFn)->values();
-        $scheduled = collect($matches)->where('status', 'scheduled')->sortBy($sortFn)->values();
-        $completed = collect($matches)->filter(fn($m) => in_array($m['status'] ?? '', ['completed', 'abandoned']))->sortBy($sortFn)->values();
+        $liveIds = $live->pluck('id')->filter()->toArray();
+
+        $scheduled = collect($matches)->where('status', 'scheduled')
+            ->reject(fn($m) => in_array($m['id'] ?? '', $liveIds))
+            ->sortBy($sortFn)
+            ->values();
+
+        $completed = collect($matches)->filter(fn($m) => in_array($m['status'] ?? '', ['completed', 'abandoned']))
+            ->reject(fn($m) => in_array($m['id'] ?? '', $liveIds))
+            ->sortBy($sortFn)
+            ->values();
 
         if ($scheduled->isEmpty()) {
             try {
