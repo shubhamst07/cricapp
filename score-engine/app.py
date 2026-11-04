@@ -57,6 +57,7 @@ class ScoreResponse(BaseModel):
     score: str
     current_batsmen: List[Batsman]
     current_bowler: Bowler
+    player_of_the_match: Optional[Dict[str, Any]] = None
 
 
 class MatchValidator(BaseModel):
@@ -166,6 +167,39 @@ class ScoreService:
         )
 
     @classmethod
+    def extract_player_of_the_match(cls, html_content: str) -> Optional[Dict[str, Any]]:
+        idx = html_content.find("PLAYER OF THE MATCH")
+        if idx == -1:
+            idx = html_content.find("Player of the Match")
+        if idx == -1:
+            return None
+
+        chunk = html_content[idx:idx + 3000]
+        # Regex 1: Cricbuzz player card with image, name, stats
+        m = re.search(r'PLAYER\s+OF\s+THE\s+MATCH.*?<img[^>]*alt=\"([^\"]+)\"[^>]*src=\"([^\"]+)\".*?<span[^>]*>([^<]+)</span>.*?<p[^>]*>([^<]+)</p>', chunk, re.DOTALL | re.IGNORECASE)
+        if m:
+            alt, img, name, stats = m.groups()
+            return {
+                "name": html.unescape(name.strip()),
+                "stats": html.unescape(stats.strip()),
+                "image": html.unescape(img.strip()),
+                "award": "Player of the Match"
+            }
+
+        # Regex 2: Broad fallback
+        name_m = re.search(r'<span[^>]*class=\"hover:underline\"[^>]*>([^<]+)</span>', chunk) or re.search(r'<span[^>]*>([^<]{2,40})</span>', chunk)
+        stats_m = re.search(r'<p[^>]*class=\"[^\"]*text-cbTxtSec[^\"]*\"[^>]*>([^<]+)</p>', chunk)
+        img_m = re.search(r'<img[^>]*src=\"([^\"]+)\"', chunk)
+        if name_m:
+            return {
+                "name": html.unescape(name_m.group(1).strip()),
+                "stats": html.unescape(stats_m.group(1).strip()) if stats_m else "",
+                "image": html.unescape(img_m.group(1).strip()) if img_m else "",
+                "award": "Player of the Match"
+            }
+        return None
+
+    @classmethod
     async def fetch_score(cls, match_id: str) -> ScoreResponse:
         cached = get_cached(f"score_{match_id}", ttl=5)
         if cached:
@@ -214,12 +248,15 @@ class ScoreService:
             bowler_match = re.search(r"Bowler.*?([A-Za-z.'\- ]+?)\s+\d+\s+\d+", page_text, re.IGNORECASE)
             bowler_name = cls.clean(bowler_match.group(1)) if bowler_match else NOT_FOUND
 
+            pom = cls.extract_player_of_the_match(response.text)
+
             res = ScoreResponse(
                 status="success",
                 title=title,
                 score=score,
                 current_batsmen=batsmen,
-                current_bowler=Bowler(name=bowler_name)
+                current_bowler=Bowler(name=bowler_name),
+                player_of_the_match=pom
             )
             set_cached(f"score_{match_id}", res)
             return res
@@ -679,18 +716,27 @@ class ScoreService:
                     except Exception as e:
                         print("Scorecard parse fallback error:", e)
                     break
-            else:
-                # Top active batting & bowling from latest innings
+            # Top active batting & bowling from latest innings
+            if formatted_innings:
                 latest_inn = formatted_innings[-1]
                 current_batting = [b for b in latest_inn["batting"] if b["out"] in ["not out", "batting"]]
                 current_bowling = latest_inn["bowling"]
+
+            pom = cls.extract_player_of_the_match(text)
+            if not pom:
+                try:
+                    score_info = await cls.fetch_score(match_id)
+                    pom = score_info.player_of_the_match
+                except Exception:
+                    pom = None
 
             result = {
                 "status": "success",
                 "data": {
                     "innings": formatted_innings,
                     "batting": current_batting,
-                    "bowling": current_bowling
+                    "bowling": current_bowling,
+                    "player_of_the_match": pom
                 }
             }
             set_cached(f"scorecard_{match_id}", result)
@@ -828,7 +874,8 @@ async def get_match_detail(match_id: str):
             "score": match_meta["score"] if match_meta else None,
             "live_score_display": score_info.score,
             "current_batsmen": [b.model_dump() for b in score_info.current_batsmen],
-            "current_bowler": score_info.current_bowler.model_dump()
+            "current_bowler": score_info.current_bowler.model_dump(),
+            "player_of_the_match": score_info.player_of_the_match
         }
     }
 

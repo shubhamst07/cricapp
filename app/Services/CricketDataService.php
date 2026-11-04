@@ -151,7 +151,7 @@ class CricketDataService
         if ($this->provider === 'local') {
             $raw = Cache::remember($this->cacheKey("match_{$matchId}"), $this->matchDetailTtl, function () use ($matchId) {
                 try {
-                    $response = Http::timeout(5)->get("{$this->localUrl}/match/{$matchId}");
+                    $response = Http::timeout(15)->get("{$this->localUrl}/match/{$matchId}");
                     if ($response->successful()) {
                         return $response->json();
                     }
@@ -175,7 +175,7 @@ class CricketDataService
         if ($this->provider === 'local') {
             return Cache::remember($this->cacheKey("scorecard_{$matchId}"), $this->scorecardTtl, function () use ($matchId) {
                 try {
-                    $response = Http::timeout(5)->get("{$this->localUrl}/scorecard/{$matchId}");
+                    $response = Http::timeout(15)->get("{$this->localUrl}/scorecard/{$matchId}");
                     if ($response->successful()) {
                         return $response->json();
                     }
@@ -311,6 +311,7 @@ class CricketDataService
             'series' => $data['series'] ?? [],
             'current_batsmen' => $data['current_batsmen'] ?? [],
             'current_bowler' => $data['current_bowler'] ?? [],
+            'player_of_the_match' => $data['player_of_the_match'] ?? null,
         ];
     }
 

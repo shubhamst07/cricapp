@@ -587,6 +587,28 @@ export default function LiveScoresApp({
                                 </div>
                             )}
 
+                            {scorecardData?.data?.player_of_the_match && (
+                                <div className="p-3 bg-gradient-to-r from-amber-500/15 via-amber-400/10 to-yellow-500/5 border border-amber-300 rounded-xl flex items-center justify-between gap-3 shadow-xs">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="p-1.5 bg-amber-500 text-white rounded-lg shrink-0">
+                                            <Trophy className="w-4 h-4" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider block">Player of the Match</span>
+                                            <p className="text-xs font-extrabold text-gray-900 truncate">
+                                                {scorecardData.data.player_of_the_match.name}
+                                                {scorecardData.data.player_of_the_match.stats && (
+                                                    <span className="font-semibold text-amber-900 ml-1">({scorecardData.data.player_of_the_match.stats})</span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md shrink-0">
+                                        Man of the Match
+                                    </span>
+                                </div>
+                            )}
+
                             {loadingScorecard ? (
                                 <div className="py-12 text-center text-gray-400">
                                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />

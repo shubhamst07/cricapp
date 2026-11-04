@@ -75,15 +75,22 @@ class LiveScoreController extends Controller
         }
 
         $match = $cricket->findMatchById($cricket->getCurrentMatches(), $matchId);
+        $details = $cricket->getMatchDetails($matchId);
 
         if (!$match) {
-            $match = $cricket->getMatchDetails($matchId);
+            $match = $details;
             if (empty($match)) {
                 abort(404, 'Match not found.');
             }
+        } elseif (!empty($details)) {
+            $match = array_merge($match, array_filter($details, fn($v) => !is_null($v) && $v !== ''));
         }
 
         $scorecard = $cricket->getMatchScorecard($matchId);
+
+        if (empty($match['player_of_the_match']) && !empty($scorecard['data']['player_of_the_match'])) {
+            $match['player_of_the_match'] = $scorecard['data']['player_of_the_match'];
+        }
 
         return view('live.show', compact('match', 'scorecard', 'forceRefresh'));
     }

@@ -111,13 +111,17 @@ class MatchesController extends Controller
 
         $matches = $cricket->getCurrentMatches();
         $match = $cricket->findMatchById($matches, $matchId);
+        $detail = $cricket->getMatchDetails($matchId);
 
         if (!$match) {
-            $detail = $cricket->getMatchDetails($matchId);
             if (!empty($detail)) {
                 return response()->json($detail);
             }
             return response()->json(['error' => 'Match not found'], 404);
+        }
+
+        if (!empty($detail)) {
+            $match = array_merge($match, array_filter($detail, fn($v) => !is_null($v) && $v !== ''));
         }
 
         return response()->json($match);
