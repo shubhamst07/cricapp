@@ -344,7 +344,7 @@ class ScoreService:
 
     @classmethod
     async def fetch_all_matches(cls) -> List[Dict[str, Any]]:
-        cached = get_cached("all_matches", ttl=10)
+        cached = get_cached("all_matches", ttl=30)
         if cached:
             return cached
 
@@ -352,80 +352,86 @@ class ScoreService:
             url_live = f"https://www.cricbuzz.com/cricket-match/live-scores?_={time.time_ns()}"
             url_recent = f"https://www.cricbuzz.com/cricket-match/live-scores/recent-matches?_={time.time_ns()}"
             url_upcoming = f"https://www.cricbuzz.com/cricket-match/live-scores/upcoming-matches?_={time.time_ns()}"
+            sched_url = f"https://www.cricbuzz.com/cricket-schedule/upcoming-series/international?_={time.time_ns()}"
 
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
                 resps = await asyncio.gather(
                     client.get(url_live, headers=cls.HEADERS),
                     client.get(url_recent, headers=cls.HEADERS),
                     client.get(url_upcoming, headers=cls.HEADERS),
+                    client.get(sched_url, headers=cls.HEADERS),
                     return_exceptions=True
                 )
 
             parsed = []
             parsed_ids = set()
 
-            for resp in resps:
+            for resp in resps[:3]:
                 if isinstance(resp, httpx.Response) and resp.status_code == 200:
                     matches = cls.parse_cards_from_html(resp.text)
                     for m in matches:
                         if m["id"] not in parsed_ids:
                             parsed_ids.add(m["id"])
                             parsed.append(m)
+                        elif m.get("score"):
+                            # If already added without score, update with score
+                            for idx, existing in enumerate(parsed):
+                                if existing.get("id") == m["id"] and not existing.get("score"):
+                                    parsed[idx] = m
+                                    break
 
-            # 2. Also fetch upcoming schedule matches from upcoming-series
+            # 2. Also parse upcoming schedule matches from upcoming-series (gathered as resps[3])
             try:
-                sched_url = f"https://www.cricbuzz.com/cricket-schedule/upcoming-series/international?_={time.time_ns()}"
-                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                    sched_resp = await client.get(sched_url, headers=cls.HEADERS)
-                    if sched_resp.status_code == 200:
-                        sched_soup = BeautifulSoup(sched_resp.text, "lxml")
-                        sched_main = sched_soup.find("main") or sched_soup.find("div", class_="page-wrapper")
-                        if sched_main:
-                            for a in sched_main.find_all("a", href=True):
-                                href = a.get("href", "")
-                                m = re.match(r"^/live-cricket-scores/(\d+)/([\w-]+)$", href)
-                                if not m:
-                                    continue
-                                m_id = m.group(1)
-                                if m_id in parsed_ids:
-                                    continue
-                                slug = m.group(2)
-                                if "-vs-" not in slug:
-                                    continue
+                sched_resp = resps[3] if len(resps) > 3 else None
+                if isinstance(sched_resp, httpx.Response) and sched_resp.status_code == 200:
+                    sched_soup = BeautifulSoup(sched_resp.text, "lxml")
+                    sched_main = sched_soup.find("main") or sched_soup.find("div", class_="page-wrapper")
+                    if sched_main:
+                        for a in sched_main.find_all("a", href=True):
+                            href = a.get("href", "")
+                            m = re.match(r"^/live-cricket-scores/(\d+)/([\w-]+)$", href)
+                            if not m:
+                                continue
+                            m_id = m.group(1)
+                            if m_id in parsed_ids:
+                                continue
+                            slug = m.group(2)
+                            if "-vs-" not in slug:
+                                continue
 
-                                text = a.get_text(" | ", strip=True)
-                                meta = text.split("|")[0].strip() if "•" in text else ""
-                                parts = meta.split("•", 1) if "•" in meta else ["Match", ""]
+                            text = a.get_text(" | ", strip=True)
+                            meta = text.split("|")[0].strip() if "•" in text else ""
+                            parts = meta.split("•", 1) if "•" in meta else ["Match", ""]
 
-                                series_link = a.find_previous("a", href=lambda h: h and "/cricket-series/" in h)
-                                series_name = series_link.get_text(" ", strip=True) if series_link else "Other Series"
-                                series_name = " ".join(series_name.split()).strip()
-                                if not series_name:
-                                    series_name = "Other Series"
+                            series_link = a.find_previous("a", href=lambda h: h and "/cricket-series/" in h)
+                            series_name = series_link.get_text(" ", strip=True) if series_link else "Other Series"
+                            series_name = " ".join(series_name.split()).strip()
+                            if not series_name:
+                                series_name = "Other Series"
 
-                                slug_parts = slug.split("-")
-                                vs_idx = slug_parts.index("vs") if "vs" in slug_parts else -1
-                                teams = []
-                                if vs_idx > 0 and vs_idx + 1 < len(slug_parts):
-                                    teams = [slug_parts[vs_idx - 1].upper(), slug_parts[vs_idx + 1].upper()]
+                            slug_parts = slug.split("-")
+                            vs_idx = slug_parts.index("vs") if "vs" in slug_parts else -1
+                            teams = []
+                            if vs_idx > 0 and vs_idx + 1 < len(slug_parts):
+                                teams = [slug_parts[vs_idx - 1].upper(), slug_parts[vs_idx + 1].upper()]
 
-                                title = a.get("title") or slug.replace("-", " ").title()
+                            title = a.get("title") or slug.replace("-", " ").title()
 
-                                parsed.append({
-                                    "id": m_id,
-                                    "name": title.strip(),
-                                    "matchType": parts[0].strip() if parts[0] else "Match",
-                                    "venue": parts[1].strip() if len(parts) > 1 else "",
-                                    "status_text": "Scheduled",
-                                    "series": series_name,
-                                    "series_name": series_name,
-                                    "teams": teams,
-                                    "score": None,
-                                    "href": href
-                                })
-                                parsed_ids.add(m_id)
+                            parsed.append({
+                                "id": m_id,
+                                "name": title.strip(),
+                                "matchType": parts[0].strip() if parts[0] else "Match",
+                                "venue": parts[1].strip() if len(parts) > 1 else "",
+                                "status_text": "Scheduled",
+                                "series": series_name,
+                                "series_name": series_name,
+                                "teams": teams,
+                                "score": None,
+                                "href": href
+                            })
+                            parsed_ids.add(m_id)
             except Exception as sched_err:
-                print("Error fetching upcoming schedule:", sched_err)
+                print("Error parsing upcoming schedule:", sched_err)
 
             def priority_key(m):
                 series = (m.get("series") or "").lower()

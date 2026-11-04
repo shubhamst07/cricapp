@@ -52,7 +52,7 @@ class CricketDataService
         if ($this->provider === 'local') {
             try {
                 $url = "{$this->localUrl}/" . ltrim($endpoint, '/');
-                $response = Http::timeout(5)
+                $response = Http::timeout(20)
                     ->withHeaders(['Accept' => 'application/json'])
                     ->get($url, $params);
 
@@ -92,7 +92,7 @@ class CricketDataService
     {
         if ($this->provider === 'local') {
             try {
-                $response = Http::timeout(10)->get("{$this->localUrl}/matches");
+                $response = Http::timeout(25)->get("{$this->localUrl}/matches");
                 if ($response->successful()) {
                     $raw = $response->json();
                     if ($raw && isset($raw['data']) && is_array($raw['data']) && !empty($raw['data'])) {

@@ -11,22 +11,22 @@ Route::get('/', [LiveScoreController::class, 'index'])->name('home');
 Route::get('/app-status', function () {
     $engineResp = null;
     $engineError = null;
+    $scoreEngineLog = null;
     try {
-        $r = \Illuminate\Support\Facades\Http::timeout(5)->get('http://127.0.0.1:6020/matches');
+        $r = \Illuminate\Support\Facades\Http::timeout(25)->get('http://127.0.0.1:6020/matches');
         $data = $r->json('data') ?? [];
+        $targetMatch = collect($data)->first(fn($m) => ($m['id'] ?? '') === '161245' || str_contains(strtolower($m['name'] ?? ''), 'zealand'));
         $engineResp = [
             'status' => $r->status(),
             'total_matches' => count($data),
-            'top_matches' => array_slice(array_map(fn($m) => [
-                'id' => $m['id'] ?? null,
-                'name' => $m['name'] ?? null,
-                'series' => $m['series'] ?? null,
-                'status_text' => $m['status_text'] ?? null,
-                'score' => $m['score'] ?? null,
-            ], $data), 0, 5)
+            'target_161245' => $targetMatch,
         ];
     } catch (\Throwable $e) {
         $engineError = $e->getMessage();
+    }
+
+    if (file_exists(storage_path('logs/score-engine.log'))) {
+        $scoreEngineLog = substr(file_get_contents(storage_path('logs/score-engine.log')), -1000);
     }
 
     return response()->json([
@@ -35,6 +35,7 @@ Route::get('/app-status', function () {
         'local_url' => config('services.cricket.local_url'),
         'score_engine' => $engineResp,
         'score_engine_error' => $engineError,
+        'score_engine_log' => $scoreEngineLog,
     ]);
 });
 Route::get('/live-scores', [LiveScoreController::class, 'index'])->name('live-scores.index');
