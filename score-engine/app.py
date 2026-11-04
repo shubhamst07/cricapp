@@ -251,7 +251,7 @@ class ScoreService:
             if not series_name:
                 series_name = "Other Matches"
 
-            children = [c for c in card.children if hasattr(c, "get_text")]
+            children = [c for c in card.children if hasattr(c, "find_all")]
             if len(children) < 2:
                 continue
 
@@ -261,6 +261,8 @@ class ScoreService:
             teams = []
             scores = []
             team_rows = children[1].find_all("div", class_=lambda c: c and "justify-between" in c)
+            if not team_rows:
+                continue
 
             for row in team_rows:
                 spans = row.find_all("span")
@@ -425,6 +427,20 @@ class ScoreService:
             except Exception as sched_err:
                 print("Error fetching upcoming schedule:", sched_err)
 
+            def priority_key(m):
+                series = (m.get("series") or "").lower()
+                name = (m.get("name") or "").lower()
+                teams = [t.lower() for t in m.get("teams", [])]
+                if any("ind" in t or "india" in t for t in teams) or "india" in name:
+                    return 0
+                top_teams = ["australia", "england", "new zealand", "south africa", "pakistan", "sri lanka", "west indies", "afghanistan", "bangladesh"]
+                if any(any(tt in t for tt in top_teams) for t in teams):
+                    return 1
+                if "tour of" in series or "icc" in series or "world cup" in series:
+                    return 2
+                return 3
+
+            parsed.sort(key=priority_key)
             set_cached("all_matches", parsed)
             return parsed
         except Exception as e:

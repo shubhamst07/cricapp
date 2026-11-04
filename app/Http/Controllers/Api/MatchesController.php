@@ -42,9 +42,28 @@ class MatchesController extends Controller
         // 3. Merge matches
         $matches = array_merge($localMatches, $externalMatches);
 
-        $live = collect($matches)->where('status', 'live')->values();
-        $scheduled = collect($matches)->where('status', 'scheduled')->values();
-        $completed = collect($matches)->filter(fn($m) => in_array($m['status'] ?? '', ['completed', 'abandoned']))->values();
+        $sortFn = function ($m) {
+            $name = strtolower($m['name'] ?? '');
+            $series = strtolower($m['series'] ?? $m['series_name'] ?? '');
+            $teams = implode(' ', array_map('strtolower', $m['teams'] ?? []));
+            if (str_contains($teams, 'ind') || str_contains($teams, 'india') || str_contains($name, 'india')) {
+                return 0;
+            }
+            $topTeams = ['australia', 'england', 'new zealand', 'south africa', 'pakistan', 'sri lanka', 'west indies', 'afghanistan', 'bangladesh'];
+            foreach ($topTeams as $tt) {
+                if (str_contains($teams, $tt)) {
+                    return 1;
+                }
+            }
+            if (str_contains($series, 'tour of') || str_contains($series, 'icc') || str_contains($series, 'world cup')) {
+                return 2;
+            }
+            return 3;
+        };
+
+        $live = collect($matches)->where('status', 'live')->sortBy($sortFn)->values();
+        $scheduled = collect($matches)->where('status', 'scheduled')->sortBy($sortFn)->values();
+        $completed = collect($matches)->filter(fn($m) => in_array($m['status'] ?? '', ['completed', 'abandoned']))->sortBy($sortFn)->values();
 
         if ($scheduled->isEmpty()) {
             try {
