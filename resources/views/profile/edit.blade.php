@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Profile') }}
+        <h2 class="font-black text-xl text-slate-900 dark:text-white leading-tight">
+            {{ __('Account Settings') }}
         </h2>
     </x-slot>
 

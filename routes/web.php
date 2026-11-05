@@ -5,6 +5,7 @@ use App\Http\Controllers\MatchController;
 use App\Http\Controllers\LiveScoreController;
 use App\Http\Controllers\GroundController;
 use App\Http\Controllers\UmpireController;
+use App\Http\Controllers\PageController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LiveScoreController::class, 'index'])->name('home');
@@ -54,6 +55,11 @@ Route::get('/matches', [MatchController::class, 'index'])->name('matches.index')
 // Public Grounds & Umpires Hub
 Route::get('/grounds', [GroundController::class, 'index'])->name('grounds.index');
 Route::get('/umpires', [UmpireController::class, 'index'])->name('umpires.index');
+
+// About & Contact Us Pages
+Route::get('/about', [PageController::class, 'about'])->name('about');
+Route::get('/contact', [PageController::class, 'contact'])->name('contact');
+Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');
 
 Route::middleware('auth')->group(function () {
     Route::post('/profile/update', [ProfileController::class, 'update'])->name('profile.update');

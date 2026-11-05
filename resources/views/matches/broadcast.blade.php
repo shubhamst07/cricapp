@@ -3,24 +3,24 @@
 @section('header')
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <a href="{{ route('matches.show', $match) }}" class="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition" title="Back to Scorecard">
+            <a href="{{ route('matches.show', $match) }}" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition" title="Back to Scorecard">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
             </a>
             <div>
-                <span class="text-[11px] font-black uppercase text-red-600 tracking-wider flex items-center gap-1.5">
+                <span class="text-[11px] font-black uppercase text-red-600 dark:text-rose-400 tracking-wider flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
                     CRICHEROES LIVE BROADCAST STUDIO
                 </span>
-                <h2 class="font-black text-xl text-gray-900 leading-tight">
+                <h2 class="font-black text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight">
                     {{ $match->team1_name }} vs {{ $match->team2_name }}
                 </h2>
             </div>
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="{{ route('matches.show', $match) }}" class="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-700 font-bold text-xs border border-gray-200 transition flex items-center gap-1.5">
+            <a href="{{ route('matches.show', $match) }}" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-white/10 transition flex items-center gap-1.5">
                 <span>📋 Full Scorecard</span>
             </a>
         </div>

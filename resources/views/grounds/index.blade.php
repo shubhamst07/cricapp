@@ -3,7 +3,11 @@
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h2 class="font-black text-2xl text-gray-900 leading-tight mt-1">Cricket Grounds & Venues</h2>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mb-1">
+                🏟️ Turf & Stadium Booking
+            </div>
+            <h2 class="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white leading-tight">Cricket Grounds & Venues</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Discover, book, or list cricket grounds with floodlights and turf pitches</p>
         </div>
 
         @auth
@@ -16,7 +20,7 @@
             </a>
         @else
             <a href="{{ route('login') }}"
-               class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-bold text-sm shadow-md transition">
+               class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-md transition">
                 <span>Sign In to List Ground</span>
             </a>
         @endauth

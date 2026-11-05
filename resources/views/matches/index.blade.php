@@ -3,7 +3,11 @@
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h2 class="font-black text-2xl text-gray-900 leading-tight mt-1">My Cricket Matches</h2>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 mb-1">
+                ⚡ CricHeroes Match Arena
+            </div>
+            <h2 class="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white leading-tight">My Cricket Matches</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Start local matches, score ball-by-ball, and broadcast live</p>
         </div>
 
         <button type="button"

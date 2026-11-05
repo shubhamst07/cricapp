@@ -10,11 +10,11 @@
                     </div>
                 </div>
                 <div>
-                    <h2 class="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
+                    <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                         <span>Cricket Buzz & Social Feed</span>
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30 uppercase tracking-wider">LIVE FEED</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 uppercase tracking-wider">LIVE FEED</span>
                     </h2>
-                    <p class="text-xs text-slate-400">Scroll trending match moments, memes, reels & fan banter</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Scroll trending match moments, memes, reels & fan banter</p>
                 </div>
             </div>
 

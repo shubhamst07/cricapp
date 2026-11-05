@@ -15,6 +15,25 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800,900&display=swap" rel="stylesheet" />
 
+        <!-- Theme Initialization -->
+        <script>
+            if (localStorage.theme === 'light') {
+                document.documentElement.classList.remove('dark');
+            } else {
+                document.documentElement.classList.add('dark');
+            }
+            function toggleTheme() {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.theme = 'light';
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.theme = 'dark';
+                }
+                window.dispatchEvent(new CustomEvent('theme-changed', { detail: { theme: localStorage.theme } }));
+            }
+        </script>
+
         <!-- Scripts & Styles -->
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.jsx'])
@@ -53,9 +72,18 @@
                     <a href="{{ route('grounds.index') }}" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition hidden sm:flex items-center gap-1.5">
                         <span>🏟️ Grounds</span>
                     </a>
-                    <a href="{{ route('umpires.index') }}" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition hidden sm:flex items-center gap-1.5">
-                        <span>⚖️ Umpires</span>
+                    <a href="{{ route('about') }}" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition hidden sm:flex items-center gap-1.5">
+                        <span>📖 About</span>
                     </a>
+                    <a href="{{ route('contact') }}" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition hidden sm:flex items-center gap-1.5">
+                        <span>📬 Contact</span>
+                    </a>
+                    <button type="button" 
+                            onclick="toggleTheme()" 
+                            class="p-2 rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 transition border border-white/10"
+                            title="Toggle Light / Dark mode">
+                        🌓
+                    </button>
                 </div>
             </div>
         </header>
@@ -76,7 +104,9 @@
                     <span>•</span>
                     <a href="{{ route('grounds.index') }}" class="hover:text-white transition">Grounds</a>
                     <span>•</span>
-                    <a href="{{ route('umpires.index') }}" class="hover:text-white transition">Umpires</a>
+                    <a href="{{ route('about') }}" class="hover:text-white transition">About</a>
+                    <span>•</span>
+                    <a href="{{ route('contact') }}" class="hover:text-white transition">Contact</a>
                 </div>
             </div>
         </footer>

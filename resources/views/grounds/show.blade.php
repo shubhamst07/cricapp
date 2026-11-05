@@ -3,21 +3,21 @@
 @section('header')
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <a href="{{ route('grounds.index') }}" class="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition" title="Back to Grounds">
+            <a href="{{ route('grounds.index') }}" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition" title="Back to Grounds">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
             </a>
             <div>
-                <span class="text-[11px] font-black uppercase text-emerald-600 tracking-wider">CRICHEROES GROUND ARENA</span>
-                <h2 class="font-black text-xl text-gray-900 leading-tight">
+                <span class="text-[11px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">CRICHEROES GROUND ARENA</span>
+                <h2 class="font-black text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight">
                     {{ $ground->name }}
                 </h2>
             </div>
         </div>
 
         @if($isOwner)
-            <span class="px-3 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-700 border border-blue-200">
+            <span class="px-3 py-1 rounded-full text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700/40">
                 👑 You Own This Venue
             </span>
         @endif

@@ -3,21 +3,21 @@
 @section('header')
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <a href="{{ route('umpires.index') }}" class="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition" title="Back to Umpires">
+            <a href="{{ route('umpires.index') }}" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition" title="Back to Umpires">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
             </a>
             <div>
-                <span class="text-[11px] font-black uppercase text-indigo-600 tracking-wider">CRICHEROES MATCH OFFICIAL</span>
-                <h2 class="font-black text-xl text-gray-900 leading-tight">
+                <span class="text-[11px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">CRICHEROES MATCH OFFICIAL</span>
+                <h2 class="font-black text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight">
                     {{ $umpire->name }}
                 </h2>
             </div>
         </div>
 
         @if($isSelf)
-            <a href="{{ route('umpires.register') }}" class="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition">
+            <a href="{{ route('umpires.register') }}" class="px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition">
                 Edit Profile ✏️
             </a>
         @endif
