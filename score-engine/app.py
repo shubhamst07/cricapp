@@ -276,6 +276,97 @@ class ScoreService:
             raise APIError(500, "failed to process score data")
 
     @classmethod
+    def parse_rsc_matches(cls, html_text: str) -> List[Dict[str, Any]]:
+        marker = 'matchesList'
+        pos = 0
+        results = []
+        seen = set()
+        while True:
+            pos = html_text.find(marker, pos)
+            if pos == -1:
+                break
+
+            arr_start = html_text.find('[', pos)
+            if arr_start == -1:
+                pos += len(marker)
+                continue
+
+            depth = 0
+            arr_end = -1
+            for i in range(arr_start, min(len(html_text), arr_start + 250000)):
+                if html_text[i] == '[':
+                    depth += 1
+                elif html_text[i] == ']':
+                    depth -= 1
+                    if depth == 0:
+                        arr_end = i
+                        break
+            if arr_end != -1:
+                raw_json = html_text[arr_start:arr_end + 1]
+                cleaned = raw_json.replace('\\\\\\"', '"').replace('\\\"', '"').replace('\\\\\\\\', '\\')
+                try:
+                    m_list = json.loads(cleaned)
+                    for item in m_list:
+                        match_obj = item.get('match') or item
+                        info = match_obj.get('matchInfo', {})
+                        m_id = str(info.get('matchId', ''))
+                        if m_id and m_id not in seen:
+                            seen.add(m_id)
+                            t1 = info.get('team1', {}).get('teamName', 'Team 1')
+                            t2 = info.get('team2', {}).get('teamName', 'Team 2')
+                            match_score = match_obj.get('matchScore')
+                            scores = []
+                            if match_score:
+                                for team_key, team_name in [('team1Score', t1), ('team2Score', t2)]:
+                                    t_data = match_score.get(team_key)
+                                    if not t_data:
+                                        continue
+                                    for inngs_key in ['inngs1', 'inngs2']:
+                                        inn = t_data.get(inngs_key)
+                                        if not inn:
+                                            continue
+                                        runs = inn.get('runs', 0)
+                                        wickets = inn.get('wickets', 0)
+                                        overs = str(inn.get('overs', '0'))
+                                        scores.append({
+                                            'inning': f"{team_name} Innings" if inngs_key == 'inngs1' else f"{team_name} 2nd Innings",
+                                            'batting_team': team_name,
+                                            'runs': runs,
+                                            'r': runs,
+                                            'wickets': wickets,
+                                            'w': wickets,
+                                            'overs': overs,
+                                            'o': overs,
+                                            'display_score': f"{runs}/{wickets}" if wickets else str(runs)
+                                        })
+
+                            state = str(info.get('state', '')).lower()
+                            status = info.get('status', '') or info.get('shortStatus', '')
+                            match_started = state in ['in progress', 'complete', 'toss'] or bool(scores)
+                            match_ended = state == 'complete'
+                            series_name = info.get('seriesName', 'Other Matches')
+                            match_desc = info.get('matchDesc', 'Match')
+
+                            results.append({
+                                'id': m_id,
+                                'name': f"{t1} vs {t2}, {match_desc}",
+                                'matchType': match_desc,
+                                'venue': f"{info.get('venueInfo', {}).get('ground', '')}, {info.get('venueInfo', {}).get('city', '')}".strip(', '),
+                                'status_text': status,
+                                'series': series_name,
+                                'series_name': series_name,
+                                'teams': [t1, t2],
+                                'score': scores if scores else None,
+                                'matchStarted': match_started,
+                                'matchEnded': match_ended,
+                                'href': f"/live-cricket-scores/{m_id}"
+                            })
+                except Exception as e:
+                    pass
+            pos = arr_start + 1
+        return results
+
+    @classmethod
     def parse_cards_from_html(cls, html_text: str) -> List[Dict[str, Any]]:
         soup = BeautifulSoup(html_text, "lxml")
         cards = soup.find_all("a", href=lambda h: h and re.match(r"^/live-cricket-scores/(\d+)/", h))
@@ -284,6 +375,11 @@ class ScoreService:
         parsed = []
 
         for card in cards:
+            # Skip top navbar / header ticker items
+            cls_str = " ".join(card.get("class", []))
+            if "max-w-[160px]" in cls_str or ("items-center" in cls_str and "hover:bg-[#444]" in cls_str):
+                continue
+
             href = card.get("href", "")
             m = re.match(r"^/live-cricket-scores/(\d+)/([\w-]+)$", href)
             if not m:
@@ -421,20 +517,43 @@ class ScoreService:
 
             for resp in resps[:3]:
                 if isinstance(resp, httpx.Response) and resp.status_code == 200:
+                    # 1. Parse high-fidelity RSC matches first (contains full series, state, and real-time scores)
+                    rsc_matches = cls.parse_rsc_matches(resp.text)
+                    for m in rsc_matches:
+                        if m["id"] not in parsed_ids:
+                            parsed_ids.add(m["id"])
+                            parsed.append(m)
+                        else:
+                            for idx, existing in enumerate(parsed):
+                                if existing.get("id") == m["id"]:
+                                    if m.get("score"):
+                                        existing["score"] = m["score"]
+                                        existing["matchStarted"] = True
+                                    if m.get("series_name") and m["series_name"] != "Other Matches":
+                                        existing["series"] = m["series_name"]
+                                        existing["series_name"] = m["series_name"]
+                                    if m.get("status_text"):
+                                        existing["status_text"] = m["status_text"]
+                                    if m.get("teams") and not existing.get("teams"):
+                                        existing["teams"] = m["teams"]
+                                    break
+
+                    # 2. Parse traditional HTML cards
                     matches = cls.parse_cards_from_html(resp.text)
                     for m in matches:
                         if m["id"] not in parsed_ids:
                             parsed_ids.add(m["id"])
                             parsed.append(m)
                         else:
-                            # Update existing match if this card has scores or better status
+                            # Update existing match if this card has scores or better series name
                             for idx, existing in enumerate(parsed):
                                 if existing.get("id") == m["id"]:
-                                    if m.get("score"):
+                                    if m.get("score") and not existing.get("score"):
                                         existing["score"] = m["score"]
                                         existing["matchStarted"] = True
-                                    if m.get("status_text") and m["status_text"].lower() not in ["scheduled", "match scheduled"]:
-                                        existing["status_text"] = m["status_text"]
+                                    if m.get("series_name") and existing.get("series_name") in ["Other Matches", "Other Series"]:
+                                        existing["series"] = m["series_name"]
+                                        existing["series_name"] = m["series_name"]
                                     if m.get("teams") and not existing.get("teams"):
                                         existing["teams"] = m["teams"]
                                     break
@@ -463,29 +582,48 @@ class ScoreService:
                             parts = meta.split("•", 1) if "•" in meta else ["Match", ""]
 
                             series_link = a.find_previous("a", href=lambda h: h and "/cricket-series/" in h)
-                            series_name = series_link.get_text(" ", strip=True) if series_link else "Other Series"
+                            series_name = series_link.get_text(" ", strip=True) if series_link else ""
                             series_name = " ".join(series_name.split()).strip()
+                            if not series_name or series_name == "Other Series":
+                                if "tour-of" in slug:
+                                    s_match = re.search(r"((?:[a-z]+-)+tour-of-[a-z]+(?:-\d{4})?)", slug)
+                                    if s_match:
+                                        series_name = s_match.group(1).replace("-", " ").title()
                             if not series_name:
-                                series_name = "Other Series"
+                                series_name = "Other Matches"
+
+                            raw_title = (a.get("title") or slug.replace("-", " ").title()).strip()
+                            status_from_title = None
+                            if " - " in raw_title:
+                                t_parts = raw_title.split(" - ", 1)
+                                match_name = t_parts[0].strip()
+                                status_from_title = t_parts[1].strip()
+                            else:
+                                match_name = raw_title
 
                             slug_parts = slug.split("-")
                             vs_idx = slug_parts.index("vs") if "vs" in slug_parts else -1
                             teams = []
                             if vs_idx > 0 and vs_idx + 1 < len(slug_parts):
                                 teams = [slug_parts[vs_idx - 1].upper(), slug_parts[vs_idx + 1].upper()]
+                            elif " vs " in match_name:
+                                t_parts = match_name.split(" vs ", 1)
+                                teams = [t_parts[0].strip(), t_parts[1].split(",")[0].strip()]
 
-                            title = a.get("title") or slug.replace("-", " ").title()
+                            status_text = status_from_title if status_from_title else "Scheduled"
+                            is_in_progress = any(w in status_text.lower() for w in ["opt to", "elected to", "live", "session", "day "])
 
                             parsed.append({
                                 "id": m_id,
-                                "name": title.strip(),
+                                "name": match_name,
                                 "matchType": parts[0].strip() if parts[0] else "Match",
                                 "venue": parts[1].strip() if len(parts) > 1 else "",
-                                "status_text": "Scheduled",
+                                "status_text": status_text,
                                 "series": series_name,
                                 "series_name": series_name,
                                 "teams": teams,
                                 "score": None,
+                                "matchStarted": is_in_progress,
                                 "href": href
                             })
                             parsed_ids.add(m_id)
@@ -893,17 +1031,22 @@ async def get_match_detail(match_id: str):
     elif (has_live_score or has_batsmen) and (not status_text or status_text.lower() in ["scheduled", "match scheduled", "upcoming"]):
         status_text = f"Live: {score_info.score}" if has_live_score else "In Progress"
 
+    series_name = (match_meta.get("series_name") or match_meta.get("series")) if match_meta else "Other Matches"
+    teams = match_meta.get("teams", []) if match_meta else []
+
     return {
         "status": "success",
         "data": {
             "id": match_id,
             "name": match_meta["name"] if match_meta else score_info.title,
             "title": score_info.title,
+            "series": series_name,
+            "series_name": series_name,
             "matchType": match_meta["matchType"] if match_meta else "Match",
             "venue": match_meta["venue"] if match_meta else "",
             "status_text": status_text,
             "matchStarted": match_started,
-            "teams": match_meta["teams"] if match_meta else [],
+            "teams": teams,
             "score": match_meta["score"] if match_meta else None,
             "live_score_display": score_info.score,
             "current_batsmen": [b.model_dump() for b in score_info.current_batsmen],
