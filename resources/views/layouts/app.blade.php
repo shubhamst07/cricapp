@@ -27,14 +27,22 @@
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.jsx'])
     </head>
-    <body class="font-sans antialiased">
-        <div class="min-h-screen bg-gray-100">
+    <body class="font-sans antialiased bg-[#080d1a] text-slate-100 min-h-screen selection:bg-indigo-600 selection:text-white relative overflow-x-hidden flex flex-col justify-between">
+        <!-- Ambient Stadium Lights Effect -->
+        <div class="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
+            <div class="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/15 rounded-full blur-[130px]"></div>
+            <div class="absolute top-1/3 -right-32 w-96 h-96 bg-blue-600/10 rounded-full blur-[140px]"></div>
+            <div class="absolute -bottom-32 left-1/3 w-96 h-96 bg-emerald-600/10 rounded-full blur-[130px]"></div>
+            <div class="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-25"></div>
+        </div>
+
+        <div class="min-h-screen bg-[#080d1a] text-slate-100 flex flex-col justify-between">
             @include('layouts.navigation')
 
             <!-- Page Heading -->
             @if (isset($header))
-                <header class="bg-white border-b border-gray-100">
-                    <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+                <header class="bg-[#0b1120]/90 border-b border-white/5 text-white backdrop-blur-md">
+                    <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 text-white">
                         {{ $header }}
                     </div>
                 </header>
@@ -43,7 +51,7 @@
             @endif
 
             <!-- Page Content -->
-            <main>
+            <main class="flex-1">
                 @yield('content')
                 {{ $slot ?? '' }}
             </main>
