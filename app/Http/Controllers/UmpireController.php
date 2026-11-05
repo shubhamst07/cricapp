@@ -20,14 +20,22 @@ class UmpireController extends Controller
 
         $query = UmpireProfile::with(['user', 'bookings']);
 
-        // Search Keyword
+        // Search Keyword (Name, Phone, WhatsApp, City, Qualification, Bio)
         $search = trim((string) $request->get('search', ''));
         if (!empty($search)) {
-            $query->where(function ($q) use ($search) {
+            $cleanDigits = preg_replace('/[^0-9]/', '', $search);
+            $query->where(function ($q) use ($search, $cleanDigits) {
                 $q->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('phone', 'LIKE', "%{$search}%")
+                    ->orWhere('whatsapp', 'LIKE', "%{$search}%")
                     ->orWhere('city', 'LIKE', "%{$search}%")
                     ->orWhere('certification_level', 'LIKE', "%{$search}%")
                     ->orWhere('bio', 'LIKE', "%{$search}%");
+
+                if (!empty($cleanDigits) && strlen($cleanDigits) >= 3) {
+                    $q->orWhere('phone', 'LIKE', "%{$cleanDigits}%")
+                      ->orWhere('whatsapp', 'LIKE', "%{$cleanDigits}%");
+                }
             });
         }
 
@@ -122,8 +130,24 @@ class UmpireController extends Controller
             'phone' => 'required|string|max:30',
             'whatsapp' => 'nullable|string|max:30',
             'bio' => 'nullable|string|max:2000',
-            'photo_url' => 'nullable|url|max:500',
+            'photo' => 'nullable|file|image|mimes:jpeg,png,jpg,webp,gif|max:5120',
+            'photo_url' => 'nullable|string|max:500',
         ]);
+
+        // Process uploaded profile photo
+        if ($request->hasFile('photo') && $request->file('photo')->isValid()) {
+            $uploadDir = public_path('uploads/umpires');
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0775, true);
+            }
+            $file = $request->file('photo');
+            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $filename = 'umpire_' . Auth::id() . '_' . time() . '.' . $ext;
+            $file->move($uploadDir, $filename);
+            $validated['photo_url'] = asset('uploads/umpires/' . $filename);
+        }
+
+        unset($validated['photo']);
 
         $validated['match_types'] = $validated['match_types'] ?? ['Tennis Ball', 'Leather Ball'];
         $validated['whatsapp'] = $validated['whatsapp'] ?: $validated['phone'];

@@ -75,7 +75,7 @@
                         <input type="text"
                                name="search"
                                value="{{ $search }}"
-                               placeholder="Search umpires by name, city, certification level, or experience..."
+                               placeholder="Search umpires by name, phone number, city, or certification..."
                                class="w-full bg-slate-950 border border-white/10 rounded-xl pl-10 pr-10 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                         @if(!empty($search))
                             <a href="{{ route('umpires.index', ['tab' => $tab]) }}"
@@ -345,7 +345,7 @@
                                         @if($umpire->photo_url)
                                             <img src="{{ $umpire->photo_url }}" alt="{{ $umpire->name }}" class="w-full h-full object-cover">
                                         @else
-                                            <span>{{ strtoupper(substr($umpire->name, 0, 2)) }}</span>
+                                            <img src="https://ui-avatars.com/api/?name={{ urlencode($umpire->name) }}&background=4f46e5&color=ffffff&size=150&bold=true&font-size=0.4" alt="{{ $umpire->name }}" class="w-full h-full object-cover">
                                         @endif
                                     </div>
                                     <div class="min-w-0">
@@ -387,6 +387,27 @@
                                 <div class="flex items-center justify-between text-xs text-slate-300 px-1">
                                     <span>Matches Umpired:</span>
                                     <span class="font-mono font-black text-white">{{ $umpire->matches_umpired }}+ Matches</span>
+                                </div>
+
+                                <!-- Contact & Phone Selection Pill -->
+                                <div class="p-2.5 rounded-xl bg-slate-950/70 border border-white/5 flex items-center justify-between text-xs">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="text-slate-400 text-[10px] uppercase font-bold shrink-0">📞 Phone:</span>
+                                        <a href="tel:{{ $umpire->phone }}" class="font-bold text-sky-400 hover:text-sky-300 truncate text-[11px]" title="Call {{ $umpire->name }}">
+                                            {{ $umpire->phone }}
+                                        </a>
+                                    </div>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <a href="tel:{{ $umpire->phone }}" class="px-2 py-0.5 rounded-lg bg-sky-500/20 hover:bg-sky-500 hover:text-white text-sky-300 font-bold text-[10px] transition flex items-center gap-1" title="Call directly">
+                                            <span>📞 Call</span>
+                                        </a>
+                                        @if($umpire->whatsapp)
+                                            <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $umpire->whatsapp) }}?text=Hi%20{{ urlencode($umpire->name) }},%20I%20want%20to%20select%20you%20as%20an%20umpire%20for%20our%20cricket%20match" target="_blank"
+                                               class="px-2 py-0.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 hover:text-white text-emerald-300 font-bold text-[10px] transition flex items-center gap-1" title="Chat on WhatsApp">
+                                                <span>💬 WA</span>
+                                            </a>
+                                        @endif
+                                    </div>
                                 </div>
 
                                 @if(!empty($umpire->match_types) && is_array($umpire->match_types))

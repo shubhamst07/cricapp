@@ -59,7 +59,7 @@
                         @if($umpire->photo_url)
                             <img src="{{ $umpire->photo_url }}" alt="{{ $umpire->name }}" class="w-full h-full object-cover">
                         @else
-                            <span>{{ strtoupper(substr($umpire->name, 0, 2)) }}</span>
+                            <img src="https://ui-avatars.com/api/?name={{ urlencode($umpire->name) }}&background=4f46e5&color=ffffff&size=200&bold=true&font-size=0.4" alt="{{ $umpire->name }}" class="w-full h-full object-cover">
                         @endif
                     </div>
 

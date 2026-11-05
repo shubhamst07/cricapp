@@ -37,7 +37,7 @@
                 <p class="text-slate-400 text-xs mt-1">Get booked by tournament organizers and local captains to officiate matches in your city.</p>
             </div>
 
-            <form method="POST" action="{{ route('umpires.profile.store') }}" class="space-y-5 text-xs">
+            <form method="POST" action="{{ route('umpires.profile.store') }}" enctype="multipart/form-data" class="space-y-5 text-xs" x-data="{ photoPreview: '{{ old('photo_url', $profile?->photo_url) }}' }">
                 @csrf
 
                 <!-- Name & City -->
@@ -121,11 +121,41 @@
                     </div>
                 </div>
 
-                <!-- Photo URL -->
-                <div>
-                    <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1.5">Profile Photo URL (Optional)</label>
-                    <input type="url" name="photo_url" value="{{ old('photo_url', $profile?->photo_url) }}" placeholder="https://images.unsplash.com/..."
-                           class="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <!-- Profile Photo Upload & URL -->
+                <div class="p-4 rounded-2xl bg-black/30 border border-white/5 space-y-3">
+                    <label class="block font-bold text-slate-300 uppercase tracking-wider">Umpire Profile Photo (Upload or URL)</label>
+                    
+                    <div class="flex flex-col sm:flex-row items-center gap-4">
+                        <!-- Photo Preview Box -->
+                        <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-600 flex items-center justify-center font-black text-2xl text-white shadow-lg overflow-hidden shrink-0 border-2 border-indigo-500/40">
+                            <template x-if="photoPreview">
+                                <img :src="photoPreview" alt="Profile Preview" class="w-full h-full object-cover">
+                            </template>
+                            <template x-if="!photoPreview">
+                                @if($profile?->photo_url)
+                                    <img src="{{ $profile->photo_url }}" alt="Profile Photo" class="w-full h-full object-cover">
+                                @else
+                                    <img src="https://ui-avatars.com/api/?name={{ urlencode($profile?->name ?? Auth::user()->name) }}&background=4f46e5&color=ffffff&size=150&bold=true&font-size=0.4" alt="Avatar" class="w-full h-full object-cover">
+                                @endif
+                            </template>
+                        </div>
+
+                        <!-- Upload Inputs -->
+                        <div class="flex-1 space-y-2 w-full">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-300 mb-1">📸 Upload Photo from Device</label>
+                                <input type="file" name="photo" accept="image/*"
+                                       @change="if ($event.target.files.length) { photoPreview = URL.createObjectURL($event.target.files[0]); }"
+                                       class="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-950 border border-white/10 rounded-xl p-1.5">
+                            </div>
+
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Or Paste Image URL (Optional)</label>
+                                <input type="url" name="photo_url" x-model="photoPreview" placeholder="https://images.unsplash.com/..."
+                                       class="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Bio -->

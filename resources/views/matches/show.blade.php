@@ -133,8 +133,8 @@
     wicketModalOpen: false,
     wicketHowOut: 'bowled',
     wicketNextBatterId: '{{ $defaultNextBatterId }}',
-    bowlerModalOpen: {{ !empty($state['needs_new_bowler']) ? 'true' : 'false' }},
-    needsNewBowler: {{ !empty($state['needs_new_bowler']) ? 'true' : 'false' }},
+    bowlerModalOpen: {{ (!empty($state['needs_new_bowler']) && $isOwner) ? 'true' : 'false' }},
+    needsNewBowler: {{ (!empty($state['needs_new_bowler']) && $isOwner) ? 'true' : 'false' }},
     newBowlerId: '{{ $defaultNewBowlerId }}',
     openersModalOpen: false,
     selectStrikerId: '{{ $state['striker_id'] ?? '' }}',
@@ -1441,6 +1441,7 @@
 
     </div>
 
+@if($isOwner)
     <!-- ============================================================== -->
     <!-- MODAL 1: WICKET DOWN - SELECT HOW OUT & NEXT BATSMAN -->
     <!-- ============================================================== -->
@@ -1757,6 +1758,7 @@
 
         </div>
     </div>
+@endif
 
 </div>
 @endsection
