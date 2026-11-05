@@ -260,6 +260,24 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
     // Current selected inning data (for Scorecard tab)
     const activeInning = innings[selectedInningIdx] || (innings.length > 0 ? innings[0] : null);
 
+    // Auto-detect if match has live scores or scorecard data
+    const hasActiveScorecard = (innings && innings.length > 0) ||
+        (scorecard?.data?.batting && scorecard.data.batting.length > 0) ||
+        (match?.score && Array.isArray(match.score) && match.score.length > 0) ||
+        (match?.current_batsmen && Array.isArray(match.current_batsmen) && match.current_batsmen.some(b => b.name && b.name !== 'score not found'));
+
+    const effectiveStatus = (match.status === 'scheduled' && hasActiveScorecard) ? 'live' : (match.status || 'live');
+
+    const effectiveStatusText = (() => {
+        if (!match.status_text) return hasActiveScorecard ? 'Match in progress' : '';
+        const lower = match.status_text.toLowerCase().trim();
+        if (hasActiveScorecard && ['scheduled', 'match scheduled', 'upcoming'].includes(lower)) {
+            const firstInn = innings[0];
+            return firstInn?.team ? `${firstInn.team} batting (${firstInn.score || ''})` : 'Match in progress';
+        }
+        return match.status_text;
+    })();
+
     // Detect return tab (from URL ?tab= or ?fromTab=, localStorage, or inferred from match status)
     const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const tabParam = urlParams?.get('tab') || urlParams?.get('fromTab');
@@ -272,12 +290,14 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
             }
         } catch (e) {}
     }
-    if (match.status === 'completed' || match.status === 'abandoned') {
+    if (effectiveStatus === 'completed' || effectiveStatus === 'abandoned') {
         fallbackTab = 'recent';
-    } else if (match.status === 'scheduled') {
+    } else if (effectiveStatus === 'scheduled') {
         fallbackTab = 'upcoming';
+    } else {
+        fallbackTab = 'live';
     }
-    const returnTab = tabParam || fallbackTab;
+    const returnTab = (tabParam && ['live', 'upcoming', 'recent'].includes(tabParam) && !hasActiveScorecard) ? tabParam : fallbackTab;
     const backUrl = `/live-scores?tab=${returnTab}`;
 
     return (
@@ -323,13 +343,13 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
                             Season {match.season}
                         </span>
                     )}
-                    {match.status && (
+                    {effectiveStatus && (
                         <span className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                            match.status === 'live'
+                            effectiveStatus === 'live'
                                 ? 'bg-rose-100 text-rose-800 animate-pulse'
-                                : (match.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800')
+                                : (effectiveStatus === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800')
                         }`}>
-                            {match.status}
+                            {effectiveStatus}
                         </span>
                     )}
                 </div>
@@ -352,10 +372,16 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
                 </div>
 
                 {/* Status / Outcome Banner */}
-                {match.status_text && (
-                    <div className="mt-5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-sm font-semibold text-amber-900 flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>{match.status_text}</span>
+                {effectiveStatusText && (
+                    <div className={`mt-5 p-3.5 rounded-xl text-sm font-semibold flex items-center gap-2 border ${
+                        effectiveStatus === 'live'
+                            ? 'bg-rose-50 border-rose-200 text-rose-900'
+                            : (effectiveStatus === 'completed' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900')
+                    }`}>
+                        <Shield className={`w-4 h-4 shrink-0 ${
+                            effectiveStatus === 'live' ? 'text-rose-600' : (effectiveStatus === 'completed' ? 'text-emerald-600' : 'text-amber-600')
+                        }`} />
+                        <span>{effectiveStatusText}</span>
                     </div>
                 )}
 

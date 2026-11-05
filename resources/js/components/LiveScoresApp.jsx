@@ -36,8 +36,12 @@ export default function LiveScoresApp({
         return (initialLive.length > 0 ? 'live' : (initialCompleted.length > 0 ? 'recent' : 'upcoming'));
     });
 
-    const [liveMatches, setLiveMatches] = useState(initialLive);
-    const [scheduledMatches, setScheduledMatches] = useState(initialScheduled);
+    const wronglyScheduledInit = (initialScheduled || []).filter(m => m.score && Array.isArray(m.score) && m.score.length > 0);
+    const sanitizedInitLive = [...(initialLive || []), ...wronglyScheduledInit.map(m => ({ ...m, status: 'live' }))];
+    const sanitizedInitScheduled = (initialScheduled || []).filter(m => !(m.score && Array.isArray(m.score) && m.score.length > 0));
+
+    const [liveMatches, setLiveMatches] = useState(sanitizedInitLive);
+    const [scheduledMatches, setScheduledMatches] = useState(sanitizedInitScheduled);
     const [completedMatches, setCompletedMatches] = useState(initialCompleted);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -86,9 +90,21 @@ export default function LiveScoresApp({
             if (!res.ok) throw new Error('Failed to fetch matches');
             const data = await res.json();
 
-            setLiveMatches(data.live || []);
-            setScheduledMatches(data.scheduled || []);
-            setCompletedMatches(data.completed || []);
+            let liveList = data.live || [];
+            let scheduledList = data.scheduled || [];
+            let completedList = data.completed || [];
+
+            // Move any wrongly scheduled matches with active score to live
+            const wronglyScheduled = scheduledList.filter(m => m.score && Array.isArray(m.score) && m.score.length > 0);
+            if (wronglyScheduled.length > 0) {
+                liveList = [...liveList, ...wronglyScheduled.map(m => ({ ...m, status: 'live' }))];
+                const movedIds = new Set(wronglyScheduled.map(m => m.id));
+                scheduledList = scheduledList.filter(m => !movedIds.has(m.id));
+            }
+
+            setLiveMatches(liveList);
+            setScheduledMatches(scheduledList);
+            setCompletedMatches(completedList);
             setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         } catch (err) {
             console.error('Error fetching live matches:', err);
@@ -693,8 +709,9 @@ export default function LiveScoresApp({
 
 // ==================== PREMIUM MATCH CARD COMPONENT ====================
 function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
-    const isLive = type === 'live';
-    const isUpcoming = type === 'upcoming';
+    const hasLiveScore = Array.isArray(match.score) && match.score.length > 0;
+    const isLive = type === 'live' || (type === 'upcoming' && hasLiveScore);
+    const isUpcoming = type === 'upcoming' && !hasLiveScore;
     const isRecent = type === 'recent';
 
     // Format teams & scores cleanly
@@ -851,7 +868,7 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                 </button>
 
                 <a
-                    href={match.is_local ? (match.match_url || `/matches/${match.local_id || match.id.replace('local_', '')}`) : `/live-scores/${match.id}?tab=${type || 'live'}`}
+                    href={match.is_local ? (match.match_url || `/matches/${match.local_id || match.id.replace('local_', '')}`) : `/live-scores/${match.id}?tab=${isLive ? 'live' : (type || 'live')}`}
                     className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-xs font-bold transition group-hover:bg-indigo-600 group-hover:text-white"
                 >
                     <span>{match.is_local ? 'View Scorecard 📊' : 'Match Center'}</span>

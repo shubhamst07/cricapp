@@ -42,6 +42,18 @@ class MatchesController extends Controller
         // 3. Merge matches
         $matches = array_merge($localMatches, $externalMatches);
 
+        // Ensure any match with active score data is marked as live, not scheduled
+        $matches = array_map(function ($m) {
+            if (($m['status'] ?? '') === 'scheduled' && !empty($m['score'])) {
+                $m['status'] = 'live';
+                $m['matchStarted'] = true;
+                if (in_array(strtolower(trim($m['status_text'] ?? '')), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                    $m['status_text'] = 'In Progress';
+                }
+            }
+            return $m;
+        }, $matches);
+
         $sortFn = function ($m) {
             $name = strtolower($m['name'] ?? '');
             $series = strtolower($m['series'] ?? $m['series_name'] ?? '');
@@ -122,6 +134,17 @@ class MatchesController extends Controller
 
         if (!empty($detail)) {
             $match = array_merge($match, array_filter($detail, fn($v) => !is_null($v) && $v !== ''));
+        }
+
+        if (in_array($match['status'] ?? '', ['scheduled', 'upcoming', '']) && (!empty($match['score']) || !empty($match['current_batsmen']))) {
+            $hasLiveBatters = !empty($match['current_batsmen']) && collect($match['current_batsmen'])->contains(fn($b) => !empty($b['name']) && $b['name'] !== 'score not found');
+            if (!empty($match['score']) || $hasLiveBatters) {
+                $match['status'] = 'live';
+                $match['matchStarted'] = true;
+                if (in_array(strtolower(trim($match['status_text'] ?? '')), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                    $match['status_text'] = 'In Progress';
+                }
+            }
         }
 
         return response()->json($match);

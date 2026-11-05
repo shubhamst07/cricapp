@@ -255,6 +255,15 @@ class CricketDataService
             $statusText = (string) ($match['status_text'] ?? $match['status'] ?? '');
             $matchStarted = (bool) ($match['matchStarted'] ?? false);
             $matchEnded = (bool) ($match['matchEnded'] ?? false);
+            $score = $this->normalizeScore($match['score'] ?? null);
+
+            // If score has any inning/runs/overs, match is actively underway
+            if (!empty($score)) {
+                $matchStarted = true;
+                if (in_array(strtolower(trim($statusText)), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                    $statusText = 'In Progress';
+                }
+            }
 
             $mappedStatus = $this->mapStatus($statusText, $matchStarted, $matchEnded);
 
@@ -268,7 +277,7 @@ class CricketDataService
                 'venue' => (string) ($match['venue'] ?? ''),
                 'matchType' => (string) ($match['matchType'] ?? ''),
                 'teams' => $match['teams'] ?? [],
-                'score' => $this->normalizeScore($match['score'] ?? null),
+                'score' => $score,
                 'dateTimeGMT' => (string) ($match['dateTimeGMT'] ?? ''),
                 'hasJadouT20League' => (int) ($match['hasJadouT20League'] ?? 0),
                 'matchStarted' => $matchStarted || ($mappedStatus === 'live' || $mappedStatus === 'completed'),
@@ -290,6 +299,20 @@ class CricketDataService
         $statusText = (string) ($data['status_text'] ?? $data['status'] ?? '');
         $matchStarted = (bool) ($data['matchStarted'] ?? false);
         $matchEnded = (bool) ($data['matchEnded'] ?? false);
+        $score = $this->normalizeScore($data['score'] ?? null);
+
+        // Check if there are active batsmen, live score display, or score data
+        $hasActiveBatsmen = !empty($data['current_batsmen']) && collect($data['current_batsmen'])->contains(fn($b) => !empty($b['name']) && $b['name'] !== 'score not found');
+        $hasLiveScoreDisplay = !empty($data['live_score_display']) && $data['live_score_display'] !== 'score not found';
+        $hasScoreData = !empty($score) || $hasActiveBatsmen || $hasLiveScoreDisplay;
+
+        if ($hasScoreData && !$matchEnded) {
+            $matchStarted = true;
+            if (in_array(strtolower(trim($statusText)), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                $statusText = $hasLiveScoreDisplay ? "Live: {$data['live_score_display']}" : 'In Progress';
+            }
+        }
+
         $mappedStatus = $this->mapStatus($statusText, $matchStarted, $matchEnded);
 
         return [
@@ -300,7 +323,7 @@ class CricketDataService
             'venue' => (string) ($data['venue'] ?? ''),
             'matchType' => (string) ($data['matchType'] ?? ''),
             'teams' => $data['teams'] ?? [],
-            'score' => $this->normalizeScore($data['score'] ?? null),
+            'score' => $score,
             'dateTimeGMT' => (string) ($data['dateTimeGMT'] ?? ''),
             'matchStarted' => $matchStarted || ($mappedStatus === 'live' || $mappedStatus === 'completed'),
             'matchEnded' => $matchEnded || ($mappedStatus === 'completed'),
@@ -312,6 +335,7 @@ class CricketDataService
             'current_batsmen' => $data['current_batsmen'] ?? [],
             'current_bowler' => $data['current_bowler'] ?? [],
             'player_of_the_match' => $data['player_of_the_match'] ?? null,
+            'live_score_display' => $data['live_score_display'] ?? null,
         ];
     }
 
@@ -342,6 +366,10 @@ class CricketDataService
         $isLiveText = str_contains($status, 'need ') ||
             str_contains($status, 'opt to') ||
             str_contains($status, 'elected to') ||
+            str_contains($status, 'chose to') ||
+            str_contains($status, 'choose to') ||
+            str_contains($status, 'batting') ||
+            str_contains($status, 'bowling') ||
             str_contains($status, 'session') ||
             str_contains($status, 'day ') ||
             str_contains($status, 'break') ||
@@ -354,6 +382,7 @@ class CricketDataService
             str_contains($status, 'target') ||
             str_contains($status, 'progress') ||
             str_contains($status, 'live') ||
+            str_contains($status, 'rain') ||
             str_contains($status, 'innings break') ||
             str_contains($status, 'drinks');
 

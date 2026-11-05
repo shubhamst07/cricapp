@@ -58,6 +58,7 @@ class ScoreResponse(BaseModel):
     current_batsmen: List[Batsman]
     current_bowler: Bowler
     player_of_the_match: Optional[Dict[str, Any]] = None
+    status_text: Optional[str] = None
 
 
 class MatchValidator(BaseModel):
@@ -250,13 +251,19 @@ class ScoreService:
 
             pom = cls.extract_player_of_the_match(response.text)
 
+            page_status = None
+            stts_el = soup.find(class_=lambda c: c and any(k in c for k in ["cb-min-stts", "cb-text-inprogress", "cb-text-complete", "cb-text-mom", "cb-text-live"]))
+            if stts_el:
+                page_status = cls.clean(stts_el.get_text(" ", strip=True))
+
             res = ScoreResponse(
                 status="success",
                 title=title,
                 score=score,
                 current_batsmen=batsmen,
                 current_bowler=Bowler(name=bowler_name),
-                player_of_the_match=pom
+                player_of_the_match=pom,
+                status_text=page_status
             )
             set_cached(f"score_{match_id}", res)
             return res
@@ -271,7 +278,9 @@ class ScoreService:
     @classmethod
     def parse_cards_from_html(cls, html_text: str) -> List[Dict[str, Any]]:
         soup = BeautifulSoup(html_text, "lxml")
-        cards = soup.find_all("a", class_=lambda c: c and "bg-cbWhite" in c)
+        cards = soup.find_all("a", href=lambda h: h and re.match(r"^/live-cricket-scores/(\d+)/", h))
+        if not cards:
+            cards = soup.find_all("a", class_=lambda c: c and "bg-cbWhite" in c)
         parsed = []
 
         for card in cards:
@@ -289,17 +298,17 @@ class ScoreService:
                 series_name = "Other Matches"
 
             children = [c for c in card.children if hasattr(c, "find_all")]
-            if len(children) < 2:
-                continue
 
-            meta_info = children[0].get_text(" ", strip=True)
+            meta_info = children[0].get_text(" ", strip=True) if len(children) > 0 else ""
             status_text = children[2].get_text(" ", strip=True) if len(children) > 2 else ""
 
             teams = []
             scores = []
-            team_rows = children[1].find_all("div", class_=lambda c: c and "justify-between" in c)
+            team_rows = []
+            if len(children) > 1 and hasattr(children[1], "find_all"):
+                team_rows = children[1].find_all("div", class_=lambda c: c and "justify-between" in c)
             if not team_rows:
-                continue
+                team_rows = card.find_all("div", class_=lambda c: c and ("justify-between" in c or "cb-ovr-flo" in c or "cb-hm-scg" in c))
 
             for row in team_rows:
                 spans = row.find_all("span")
@@ -359,8 +368,14 @@ class ScoreService:
             else:
                 venue = meta_info
 
-            # Normalize status_text for upcoming matches with no live score
-            if not scores:
+            # Match started detection
+            match_started = bool(scores)
+
+            # Normalize status_text for matches with active score or upcoming matches
+            if scores:
+                if not status_text or status_text.lower() in ["scheduled", "match scheduled", "upcoming"]:
+                    status_text = "In Progress"
+            elif not scores:
                 if not status_text or (teams and all(t.lower() in status_text.lower() for t in teams)):
                     status_text = "Match Scheduled"
 
@@ -374,6 +389,7 @@ class ScoreService:
                 "series_name": series_name,
                 "teams": teams,
                 "score": scores if scores else None,
+                "matchStarted": match_started,
                 "href": href
             })
 
@@ -410,11 +426,17 @@ class ScoreService:
                         if m["id"] not in parsed_ids:
                             parsed_ids.add(m["id"])
                             parsed.append(m)
-                        elif m.get("score"):
-                            # If already added without score, update with score
+                        else:
+                            # Update existing match if this card has scores or better status
                             for idx, existing in enumerate(parsed):
-                                if existing.get("id") == m["id"] and not existing.get("score"):
-                                    parsed[idx] = m
+                                if existing.get("id") == m["id"]:
+                                    if m.get("score"):
+                                        existing["score"] = m["score"]
+                                        existing["matchStarted"] = True
+                                    if m.get("status_text") and m["status_text"].lower() not in ["scheduled", "match scheduled"]:
+                                        existing["status_text"] = m["status_text"]
+                                    if m.get("teams") and not existing.get("teams"):
+                                        existing["teams"] = m["teams"]
                                     break
 
             # 2. Also parse upcoming schedule matches from upcoming-series (gathered as resps[3])
@@ -861,6 +883,16 @@ async def get_match_detail(match_id: str):
     all_matches = await ScoreService.fetch_all_matches()
     match_meta = next((m for m in all_matches if m["id"] == match_id), None)
 
+    has_live_score = score_info.score != NOT_FOUND
+    has_batsmen = any(b.name != NOT_FOUND for b in score_info.current_batsmen)
+    match_started = bool(match_meta and (match_meta.get("score") or match_meta.get("matchStarted"))) or has_live_score or has_batsmen
+
+    status_text = match_meta["status_text"] if match_meta else ""
+    if getattr(score_info, "status_text", None):
+        status_text = score_info.status_text
+    elif (has_live_score or has_batsmen) and (not status_text or status_text.lower() in ["scheduled", "match scheduled", "upcoming"]):
+        status_text = f"Live: {score_info.score}" if has_live_score else "In Progress"
+
     return {
         "status": "success",
         "data": {
@@ -869,7 +901,8 @@ async def get_match_detail(match_id: str):
             "title": score_info.title,
             "matchType": match_meta["matchType"] if match_meta else "Match",
             "venue": match_meta["venue"] if match_meta else "",
-            "status_text": match_meta["status_text"] if match_meta else "",
+            "status_text": status_text,
+            "matchStarted": match_started,
             "teams": match_meta["teams"] if match_meta else [],
             "score": match_meta["score"] if match_meta else None,
             "live_score_display": score_info.score,

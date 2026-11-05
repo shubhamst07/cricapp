@@ -31,6 +31,18 @@ class LiveScoreController extends Controller
         // 3. Merge: Local community & network matches lead the list, followed by external matches
         $matches = array_merge($localMatches, $externalMatches);
 
+        // Ensure any match with active score data is marked as live, not scheduled
+        $matches = array_map(function ($m) {
+            if (($m['status'] ?? '') === 'scheduled' && !empty($m['score'])) {
+                $m['status'] = 'live';
+                $m['matchStarted'] = true;
+                if (in_array(strtolower(trim($m['status_text'] ?? '')), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                    $m['status_text'] = 'In Progress';
+                }
+            }
+            return $m;
+        }, $matches);
+
         $live = collect($matches)->where('status', 'live')->values();
         $scheduled = collect($matches)->where('status', 'scheduled')->values();
         $completed = collect($matches)->filter(fn($m) => in_array($m['status'] ?? '', ['completed', 'abandoned']))->values();
@@ -90,6 +102,20 @@ class LiveScoreController extends Controller
 
         if (empty($match['player_of_the_match']) && !empty($scorecard['data']['player_of_the_match'])) {
             $match['player_of_the_match'] = $scorecard['data']['player_of_the_match'];
+        }
+
+        // Auto-correct status if scorecard has live innings or batting data
+        $scInnings = $scorecard['data']['innings'] ?? [];
+        $scBatting = $scorecard['data']['batting'] ?? [];
+        $hasActiveScorecard = !empty($scInnings) || !empty($scBatting);
+
+        if ($hasActiveScorecard && in_array($match['status'] ?? '', ['scheduled', 'upcoming', ''])) {
+            $match['status'] = 'live';
+            $match['matchStarted'] = true;
+            if (in_array(strtolower(trim($match['status_text'] ?? '')), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                $firstInn = $scInnings[0] ?? null;
+                $match['status_text'] = $firstInn && !empty($firstInn['team']) ? "{$firstInn['team']} batting ({$firstInn['score']})" : 'Match in progress';
+            }
         }
 
         return view('live.show', compact('match', 'scorecard', 'forceRefresh'));
