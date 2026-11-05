@@ -3,12 +3,6 @@
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-xs">
-                    CRICHEROES OFFICIALS HUB
-                </span>
-                <span class="text-xs text-gray-400 font-bold">• Certified Match Umpires</span>
-            </div>
             <h2 class="font-black text-2xl text-gray-900 leading-tight mt-1">Book Match Umpires ⚖️</h2>
         </div>
 

@@ -3,12 +3,6 @@
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">
-                    CRICHEROES ARENA
-                </span>
-                <span class="text-xs text-gray-400 font-bold">• Grassroots Cricket Hub</span>
-            </div>
             <h2 class="font-black text-2xl text-gray-900 leading-tight mt-1">My Cricket Matches</h2>
         </div>
 
@@ -25,7 +19,7 @@
 @endsection
 
 @section('content')
-<div class="py-6 sm:py-8 bg-slate-900 min-h-screen text-slate-100 font-sans" 
+<div class="py-6 sm:py-8 bg-slate-900 min-h-screen text-slate-100 font-sans"
      @open-create-match.window="createMatchModal = true"
      x-data="{
     createMatchModal: false,
@@ -71,8 +65,8 @@
     },
     openScorer(match) {
         this.activeMatch = match;
-        const currentScore = match.scores && match.scores.length > 0 
-            ? match.scores[match.scores.length - 1] 
+        const currentScore = match.scores && match.scores.length > 0
+            ? match.scores[match.scores.length - 1]
             : null;
 
         if (currentScore) {
@@ -238,7 +232,7 @@
     </style>
 
     <!-- Floating Toast -->
-    <div x-cloak x-show="toastMsg" x-transition 
+    <div x-cloak x-show="toastMsg" x-transition
          class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-2 border border-white/20">
         <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
         <span x-text="toastMsg"></span>
@@ -305,20 +299,20 @@
             <form method="GET" action="{{ route('matches.index') }}" class="flex flex-col sm:flex-row items-center gap-3">
                 <input type="hidden" name="tab" value="{{ $tab }}">
                 <input type="hidden" name="scope" value="{{ $scope }}">
-                
+
                 <div class="relative flex-1 w-full">
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
                     </span>
-                    <input type="text" 
-                           name="search" 
-                           value="{{ $search }}" 
+                    <input type="text"
+                           name="search"
+                           value="{{ $search }}"
                            placeholder="Search by Tournament, Player Name, Ground / Venue, or Team..."
                            class="w-full bg-slate-950 border border-white/10 rounded-xl pl-10 pr-10 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-red-500 focus:outline-none">
                     @if(!empty($search))
-                        <a href="{{ route('matches.index', ['tab' => $tab, 'scope' => $scope]) }}" 
+                        <a href="{{ route('matches.index', ['tab' => $tab, 'scope' => $scope]) }}"
                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white text-xs font-bold"
                            title="Clear search">
                             ✕
@@ -327,12 +321,12 @@
                 </div>
 
                 <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <button type="submit" 
+                    <button type="submit"
                             class="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-md transition">
                         Search
                     </button>
                     @if(!empty($search))
-                        <a href="{{ route('matches.index', ['tab' => $tab, 'scope' => $scope]) }}" 
+                        <a href="{{ route('matches.index', ['tab' => $tab, 'scope' => $scope]) }}"
                            class="px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 text-xs font-bold transition">
                             Reset
                         </a>
@@ -374,33 +368,33 @@
         <!-- CRICHEROES TABS & QUICK START BUTTON -->
         <!-- ============================================== -->
         <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            <a href="{{ route('matches.index', ['tab' => 'all', 'scope' => $scope, 'search' => $search]) }}" 
+            <a href="{{ route('matches.index', ['tab' => 'all', 'scope' => $scope, 'search' => $search]) }}"
                class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 {{ $tab === 'all' ? 'ch-pill-active' : 'bg-white/5 hover:bg-white/10 text-slate-300' }}">
                 <span>All Status</span>
                 <span class="px-1.5 py-0.2 rounded-md bg-black/20 text-[10px]">{{ $stats['total'] }}</span>
             </a>
 
-            <a href="{{ route('matches.index', ['tab' => 'live', 'scope' => $scope, 'search' => $search]) }}" 
+            <a href="{{ route('matches.index', ['tab' => 'live', 'scope' => $scope, 'search' => $search]) }}"
                class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 {{ $tab === 'live' ? 'ch-pill-active' : 'bg-white/5 hover:bg-white/10 text-slate-300' }}">
                 <span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
                 <span>🔴 Live</span>
                 <span class="px-1.5 py-0.2 rounded-md bg-black/20 text-[10px]">{{ $stats['live'] }}</span>
             </a>
 
-            <a href="{{ route('matches.index', ['tab' => 'upcoming', 'scope' => $scope, 'search' => $search]) }}" 
+            <a href="{{ route('matches.index', ['tab' => 'upcoming', 'scope' => $scope, 'search' => $search]) }}"
                class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 {{ $tab === 'upcoming' ? 'ch-pill-active' : 'bg-white/5 hover:bg-white/10 text-slate-300' }}">
                 <span>⏳ Upcoming</span>
                 <span class="px-1.5 py-0.2 rounded-md bg-black/20 text-[10px]">{{ $stats['upcoming'] }}</span>
             </a>
 
-            <a href="{{ route('matches.index', ['tab' => 'completed', 'scope' => $scope, 'search' => $search]) }}" 
+            <a href="{{ route('matches.index', ['tab' => 'completed', 'scope' => $scope, 'search' => $search]) }}"
                class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 {{ $tab === 'completed' ? 'ch-pill-active' : 'bg-white/5 hover:bg-white/10 text-slate-300' }}">
                 <span>🏆 Completed</span>
                 <span class="px-1.5 py-0.2 rounded-md bg-black/20 text-[10px]">{{ $stats['completed'] }}</span>
             </a>
 
             @if(auth()->check())
-                <button type="button" 
+                <button type="button"
                         @click="createMatchModal = true"
                         class="ml-auto shrink-0 px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-red-600/20 active:scale-95 transition">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -409,7 +403,7 @@
                     <span>+ Start Match</span>
                 </button>
             @else
-                <a href="{{ route('login') }}" 
+                <a href="{{ route('login') }}"
                    class="ml-auto shrink-0 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition">
                     <span>Sign In to Host Match 🏏</span>
                 </a>
@@ -425,7 +419,7 @@
                     @php
                         $score1 = $match->getScoreForTeam($match->team1_name);
                         $score2 = $match->getScoreForTeam($match->team2_name);
-                        
+
                         $team1Initial = strtoupper(substr($match->team1_name, 0, 2));
                         $team2Initial = strtoupper(substr($match->team2_name, 0, 2));
 
@@ -435,7 +429,7 @@
                     @endphp
 
                     <div class="ch-card flex flex-col justify-between">
-                        
+
                         <!-- 1. Match Header Bar (Tournament / Venue / Status) -->
                         <div class="px-5 py-3 border-b border-white/5 bg-black/20 flex flex-wrap items-center justify-between gap-2">
                             <div class="min-w-0 pr-2">
@@ -465,7 +459,7 @@
                             <!-- Status Badge -->
                             <div class="shrink-0 flex items-center gap-1.5">
                                 @if($match->stream_url)
-                                    <a href="{{ route('matches.broadcast', $match) }}" 
+                                    <a href="{{ route('matches.broadcast', $match) }}"
                                        class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600/30 text-rose-300 border border-rose-500/40 flex items-center gap-1 hover:bg-rose-600 hover:text-white transition"
                                        title="Watch Live Stream with Score Overlay">
                                         <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping"></span>
@@ -495,7 +489,7 @@
 
                         <!-- 2. Teams & Scorecard Body (CricHeroes Style) -->
                         <div class="p-5 space-y-4 flex-1">
-                            
+
                             <!-- Team 1 Row -->
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3 min-w-0">
@@ -601,7 +595,7 @@
                                 {{-- 👑 MATCH OWNER ACTIONS --}}
                                 <div class="flex flex-wrap items-center gap-2">
                                     <button type="button"
-                                            @click="openScorer({{ json_encode($match) }})" 
+                                            @click="openScorer({{ json_encode($match) }})"
                                             class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white transition flex items-center gap-1.5 shadow-sm">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -609,12 +603,12 @@
                                         <span>Score Match</span>
                                     </button>
 
-                                    <a href="{{ route('matches.show', $match) }}" 
+                                    <a href="{{ route('matches.show', $match) }}"
                                        class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition">
                                         Scorecard & Lineups
                                     </a>
 
-                                    <a href="{{ route('matches.broadcast', $match) }}" 
+                                    <a href="{{ route('matches.broadcast', $match) }}"
                                        class="px-2.5 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 hover:text-white transition flex items-center gap-1 shadow-sm"
                                        title="Open In-App Camera Broadcast with Live Score Overlay">
                                         <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
@@ -623,7 +617,7 @@
 
                                     <form action="{{ route('matches.rematch', $match) }}" method="POST" onsubmit="return confirm('Start a fresh Rematch with identical squads? 🏏');" class="inline">
                                         @csrf
-                                        <button type="submit" 
+                                        <button type="submit"
                                                 class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-white transition flex items-center gap-1.5 shadow-sm"
                                                 title="Start a fresh Rematch with identical squads without selecting players again">
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -656,7 +650,7 @@
                                 {{-- 👥 SPECTATOR / COMMUNITY VIEW (Anyone can watch scores, nobody can tamper!) --}}
                                 <div class="flex flex-wrap items-center justify-between w-full gap-2">
                                     <div class="flex items-center gap-2">
-                                        <a href="{{ route('matches.show', $match) }}" 
+                                        <a href="{{ route('matches.show', $match) }}"
                                            class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -664,7 +658,7 @@
                                             <span>View Live Scorecard 📊</span>
                                         </a>
 
-                                        <a href="{{ route('matches.broadcast', $match) }}" 
+                                        <a href="{{ route('matches.broadcast', $match) }}"
                                            class="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1.5">
                                             <span class="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"></span>
                                             <span>Watch Broadcast 📺</span>
@@ -729,7 +723,7 @@
          @keydown.escape.window="scoreModal = false">
         <div class="relative bg-slate-900 border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl"
              @click.away="scoreModal = false">
-            
+
             <div class="flex items-center justify-between pb-4 border-b border-white/10 mb-4">
                 <div>
                     <span class="text-[10px] font-black uppercase tracking-wider text-red-400">⚡ LIVE CRICHEROES SCORER</span>
@@ -741,13 +735,13 @@
             <!-- Inning & Batting Team Selector -->
             <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-2">
-                    <button type="button" 
+                    <button type="button"
                             @click="scoreInning = 1; scoreBattingTeam = activeMatch.team1_name"
                             :class="scoreInning === 1 ? 'bg-red-600 text-white font-bold' : 'bg-white/5 text-slate-300'"
                             class="py-2 rounded-xl text-xs transition border border-white/10">
                         Innings 1 (<span x-text="activeMatch ? activeMatch.team1_name : ''"></span>)
                     </button>
-                    <button type="button" 
+                    <button type="button"
                             @click="scoreInning = 2; scoreBattingTeam = activeMatch.team2_name"
                             :class="scoreInning === 2 ? 'bg-red-600 text-white font-bold' : 'bg-white/5 text-slate-300'"
                             class="py-2 rounded-xl text-xs transition border border-white/10">
@@ -816,7 +810,7 @@
                     <button type="button" @click="scoreModal = false" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">
                         Cancel
                     </button>
-                    <button type="button" @click="saveQuickScore()" 
+                    <button type="button" @click="saveQuickScore()"
                             class="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-lg transition">
                         <span x-show="!isSavingScore">Update Score ⚡</span>
                         <span x-show="isSavingScore">Saving...</span>
@@ -834,7 +828,7 @@
          @keydown.escape.window="createMatchModal = false">
         <div class="relative bg-slate-900 border border-white/10 rounded-2xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
              @click.away="createMatchModal = false">
-            
+
             <div class="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
                 <div>
                     <span class="text-[10px] font-black uppercase tracking-wider text-red-400">CRICHEROES TOURNAMENT CREATOR</span>
@@ -945,14 +939,14 @@
 
                     <!-- Team Squad Switcher Tabs -->
                     <div class="flex items-center gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
-                        <button type="button" 
+                        <button type="button"
                                 @click="activeSquadTab = 1"
                                 :class="activeSquadTab === 1 ? 'bg-red-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
                                 class="flex-1 py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1.5">
                             <span x-text="matchTeam1Name || 'Team 1'"></span>
                             <span class="px-1.5 py-0.2 rounded-full bg-black/30 text-[10px]" x-text="team1Squad.length"></span>
                         </button>
-                        <button type="button" 
+                        <button type="button"
                                 @click="activeSquadTab = 2"
                                 :class="activeSquadTab === 2 ? 'bg-red-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
                                 class="flex-1 py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1.5">
@@ -967,12 +961,12 @@
                             <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-emerald-400 text-sm">
                                 💬
                             </span>
-                            <input type="text" x-model="playerSearchQuery" 
+                            <input type="text" x-model="playerSearchQuery"
                                    @keydown.enter.prevent="searchPlayerWhatsApp()"
                                    placeholder="Enter WhatsApp/Phone (e.g. 9876543210, 9812345678) or Name"
                                    class="w-full bg-slate-950 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                         </div>
-                        <button type="button" @click="searchPlayerWhatsApp()" 
+                        <button type="button" @click="searchPlayerWhatsApp()"
                                 class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 transition flex items-center gap-1.5 shadow-md">
                             <span x-show="!isSearchingPlayer">Fetch Record 🔍</span>
                             <span x-show="isSearchingPlayer" class="animate-spin text-xs">⏳</span>
@@ -1044,7 +1038,7 @@
                                 <span class="text-slate-400 text-[11px]">
                                     Want to add a different "<span class="text-white font-bold" x-text="playerSearchQuery || searchedPlayer.name"></span>"?
                                 </span>
-                                <button type="button" 
+                                <button type="button"
                                         @click="openManualAdd(playerSearchQuery || searchedPlayer.name)"
                                         class="text-amber-400 hover:text-amber-300 font-bold underline text-[11px] flex items-center gap-1 transition">
                                     <span>➕ Create new player instead</span>
@@ -1064,9 +1058,9 @@
                                 <button type="button" @click="searchNotFound = false" class="text-slate-400 hover:text-white text-xs">✕ Cancel</button>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <input type="text" x-model="newPlayerName" placeholder="Player Full Name *" 
+                                <input type="text" x-model="newPlayerName" placeholder="Player Full Name *"
                                        class="bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
-                                <input type="text" x-model="newPlayerPhone" placeholder="Phone/WhatsApp (Optional)" 
+                                <input type="text" x-model="newPlayerPhone" placeholder="Phone/WhatsApp (Optional)"
                                        class="bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
                                 <select x-model="newPlayerRole" class="bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white">
                                     <option value="Top-Order Batter">Top-Order Batter</option>
@@ -1156,7 +1150,7 @@
                     <button type="button" @click="createMatchModal = false" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">
                         Cancel
                     </button>
-                    <button type="submit" 
+                    <button type="submit"
                             class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-xs shadow-lg shadow-red-600/30 transition">
                         Create & Start Match 🏏
                     </button>
