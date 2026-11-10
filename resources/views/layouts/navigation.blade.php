@@ -120,6 +120,9 @@
                             <x-dropdown-link :href="route('profile.show')" class="text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10">
                                 <span>👤 {{ __('My Profile') }}</span>
                             </x-dropdown-link>
+                            <x-dropdown-link :href="route('inquiries.index')" class="text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10">
+                                <span>📬 {{ __('Contact Inquiries') }}</span>
+                            </x-dropdown-link>
                             <x-dropdown-link :href="route('profile.edit')" class="text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10">
                                 <span>⚙️ {{ __('Account Settings') }}</span>
                             </x-dropdown-link>
@@ -234,6 +237,9 @@
                 <div class="mt-3 space-y-1">
                     <x-responsive-nav-link :href="route('profile.show')">
                         <span>👤 {{ __('My Profile') }}</span>
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('inquiries.index')">
+                        <span>📬 {{ __('Contact Inquiries') }}</span>
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('profile.edit')">
                         <span>⚙️ {{ __('Account Settings') }}</span>

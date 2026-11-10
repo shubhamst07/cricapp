@@ -44,18 +44,20 @@ class PageController extends Controller
                 'ip_address' => $request->ip(),
                 'is_read' => false,
             ]);
+            Log::info('Contact inquiry saved to database successfully.');
         } catch (\Throwable $e) {
-            Log::warning('Could not save contact message to DB: ' . $e->getMessage());
+            Log::warning('Could not save contact inquiry to DB: ' . $e->getMessage());
         }
 
-        // 2. Send email notification to Shubham Thakur
+        // 2. Deliver email notification to Shubham Thakur
         $adminEmail = config('mail.admin_address', env('ADMIN_EMAIL', 'shubhamthakurst07@gmail.com'));
         $mailSent = false;
 
         // A. Resend HTTPS API (Port 443 - Never blocked on Render Free Tier)
-        if (env('RESEND_API_KEY')) {
+        $resendKey = env('RESEND_API_KEY');
+        if ($resendKey) {
             try {
-                $response = Http::timeout(5)->withToken(env('RESEND_API_KEY'))->post('https://api.resend.com/emails', [
+                $response = Http::timeout(4)->withToken($resendKey)->post('https://api.resend.com/emails', [
                     'from' => env('MAIL_FROM_NAME', 'LiveCricket') . ' <' . (env('RESEND_FROM_EMAIL', 'onboarding@resend.dev')) . '>',
                     'to' => [$adminEmail],
                     'reply_to' => $validated['email'],
@@ -66,7 +68,7 @@ class PageController extends Controller
                     $mailSent = true;
                     Log::info("Contact message delivered via Resend HTTPS API to {$adminEmail}");
                 } else {
-                    Log::warning("Resend API response failed: " . $response->body());
+                    Log::warning("Resend API response: " . $response->body());
                 }
             } catch (\Throwable $e) {
                 Log::warning("Resend API delivery error: " . $e->getMessage());
@@ -74,10 +76,11 @@ class PageController extends Controller
         }
 
         // B. Brevo HTTPS API (Port 443 - Never blocked on Render Free Tier)
-        if (!$mailSent && env('BREVO_API_KEY')) {
+        $brevoKey = env('BREVO_API_KEY');
+        if (!$mailSent && $brevoKey) {
             try {
-                $response = Http::timeout(5)->withHeaders([
-                    'api-key' => env('BREVO_API_KEY'),
+                $response = Http::timeout(4)->withHeaders([
+                    'api-key' => $brevoKey,
                     'Content-Type' => 'application/json',
                 ])->post('https://api.brevo.com/v3/smtp/email', [
                     'sender' => [
@@ -103,17 +106,47 @@ class PageController extends Controller
             }
         }
 
-        // C. Standard SMTP (with strict 4s timeout guard to prevent 504 Gateway Timeouts)
-        if (!$mailSent) {
-            try {
-                config(['mail.mailers.smtp.timeout' => 4]);
-                Mail::to($adminEmail)->send(new ContactInquiryMail($validated));
-                Log::info("Contact inquiry email dispatched via SMTP to: {$adminEmail}");
-            } catch (\Throwable $e) {
-                Log::warning("SMTP delivery failed (expected on Render Free tier due to port 587/465 restriction): " . $e->getMessage());
+        // C. Standard SMTP (with 1.5s pre-flight socket test to PREVENT 504 TIMEOUTS)
+        if (!$mailSent && config('mail.default') === 'smtp') {
+            $host = config('mail.mailers.smtp.host', env('MAIL_HOST', 'smtp.gmail.com'));
+            $port = (int) config('mail.mailers.smtp.port', env('MAIL_PORT', 587));
+
+            // Pre-flight check: Can this host actually open TCP connection to the SMTP port in 1.5 seconds?
+            $canConnect = false;
+            if ($host && $port) {
+                $fp = @fsockopen($host, $port, $errno, $errstr, 1.5);
+                if (is_resource($fp)) {
+                    fclose($fp);
+                    $canConnect = true;
+                }
+            }
+
+            if ($canConnect) {
+                try {
+                    config(['mail.mailers.smtp.timeout' => 4]);
+                    Mail::to($adminEmail)->send(new ContactInquiryMail($validated));
+                    Log::info("Contact inquiry email dispatched via SMTP to: {$adminEmail}");
+                } catch (\Throwable $e) {
+                    Log::warning("SMTP delivery error: " . $e->getMessage());
+                }
+            } else {
+                Log::warning("SMTP port {$port} on {$host} is blocked by cloud provider (Render Free Tier blocks outbound SMTP ports 25, 465, and 587). Skipping synchronous SMTP to prevent 504 Gateway Timeout. Stored in DB instead.");
             }
         }
 
         return back()->with('success', 'Thank you ' . e($validated['name']) . '! Your message has been received by Shubham Thakur and the LiveCricket team. We will get in touch with you shortly.');
+    }
+
+    /**
+     * View all contact inquiries (Admin).
+     */
+    public function inquiries()
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        $inquiries = ContactInquiry::latest()->paginate(25);
+        return view('pages.inquiries', compact('inquiries'));
     }
 }
