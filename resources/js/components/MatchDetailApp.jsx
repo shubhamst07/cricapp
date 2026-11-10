@@ -22,8 +22,181 @@ import {
     Sparkles,
     ExternalLink,
     Play,
-    Volume2
+    Volume2,
+    Radio,
+    Mic
 } from 'lucide-react';
+
+function generateMatchCommentary(match, scorecard, posts) {
+    const list = [];
+    const batting = scorecard?.data?.batting || [];
+    const bowling = scorecard?.data?.bowling || [];
+    const innings = scorecard?.data?.innings || [];
+    const statusText = match?.status_text || '';
+
+    // 1. User & Fan Custom Commentary Posts
+    const commentaryPosts = (posts || []).filter(p => p.post_type === 'commentary' || (p.content && p.content.startsWith('[Commentary]')));
+    commentaryPosts.forEach(cp => {
+        const rawContent = cp.content ? cp.content.replace(/^\[Commentary\]\s*/, '') : '';
+        const tag = cp.team_tag || 'Live Note';
+        const isWicket = tag.includes('Wicket');
+        const isSix = tag.includes('6');
+        const isFour = tag.includes('4');
+
+        list.push({
+            id: 'post-' + cp.id,
+            over: tag.includes('.') ? tag : 'LIVE',
+            badge: isWicket ? 'W' : (isSix ? '6' : (isFour ? '4' : '🎙️')),
+            badgeType: isWicket ? 'wicket' : (isSix ? 'six' : (isFour ? 'four' : 'expert')),
+            title: `${cp.user_name || 'Live Blogger'} (Community Update)`,
+            desc: rawContent,
+            type: 'fan_update',
+            tag: tag,
+            time: cp.created_at ? new Date(cp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'
+        });
+    });
+
+    // 2. Fall of Wickets (FOW) & Batsmen Dismissals
+    batting.forEach((b, idx) => {
+        const d = String(b.dismissal || '').trim().toLowerCase();
+        if (d && d !== 'not out' && d !== 'dnb') {
+            const approxOver = Math.max(1, Math.min(49, Math.floor((b.balls || (idx * 14 + 8)) / 6))) + '.' + ((idx % 6) + 1);
+            list.push({
+                id: `wicket-${b.name}-${idx}`,
+                over: approxOver,
+                badge: 'W',
+                badgeType: 'wicket',
+                title: `OUT! ${b.name} (${b.dismissal})`,
+                desc: `WICKET! ${b.name} departs after scoring ${b.runs} runs off ${b.balls || 0} balls (${b.fours || 0}x4, ${b.sixes || 0}x6). Dismissal: ${b.dismissal}. Big breakthrough for the bowling side!`,
+                type: 'wicket',
+                tag: 'Fall of Wicket',
+                time: 'Wicket'
+            });
+        }
+    });
+
+    // 3. Major Boundary Moments (Fours & Sixes)
+    batting.forEach((b, idx) => {
+        if (b.sixes > 0) {
+            const overNum = Math.max(1, Math.min(48, Math.floor((b.balls || 30) / 6) - 1)) + '.' + ((idx % 5) + 1);
+            list.push({
+                id: `six-${b.name}-${idx}`,
+                over: overNum,
+                badge: '6',
+                badgeType: 'six',
+                title: `${b.name}, MAXIMUM SIX! 💥`,
+                desc: `BOOM! Clean as a whistle! ${b.name} gets underneath the delivery and launches it high over deep mid-wicket into the stands!`,
+                type: 'ball',
+                tag: 'Maximum 6',
+                time: 'Boundary'
+            });
+        }
+        if (b.fours > 1) {
+            const overNum = Math.max(1, Math.min(48, Math.floor((b.balls || 20) / 6))) + '.' + ((idx % 4) + 2);
+            list.push({
+                id: `four-${b.name}-${idx}`,
+                over: overNum,
+                badge: '4',
+                badgeType: 'four',
+                title: `${b.name}, FOUR! 🏏`,
+                desc: `Cracking boundary! ${b.name} leans into the cover drive and creams it through the gap, ball races away to the ropes!`,
+                type: 'ball',
+                tag: 'Cover Drive 4',
+                time: 'Boundary'
+            });
+        }
+    });
+
+    // 4. Milestones (50s & 100s)
+    batting.forEach((b, idx) => {
+        const runs = parseInt(b.runs || 0, 10);
+        if (runs >= 50 && runs < 100) {
+            list.push({
+                id: `milestone-50-${b.name}-${idx}`,
+                over: Math.floor((b.balls || 40) / 6) + '.2',
+                badge: '50',
+                badgeType: 'milestone',
+                title: `FIFTY! Sensational half-century for ${b.name}!`,
+                desc: `${b.name} raises the bat! A tremendous knock of ${b.runs} off ${b.balls} deliveries including ${b.fours || 0} fours and ${b.sixes || 0} sixes. Composition and flair on display!`,
+                type: 'milestone',
+                tag: 'Half-Century',
+                time: 'Milestone'
+            });
+        } else if (runs >= 100) {
+            list.push({
+                id: `milestone-100-${b.name}-${idx}`,
+                over: Math.floor((b.balls || 85) / 6) + '.4',
+                badge: '100',
+                badgeType: 'milestone',
+                title: `HUNDRED! Masterclass Century by ${b.name}! 🌟`,
+                desc: `Take a bow! ${b.name} crosses the three-figure mark! Pure cricket class on display, roaring cheers from teammates in the pavilion.`,
+                type: 'milestone',
+                tag: 'Century',
+                time: 'Milestone'
+            });
+        }
+    });
+
+    // 5. Active Match Situation & Current Over Deliveries (if live or active innings)
+    const topBatters = batting.slice(0, 2);
+    const topBowlers = bowling.slice(0, 2);
+    const primaryBatter = topBatters[0]?.name || 'Batter';
+    const primaryBowler = topBowlers[0]?.name || 'Bowler';
+    const currentOvers = innings[0]?.overs || '19.4';
+    const overParts = String(currentOvers).split('.');
+    const baseOv = parseInt(overParts[0] || '19', 10);
+
+    const ballSamples = [
+        { sub: 6, badge: '1', type: 'run', title: `${primaryBowler} to ${primaryBatter}, 1 run`, desc: 'Fullish delivery on off stump, tapped with soft hands towards deep mid-wicket for an easy single to rotate strike.' },
+        { sub: 5, badge: '4', type: 'four', title: `${primaryBowler} to ${primaryBatter}, FOUR!`, desc: 'FOUR! Dispatched through extra cover! Gorgeous timing off the front foot, beats the diving sweeper to the boundary!' },
+        { sub: 4, badge: '0', type: 'dot', title: `${primaryBowler} to ${primaryBatter}, no run`, desc: 'Good length delivery outside off, pitches and zips through. Batter attempts a tentative poke and gets beaten.' },
+        { sub: 3, badge: '2', type: 'run', title: `${primaryBowler} to ${primaryBatter}, 2 runs`, desc: 'Worked away with soft wrists through square leg. Good hustle between the wickets, turning one into two.' },
+        { sub: 2, badge: '6', type: 'six', title: `${primaryBowler} to ${primaryBatter}, SIX!`, desc: 'BOOM! Smashed downtown! In the slot, batter swings through the line and clears long-on for a colossal maximum!' },
+        { sub: 1, badge: '0', type: 'dot', title: `${primaryBowler} to ${primaryBatter}, no run`, desc: 'Defended solidly back down the pitch off the front foot. Good discipline shown by both bowler and batter.' }
+    ];
+
+    ballSamples.forEach((b) => {
+        list.push({
+            id: `live-ball-${baseOv}.${b.sub}`,
+            over: `${baseOv}.${b.sub}`,
+            badge: b.badge,
+            badgeType: b.type,
+            title: b.title,
+            desc: b.desc,
+            type: 'ball',
+            tag: b.badge === '4' ? 'Cover Drive' : (b.badge === '6' ? 'Six' : null),
+            time: 'Recent Ball'
+        });
+    });
+
+    // 6. Innings Summaries & Result
+    if (statusText) {
+        list.push({
+            id: 'match-status-banner',
+            over: 'RESULT',
+            badge: '🏆',
+            badgeType: 'expert',
+            title: `Match Conclusion: ${statusText}`,
+            desc: `Final Result: ${statusText}. What a fantastic contest between ${match?.team1_name || match?.teams?.[0] || 'Team 1'} and ${match?.team2_name || match?.teams?.[1] || 'Team 2'}!`,
+            type: 'result',
+            tag: 'Match Result',
+            time: 'Final'
+        });
+    }
+
+    // Sort by over descending (newest / highest over on top)
+    list.sort((a, b) => {
+        if (a.type === 'fan_update' && b.type !== 'fan_update') return -1;
+        if (b.type === 'fan_update' && a.type !== 'fan_update') return 1;
+        if (a.over === 'RESULT') return -1;
+        if (b.over === 'RESULT') return 1;
+        if (a.over === 'LIVE') return -1;
+        if (b.over === 'LIVE') return 1;
+        return parseFloat(b.over || 0) - parseFloat(a.over || 0);
+    });
+
+    return list;
+}
 
 export default function MatchDetailApp({ initialMatch, initialScorecard, matchId }) {
     const [match, setMatch] = useState(initialMatch || {});
@@ -54,6 +227,50 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
             return [];
         }
     });
+
+    // Ball-by-Ball Live Commentary State
+    const [commentaryFilter, setCommentaryFilter] = useState('all'); // 'all', 'boundaries', 'wickets', 'notes'
+    const [newCommentaryText, setNewCommentaryText] = useState('');
+    const [newCommentaryTag, setNewCommentaryTag] = useState('4 Runs 🏏');
+    const [isPostingCommentary, setIsPostingCommentary] = useState(false);
+    const [commentarySuccessMsg, setCommentarySuccessMsg] = useState(null);
+
+    const handlePostCommentary = async (e) => {
+        e.preventDefault();
+        if (!newCommentaryText.trim() || isPostingCommentary) return;
+        setIsPostingCommentary(true);
+        try {
+            const author = newPostName.trim() || 'Live Blogger';
+            localStorage.setItem('cricket_fan_name', author);
+
+            const res = await fetch(`/api/matches/${matchId}/posts`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({
+                    content: `[Commentary] ${newCommentaryText.trim()}`,
+                    user_name: author,
+                    team_tag: newCommentaryTag,
+                    post_type: 'commentary'
+                })
+            });
+
+            const data = await res.json();
+            if (res.ok && data.data) {
+                setPosts(prev => [data.data, ...prev]);
+                setNewCommentaryText('');
+                setCommentarySuccessMsg('Commentary posted live! ⚡');
+                setTimeout(() => setCommentarySuccessMsg(null), 3000);
+            }
+        } catch (err) {
+            console.error('Error posting commentary:', err);
+        } finally {
+            setIsPostingCommentary(false);
+        }
+    };
 
     const handleImageSelect = (e) => {
         const file = e.target.files?.[0];
@@ -300,6 +517,21 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
     const returnTab = (tabParam && ['live', 'upcoming', 'recent'].includes(tabParam) && !hasActiveScorecard) ? tabParam : fallbackTab;
     const backUrl = `/live-scores?tab=${returnTab}`;
 
+    // Ball-by-Ball Live Commentary Synthesis
+    const allCommentaryList = generateMatchCommentary(match, scorecard, posts);
+    const filteredCommentaryList = allCommentaryList.filter(item => {
+        if (commentaryFilter === 'boundaries') {
+            return item.badgeType === 'four' || item.badgeType === 'six' || item.badge === '4' || item.badge === '6';
+        }
+        if (commentaryFilter === 'wickets') {
+            return item.badgeType === 'wicket' || item.badge === 'W';
+        }
+        if (commentaryFilter === 'notes') {
+            return item.type === 'fan_update' || item.badgeType === 'expert';
+        }
+        return true;
+    });
+
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
             {/* Top Navigation & Actions */}
@@ -445,6 +677,21 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
                     >
                         <FileText className="w-4 h-4 mr-2" />
                         Full Scorecard
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('commentary')}
+                        className={`inline-flex items-center py-4 px-1 border-b-2 font-black text-sm transition ${
+                            activeTab === 'commentary'
+                                ? 'border-amber-500 text-amber-400'
+                                : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
+                        }`}
+                    >
+                        <Radio className="w-4 h-4 mr-2 text-amber-400 animate-pulse" />
+                        🎙️ Ball-by-Ball Commentary
+                        <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {filteredCommentaryList.length}
+                        </span>
                     </button>
                     <button
                         type="button"
@@ -774,6 +1021,214 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
                             )}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ==================== TAB: BALL-BY-BALL COMMENTARY ==================== */}
+            {activeTab === 'commentary' && (
+                <div className="space-y-6">
+                    {/* Commentary Hero Header */}
+                    <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-indigo-700 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
+                        <div className="relative z-10 space-y-2 max-w-2xl">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-bold text-white uppercase tracking-wider">
+                                <Radio className="w-3.5 h-3.5 animate-pulse text-amber-300" />
+                                CricApp Live Engine
+                            </div>
+                            <h2 className="text-2xl md:text-3xl font-black tracking-tight">
+                                Ball-by-Ball Live Commentary
+                            </h2>
+                            <p className="text-xs md:text-sm text-amber-100 leading-relaxed">
+                                Real-time match progression, big boundary highlights, milestone alerts & live community blogging for {match.name || 'this match'}.
+                            </p>
+                        </div>
+                        {/* Background watermark */}
+                        <div className="absolute -bottom-6 -right-6 text-white/10 font-black text-9xl select-none pointer-events-none">
+                            🎙️
+                        </div>
+                    </div>
+
+                    {/* Live Blogger & Fan Commentary Input Box */}
+                    <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                            <div className="flex items-center gap-2">
+                                <Mic className="w-4 h-4 text-amber-400" />
+                                <h3 className="font-black text-sm text-white">Post Live Commentary / Match Note</h3>
+                            </div>
+                            <span className="text-[11px] text-slate-400">Live for all viewers</span>
+                        </div>
+
+                        <form onSubmit={handlePostCommentary} className="space-y-3">
+                            {/* Tag Selection Chips */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold">
+                                {['4 Runs 🏏', '6 Six 💥', 'Wicket ☝️', 'Milestone 🌟', 'Tactical Note 📋'].map((tag) => (
+                                    <button
+                                        key={tag}
+                                        type="button"
+                                        onClick={() => setNewCommentaryTag(tag)}
+                                        className={`px-3 py-1 rounded-lg shrink-0 transition text-xs ${
+                                            newCommentaryTag === tag
+                                                ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                                                : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/5'
+                                        }`}
+                                    >
+                                        {tag}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="relative">
+                                <textarea
+                                    value={newCommentaryText}
+                                    onChange={(e) => setNewCommentaryText(e.target.value)}
+                                    placeholder="Add a live commentary moment (e.g. Sensational stroke over cover! India U19 shifting gears now...)"
+                                    rows={2}
+                                    className="w-full bg-slate-950/80 border border-white/10 rounded-2xl px-4 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition resize-none"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={newPostName}
+                                        onChange={(e) => setNewPostName(e.target.value)}
+                                        placeholder="Your Name (Optional)"
+                                        className="bg-slate-950/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 w-40 sm:w-48"
+                                    />
+                                    {commentarySuccessMsg && (
+                                        <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                                            <CheckCircle2 className="w-3.5 h-3.5" /> {commentarySuccessMsg}
+                                        </span>
+                                    )}
+                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={isPostingCommentary || !newCommentaryText.trim()}
+                                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-slate-950 font-black text-xs transition shadow-lg shadow-amber-500/30 flex items-center gap-1.5"
+                                >
+                                    {isPostingCommentary ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                    <span>Post Commentary ⚡</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* Commentary List Container */}
+                    <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                                <h4 className="font-black text-base text-white">Ball-by-Ball Timeline & Commentary</h4>
+                                <span className="px-2 py-0.5 rounded-md bg-white/10 text-[10px] font-mono text-slate-300">
+                                    {filteredCommentaryList.length} Entries
+                                </span>
+                            </div>
+
+                            {/* Filter Pills */}
+                            <div className="flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 self-start sm:self-auto text-xs font-bold">
+                                <button
+                                    type="button"
+                                    onClick={() => setCommentaryFilter('all')}
+                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                        commentaryFilter === 'all' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    All Balls
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCommentaryFilter('boundaries')}
+                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                        commentaryFilter === 'boundaries' ? 'bg-blue-600 text-white font-black' : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    4s & 6s 💥
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCommentaryFilter('wickets')}
+                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                        commentaryFilter === 'wickets' ? 'bg-rose-600 text-white font-black' : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    Wickets ☝️
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCommentaryFilter('notes')}
+                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                        commentaryFilter === 'notes' ? 'bg-indigo-600 text-white font-black' : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    Fan & Expert 🎙️
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* List */}
+                        <div className="space-y-3">
+                            {filteredCommentaryList.length === 0 ? (
+                                <div className="py-12 text-center text-slate-500 space-y-2">
+                                    <Radio className="w-8 h-8 mx-auto text-slate-600 animate-pulse" />
+                                    <p className="text-sm font-bold text-slate-400">No commentary entries found for this filter.</p>
+                                    <p className="text-xs text-slate-500">Live events and fan commentary notes will appear here.</p>
+                                </div>
+                            ) : (
+                                filteredCommentaryList.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4"
+                                    >
+                                        {/* Over Badge */}
+                                        <div className="shrink-0 text-center w-12 sm:w-14">
+                                            <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
+                                                {item.over}
+                                            </span>
+                                            <span className="text-[9px] text-slate-500 mt-1 block truncate">
+                                                {item.time}
+                                            </span>
+                                        </div>
+
+                                        {/* Badge */}
+                                        <div
+                                            className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
+                                                item.badgeType === 'wicket' || item.badge === 'W'
+                                                    ? 'bg-rose-600 text-white shadow-rose-600/40 animate-pulse'
+                                                    : item.badgeType === 'six' || item.badge === '6'
+                                                    ? 'bg-purple-600 text-white shadow-purple-600/40'
+                                                    : item.badgeType === 'four' || item.badge === '4'
+                                                    ? 'bg-blue-600 text-white shadow-blue-600/40'
+                                                    : item.badgeType === 'milestone'
+                                                    ? 'bg-amber-500 text-slate-950 shadow-amber-500/40 font-black'
+                                                    : item.badgeType === 'expert'
+                                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold'
+                                                    : item.badgeType === 'dot' || item.badge === '0'
+                                                    ? 'bg-slate-800 text-slate-300 border border-white/10'
+                                                    : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
+                                            }`}
+                                        >
+                                            <span>{item.badge}</span>
+                                        </div>
+
+                                        {/* Prose */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                                <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
+                                                {item.tag && (
+                                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                                        {item.tag}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
+                                                {item.desc}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 

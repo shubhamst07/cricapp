@@ -45,7 +45,7 @@ class MatchPostController extends Controller
             'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
             'insta_url' => 'nullable|string|max:500',
             'team_tag' => 'nullable|string|max:50',
-            'post_type' => 'nullable|string|in:text,meme,instagram,highlight',
+            'post_type' => 'nullable|string|in:text,meme,instagram,highlight,commentary',
         ]);
 
         $user = Auth::user();
