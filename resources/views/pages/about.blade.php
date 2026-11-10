@@ -84,11 +84,11 @@
                         <span>💬 Direct WhatsApp</span>
                     </a>
 
-                    <a href="mailto:shubhamthakurst07@gmail.com" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-900 dark:text-white font-bold text-xs transition border border-slate-200 dark:border-white/10">
+                    <a href="mailto:shubhamthakurst007@gmail.com" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-900 dark:text-white font-bold text-xs transition border border-slate-200 dark:border-white/10">
                         <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
-                        <span>shubhamthakurst07@gmail.com</span>
+                        <span>shubhamthakurst007@gmail.com</span>
                     </a>
                 </div>
             </div>

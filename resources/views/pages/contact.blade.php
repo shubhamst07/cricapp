@@ -75,8 +75,8 @@
                         </div>
                         <div>
                             <span class="block text-slate-400 text-[10px] uppercase font-bold">Official Email</span>
-                            <a href="mailto:shubhamthakurst07@gmail.com" class="font-extrabold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 break-all">
-                                shubhamthakurst07@gmail.com
+                            <a href="mailto:shubhamthakurst007@gmail.com" class="font-extrabold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 break-all">
+                                shubhamthakurst007@gmail.com
                             </a>
                         </div>
                     </div>

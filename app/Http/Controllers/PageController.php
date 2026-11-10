@@ -54,7 +54,10 @@ class PageController extends Controller
         // 2. Dispatch email delivery in background AFTER HTTP response is returned to browser
         // Using ->afterResponse() guarantees the browser receives an instant response (0.05s)
         // and NEVER suffers from a 504 Gateway Timeout!
-        $adminEmail = config('mail.admin_address', env('ADMIN_EMAIL', 'shubhamthakurst07@gmail.com'));
+        $adminEmail = env('ADMIN_EMAIL') ?: config('mail.admin_address', 'shubhamthakurst007@gmail.com');
+        if ($adminEmail === 'shubhamthakurst07@gmail.com') {
+            $adminEmail = 'shubhamthakurst007@gmail.com';
+        }
 
         dispatch(function () use ($adminEmail, $validated) {
             $mailSent = false;
@@ -92,10 +95,10 @@ class PageController extends Controller
                     ])->post('https://api.brevo.com/v3/smtp/email', [
                         'sender' => [
                             'name' => 'LiveCricket',
-                            'email' => 'shubhamthakurst07@gmail.com',
+                            'email' => 'shubhamthakurst007@gmail.com',
                         ],
                         'to' => [
-                            ['email' => $adminEmail, 'name' => 'Shubham Thakur'],
+                            ['email' => 'shubhamthakurst007@gmail.com', 'name' => 'Shubham Thakur'],
                         ],
                         'replyTo' => [
                             'email' => $validated['email'],
@@ -106,7 +109,7 @@ class PageController extends Controller
                     ]);
                     if ($response->successful()) {
                         $mailSent = true;
-                        Log::info("Contact message delivered via Brevo HTTPS API to {$adminEmail}");
+                        Log::info("Contact message delivered via Brevo HTTPS API to shubhamthakurst007@gmail.com");
                     } else {
                         Log::warning("Brevo API error (" . $response->status() . "): " . $response->body());
                     }
@@ -148,12 +151,16 @@ class PageController extends Controller
      */
     public function testEmail()
     {
-        $adminEmail = config('mail.admin_address', env('ADMIN_EMAIL', 'shubhamthakurst07@gmail.com'));
+        $adminEmail = env('ADMIN_EMAIL') ?: 'shubhamthakurst007@gmail.com';
+        if ($adminEmail === 'shubhamthakurst07@gmail.com') {
+            $adminEmail = 'shubhamthakurst007@gmail.com';
+        }
+
         $brevoKey = config('services.brevo.key') ?: env('BREVO_API_KEY');
         $resendKey = config('services.resend.key') ?: env('RESEND_API_KEY');
 
         $results = [
-            'admin_email' => $adminEmail,
+            'destination_email' => $adminEmail,
             'brevo_key_detected' => !empty($brevoKey) ? ('Present (Starts with ' . substr($brevoKey, 0, 10) . '...)') : 'NOT FOUND (Please check Render Environment BREVO_API_KEY)',
             'resend_key_detected' => !empty($resendKey) ? 'Present' : 'NOT FOUND',
             'tests' => [],
@@ -169,13 +176,13 @@ class PageController extends Controller
                 ])->post('https://api.brevo.com/v3/smtp/email', [
                     'sender' => [
                         'name' => 'LiveCricket',
-                        'email' => 'shubhamthakurst07@gmail.com',
+                        'email' => 'shubhamthakurst007@gmail.com',
                     ],
                     'to' => [
                         ['email' => $adminEmail, 'name' => 'Shubham Thakur'],
                     ],
-                    'subject' => '[LiveCricket] Brevo Test Email Verification',
-                    'htmlContent' => '<h3>Hi Shubham!</h3><p>Your Brevo API connection is 100% working on Render!</p>',
+                    'subject' => '[LiveCricket] Brevo Test Email Verification to 007',
+                    'htmlContent' => '<h3>Hi Shubham!</h3><p>Your Brevo API connection is 100% working and delivering directly to shubhamthakurst007@gmail.com!</p>',
                 ]);
 
                 $results['tests']['brevo'] = [
