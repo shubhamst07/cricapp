@@ -60,11 +60,11 @@ class PageController extends Controller
             $mailSent = false;
 
             // A. Resend HTTPS API (Port 443 - Works on Render Free Tier)
-            $resendKey = env('RESEND_API_KEY');
+            $resendKey = config('services.resend.key') ?: env('RESEND_API_KEY');
             if ($resendKey) {
                 try {
-                    $response = Http::timeout(5)->withToken($resendKey)->post('https://api.resend.com/emails', [
-                        'from' => env('MAIL_FROM_NAME', 'LiveCricket') . ' <' . (env('RESEND_FROM_EMAIL', 'onboarding@resend.dev')) . '>',
+                    $response = Http::timeout(5)->withToken(trim($resendKey))->post('https://api.resend.com/emails', [
+                        'from' => 'LiveCricket <onboarding@resend.dev>',
                         'to' => [$adminEmail],
                         'reply_to' => $validated['email'],
                         'subject' => "[LiveCricket] New Contact Message: {$validated['inquiry_type']} from {$validated['name']}",
@@ -82,16 +82,17 @@ class PageController extends Controller
             }
 
             // B. Brevo HTTPS API (Port 443 - Works on Render Free Tier)
-            $brevoKey = env('BREVO_API_KEY');
+            $brevoKey = config('services.brevo.key') ?: env('BREVO_API_KEY');
             if (!$mailSent && $brevoKey) {
                 try {
                     $response = Http::timeout(5)->withHeaders([
-                        'api-key' => $brevoKey,
+                        'api-key' => trim($brevoKey),
                         'Content-Type' => 'application/json',
+                        'Accept' => 'application/json',
                     ])->post('https://api.brevo.com/v3/smtp/email', [
                         'sender' => [
-                            'name' => env('MAIL_FROM_NAME', 'LiveCricket'),
-                            'email' => env('MAIL_FROM_ADDRESS', 'shubhamthakurst07@gmail.com'),
+                            'name' => 'LiveCricket',
+                            'email' => 'shubhamthakurst07@gmail.com',
                         ],
                         'to' => [
                             ['email' => $adminEmail, 'name' => 'Shubham Thakur'],
@@ -106,6 +107,8 @@ class PageController extends Controller
                     if ($response->successful()) {
                         $mailSent = true;
                         Log::info("Contact message delivered via Brevo HTTPS API to {$adminEmail}");
+                    } else {
+                        Log::warning("Brevo API error (" . $response->status() . "): " . $response->body());
                     }
                 } catch (\Throwable $e) {
                     Log::warning("Brevo API delivery error: " . $e->getMessage());
@@ -138,5 +141,55 @@ class PageController extends Controller
 
         $inquiries = ContactInquiry::latest()->paginate(25);
         return view('pages.inquiries', compact('inquiries'));
+    }
+
+    /**
+     * Diagnostic endpoint to test email delivery on Render.
+     */
+    public function testEmail()
+    {
+        $adminEmail = config('mail.admin_address', env('ADMIN_EMAIL', 'shubhamthakurst07@gmail.com'));
+        $brevoKey = config('services.brevo.key') ?: env('BREVO_API_KEY');
+        $resendKey = config('services.resend.key') ?: env('RESEND_API_KEY');
+
+        $results = [
+            'admin_email' => $adminEmail,
+            'brevo_key_detected' => !empty($brevoKey) ? ('Present (Starts with ' . substr($brevoKey, 0, 10) . '...)') : 'NOT FOUND (Please check Render Environment BREVO_API_KEY)',
+            'resend_key_detected' => !empty($resendKey) ? 'Present' : 'NOT FOUND',
+            'tests' => [],
+        ];
+
+        // 1. Test Brevo if key exists
+        if ($brevoKey) {
+            try {
+                $response = Http::timeout(8)->withHeaders([
+                    'api-key' => trim($brevoKey),
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                ])->post('https://api.brevo.com/v3/smtp/email', [
+                    'sender' => [
+                        'name' => 'LiveCricket',
+                        'email' => 'shubhamthakurst07@gmail.com',
+                    ],
+                    'to' => [
+                        ['email' => $adminEmail, 'name' => 'Shubham Thakur'],
+                    ],
+                    'subject' => '[LiveCricket] Brevo Test Email Verification',
+                    'htmlContent' => '<h3>Hi Shubham!</h3><p>Your Brevo API connection is 100% working on Render!</p>',
+                ]);
+
+                $results['tests']['brevo'] = [
+                    'http_status' => $response->status(),
+                    'success' => $response->successful(),
+                    'response' => $response->json() ?? $response->body(),
+                ];
+            } catch (\Throwable $e) {
+                $results['tests']['brevo'] = [
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json($results, 200, [], JSON_PRETTY_PRINT);
     }
 }

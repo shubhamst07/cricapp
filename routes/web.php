@@ -61,6 +61,7 @@ Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');
 Route::get('/inquiries', [PageController::class, 'inquiries'])->name('inquiries.index')->middleware('auth');
+Route::get('/test-email', [PageController::class, 'testEmail'])->name('test.email');
 
 Route::middleware('auth')->group(function () {
     Route::post('/profile/update', [ProfileController::class, 'update'])->name('profile.update');
