@@ -62,6 +62,8 @@
     nonStriker: {{ json_encode($nonStriker) }},
     bowler: {{ json_encode($bowler) }},
     thisOver: {{ json_encode($state['this_over'] ?? []) }},
+    commentaryList: {{ json_encode($state['commentary'] ?? []) }},
+    showCommentaryDrawer: false,
 
     // Toast
     toastMsg: '',
@@ -252,6 +254,8 @@
         if (data.non_striker) this.nonStriker = data.non_striker;
         if (data.bowler) this.bowler = data.bowler;
         if (data.state && data.state.this_over) this.thisOver = data.state.this_over;
+        if (data.state && data.state.commentary) this.commentaryList = data.state.commentary;
+        if (data.commentary) this.commentaryList = data.commentary;
         if (data.match) {
             this.matchStatus = data.match.status;
             this.matchResult = data.match.match_result;
@@ -275,6 +279,7 @@
                     this.nonStriker = data.nonStriker;
                     this.bowler = data.bowler;
                     this.thisOver = data.this_over || [];
+                    if (data.commentary) this.commentaryList = data.commentary;
                     this.matchStatus = data.match_status;
                     this.matchResult = data.match_result;
 
@@ -641,12 +646,65 @@
                 </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
+                <button type="button" @click="showCommentaryDrawer = !showCommentaryDrawer" 
+                        class="px-3.5 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 hover:text-white font-bold transition flex items-center gap-1.5">
+                    <span>🎙️ Commentary</span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-black/40 text-[10px] font-mono" x-text="commentaryList.length"></span>
+                </button>
                 <button type="button" @click="editStreamModal = true" class="px-3.5 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 hover:text-white font-bold transition flex items-center gap-1.5">
                     <span>🔗 Stream Link</span>
                 </button>
                 <a href="{{ route('matches.show', $match) }}" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition">
                     Full Scorecard ➔
                 </a>
+            </div>
+        </div>
+
+        <!-- Live Commentary Expandable Slide-Down Card in Broadcast -->
+        <div x-cloak x-show="showCommentaryDrawer" x-transition class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                    <h4 class="font-black text-sm text-white">🎙️ Live Ball-by-Ball Commentary Stream</h4>
+                </div>
+                <button type="button" @click="showCommentaryDrawer = false" class="text-slate-400 hover:text-white text-xs font-bold">✕ Close</button>
+            </div>
+
+            <div class="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+                <template x-if="commentaryList.length === 0">
+                    <div class="py-8 text-center text-slate-500 text-xs italic">
+                        No commentary recorded yet. Deliveries will update here automatically in real time.
+                    </div>
+                </template>
+
+                <template x-for="item in commentaryList" :key="item.id || (item.ball + '-' + item.time)">
+                    <div class="p-3.5 rounded-2xl bg-white/5 border border-white/5 flex items-start gap-3 text-xs">
+                        <div class="shrink-0 text-center w-12">
+                            <span class="px-2 py-0.5 rounded-md bg-black/40 font-mono font-bold text-xs text-slate-200 block" x-text="item.ball"></span>
+                            <span class="text-[9px] text-slate-500 block mt-0.5 truncate" x-text="item.time"></span>
+                        </div>
+                        <div class="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center font-mono font-black text-xs shadow-md"
+                             :class="{
+                                 'bg-rose-600 text-white shadow-rose-600/40': item.badge_type === 'wicket' || item.badge === 'W',
+                                 'bg-purple-600 text-white shadow-purple-600/40': item.badge_type === 'six' || item.badge === '6',
+                                 'bg-blue-600 text-white shadow-blue-600/40': item.badge_type === 'four' || item.badge === '4',
+                                 'bg-amber-600 text-white shadow-amber-600/40': item.badge_type === 'extra',
+                                 'bg-slate-800 text-slate-300 border border-white/10': item.badge_type === 'dot' || item.badge === '0',
+                                 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30': item.badge_type === 'run' || (!['wicket','six','four','extra','dot'].includes(item.badge_type))
+                             }">
+                            <span x-text="item.badge"></span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-1.5">
+                                <span class="font-black text-white text-xs truncate" x-text="item.heading"></span>
+                                <template x-if="item.shot">
+                                    <span class="px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/30" x-text="item.shot"></span>
+                                </template>
+                            </div>
+                            <p class="text-[11px] text-slate-300 mt-0.5 leading-snug" x-text="item.text"></p>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
 

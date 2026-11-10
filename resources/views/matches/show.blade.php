@@ -141,12 +141,52 @@
     selectNonStrikerId: '{{ $state['non_striker_id'] ?? '' }}',
     selectBowlerId: '{{ $state['bowler_id'] ?? '' }}',
 
+    // Ball-by-Ball Commentary & Shot Direction System
+    activeMainTab: 'scorecard',
+    selectedShot: '',
+    customCommentaryText: '',
+    showCustomCommentaryInput: false,
+    commentaryFilter: 'all',
+    commentaryList: {{ json_encode($state['commentary'] ?? []) }},
+
+    selectedShotLabel() {
+        const labels = {
+            'cover': 'Cover Drive 🏏',
+            'cut': 'Square Cut ⚡',
+            'pull': 'Pull Shot 💥',
+            'straight': 'Straight Drive 🎯',
+            'midwicket': 'Mid-Wicket 🔄',
+            'sweep': 'Sweep 🧹',
+            'edge': 'Edge / Cut 🧤'
+        };
+        return labels[this.selectedShot] || this.selectedShot;
+    },
+
+    filteredCommentary() {
+        if (!this.commentaryList) return [];
+        if (this.commentaryFilter === 'boundaries') {
+            return this.commentaryList.filter(c => c.badge_type === 'four' || c.badge_type === 'six' || c.badge === '4' || c.badge === '6');
+        }
+        if (this.commentaryFilter === 'wickets') {
+            return this.commentaryList.filter(c => c.badge_type === 'wicket' || c.badge === 'W');
+        }
+        return this.commentaryList;
+    },
+
     // CricHeroes Ball-By-Ball Action Dispatcher
     async recordBallAction(action, payload = {}) {
         // Exclude setup/meta actions from active bowler and batsman requirement
         const isSetupAction = ['select_bowler', 'select_openers', 'switch_innings', 'undo'].includes(action);
 
         if (!isSetupAction) {
+            // Attach selected shot and custom commentary if not specified
+            if (!payload.shot && this.selectedShot) {
+                payload.shot = this.selectedShot;
+            }
+            if (!payload.commentary && this.customCommentaryText) {
+                payload.commentary = this.customCommentaryText;
+            }
+
             // 1. Strict Bowler Check
             if (!this.liveBowler || !this.liveBowler.id) {
                 this.showToast('⚠️ Please select a Bowler first!');
@@ -186,6 +226,10 @@
                 if (data.non_striker) this.liveNonStriker = data.non_striker;
                 if (data.bowler) this.liveBowler = data.bowler;
                 if (data.state && data.state.this_over) this.thisOverBalls = data.state.this_over;
+                if (data.state && data.state.commentary) this.commentaryList = data.state.commentary;
+                this.selectedShot = '';
+                this.customCommentaryText = '';
+                this.showCustomCommentaryInput = false;
                 if (data.score) {
                     this.scoreRuns = data.score.runs;
                     this.scoreWickets = data.score.wickets;
@@ -762,6 +806,71 @@
                         TAP TO RECORD BALL (AUTO ROTATES STRIKE & ADVANCES OVERS)
                     </div>
 
+                    <!-- Shot Direction & Commentary Preset Selector -->
+                    <div class="p-3 rounded-2xl bg-black/40 border border-white/10 space-y-2">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <div class="flex items-center gap-1.5 font-bold text-slate-300">
+                                <span>🎙️ Shot Commentary:</span>
+                                <span class="text-amber-400 font-mono font-bold" x-text="selectedShot ? ('[' + selectedShotLabel() + ']') : '[Auto Smart AI ⚡]'"></span>
+                            </div>
+                            <button type="button" @click="showCustomCommentaryInput = !showCustomCommentaryInput"
+                                    class="text-[10px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition">
+                                <span x-text="showCustomCommentaryInput ? '✕ Hide Note' : '✍️ Custom Note'"></span>
+                            </button>
+                        </div>
+
+                        <!-- 1-Click Shot Direction Chips -->
+                        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] scrollbar-none font-medium">
+                            <button type="button" @click="selectedShot = ''"
+                                    :class="selectedShot === '' ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-400'"
+                                    class="px-2.5 py-1 rounded-lg shrink-0 transition text-xs">
+                                ⚡ Auto
+                            </button>
+                            <button type="button" @click="selectedShot = (selectedShot === 'cover' ? '' : 'cover')"
+                                    :class="selectedShot === 'cover' ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300'"
+                                    class="px-2.5 py-1 rounded-lg shrink-0 transition">
+                                🏏 Cover Drive
+                            </button>
+                            <button type="button" @click="selectedShot = (selectedShot === 'cut' ? '' : 'cut')"
+                                    :class="selectedShot === 'cut' ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300'"
+                                    class="px-2.5 py-1 rounded-lg shrink-0 transition">
+                                ⚡ Square Cut
+                            </button>
+                            <button type="button" @click="selectedShot = (selectedShot === 'pull' ? '' : 'pull')"
+                                    :class="selectedShot === 'pull' ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300'"
+                                    class="px-2.5 py-1 rounded-lg shrink-0 transition">
+                                💥 Pull Shot
+                            </button>
+                            <button type="button" @click="selectedShot = (selectedShot === 'straight' ? '' : 'straight')"
+                                    :class="selectedShot === 'straight' ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300'"
+                                    class="px-2.5 py-1 rounded-lg shrink-0 transition">
+                                🎯 Straight Drive
+                            </button>
+                            <button type="button" @click="selectedShot = (selectedShot === 'midwicket' ? '' : 'midwicket')"
+                                    :class="selectedShot === 'midwicket' ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300'"
+                                    class="px-2.5 py-1 rounded-lg shrink-0 transition">
+                                🔄 Mid-Wicket
+                            </button>
+                            <button type="button" @click="selectedShot = (selectedShot === 'sweep' ? '' : 'sweep')"
+                                    :class="selectedShot === 'sweep' ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300'"
+                                    class="px-2.5 py-1 rounded-lg shrink-0 transition">
+                                🧹 Sweep
+                            </button>
+                            <button type="button" @click="selectedShot = (selectedShot === 'edge' ? '' : 'edge')"
+                                    :class="selectedShot === 'edge' ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300'"
+                                    class="px-2.5 py-1 rounded-lg shrink-0 transition">
+                                🧤 Edge / Cut
+                            </button>
+                        </div>
+
+                        <!-- Optional Custom Note Input -->
+                        <div x-show="showCustomCommentaryInput" x-cloak class="pt-1">
+                            <input type="text" x-model="customCommentaryText" 
+                                   placeholder="Optional: Type custom ball commentary (e.g. Magnificent upper-cut over third man!)"
+                                   class="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-amber-400 focus:ring-0">
+                        </div>
+                    </div>
+
                     <!-- Row 1: Primary Runs (Big Rounded Buttons) -->
                     <div class="grid grid-cols-6 gap-2 sm:gap-3 text-base sm:text-lg font-black font-mono">
                         <button type="button" @click="recordBallAction('run', { runs: 0 })"
@@ -830,8 +939,31 @@
         @endif
 
         <!-- ============================================================== -->
-        <!-- CRICHEROES COMPLETE SCORECARD (INDIVIDUAL RUNS & WICKETS) -->
+        <!-- MASTER NAVIGATION TABS: SCORECARD | LIVE COMMENTARY | SQUADS -->
         <!-- ============================================================== -->
+        <div class="flex items-center gap-2 p-1.5 bg-[#131b2e] border border-white/10 rounded-2xl shadow-xl">
+            <button type="button" @click="activeMainTab = 'scorecard'"
+                    :class="activeMainTab === 'scorecard' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white font-bold'"
+                    class="flex-1 py-3 px-3 sm:px-5 rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2">
+                <span>📊 Scorecard</span>
+            </button>
+            <button type="button" @click="activeMainTab = 'commentary'"
+                    :class="activeMainTab === 'commentary' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white font-bold'"
+                    class="flex-1 py-3 px-3 sm:px-5 rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2">
+                <span>🎙️ Ball-by-Ball Commentary</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] bg-black/40 font-mono font-bold" x-text="commentaryList.length"></span>
+            </button>
+            <button type="button" @click="activeMainTab = 'squads'"
+                    :class="activeMainTab === 'squads' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white font-bold'"
+                    class="flex-1 py-3 px-3 sm:px-5 rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2">
+                <span>👥 Squads ({{ $match->team1Players->count() + $match->team2Players->count() }})</span>
+            </button>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- TAB 1: CRICHEROES COMPLETE SCORECARD (INDIVIDUAL RUNS & WICKETS) -->
+        <!-- ============================================================== -->
+        <div x-show="activeMainTab === 'scorecard'" class="space-y-6">
         <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
                 <div>
@@ -1271,6 +1403,98 @@
                 </div>
             </div>
         </div>
+        </div> <!-- End of Tab 1: Scorecard -->
+
+        <!-- ============================================================== -->
+        <!-- TAB 2: BALL-BY-BALL COMMENTARY FEED (CRICBUZZ / CRICHEROES) -->
+        <!-- ============================================================== -->
+        <div x-show="activeMainTab === 'commentary'" x-cloak class="space-y-6">
+            <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+                <!-- Header with Filters -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                            <span class="text-[10px] font-black uppercase text-red-500 tracking-wider">LIVE COMMENTARY</span>
+                        </div>
+                        <h3 class="font-black text-xl text-white mt-0.5">Ball-by-Ball Live Commentary</h3>
+                        <p class="text-slate-400 text-xs">Real-time ball description, shot breakdown, and match commentary.</p>
+                    </div>
+
+                    <!-- Commentary Outcome Filter Buttons -->
+                    <div class="flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 self-start sm:self-auto text-xs font-bold">
+                        <button type="button" @click="commentaryFilter = 'all'"
+                                :class="commentaryFilter === 'all' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'"
+                                class="px-3 py-1.5 rounded-lg transition">
+                            All Balls
+                        </button>
+                        <button type="button" @click="commentaryFilter = 'boundaries'"
+                                :class="commentaryFilter === 'boundaries' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'"
+                                class="px-3 py-1.5 rounded-lg transition">
+                            4s & 6s 💥
+                        </button>
+                        <button type="button" @click="commentaryFilter = 'wickets'"
+                                :class="commentaryFilter === 'wickets' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'"
+                                class="px-3 py-1.5 rounded-lg transition">
+                            Wickets ☝️
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Commentary Feed List -->
+                <div class="space-y-3">
+                    <template x-if="filteredCommentary().length === 0">
+                        <div class="py-12 text-center text-slate-500 space-y-2">
+                            <span class="text-3xl block">🎙️</span>
+                            <p class="text-sm font-bold text-slate-400">No commentary balls recorded yet.</p>
+                            <p class="text-xs text-slate-500">Every ball bowled by scorers will appear here automatically with shot descriptions!</p>
+                        </div>
+                    </template>
+
+                    <template x-for="item in filteredCommentary()" :key="item.id || (item.ball + '-' + item.time)">
+                        <div class="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4">
+                            <!-- Left: Over Badge & Time -->
+                            <div class="shrink-0 text-center w-12 sm:w-14">
+                                <span class="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block" x-text="item.ball"></span>
+                                <span class="text-[9px] text-slate-500 mt-1 block truncate" x-text="item.time"></span>
+                            </div>
+
+                            <!-- Outcome Chip Badge -->
+                            <div class="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md"
+                                 :class="{
+                                     'bg-rose-600 text-white shadow-rose-600/40 animate-pulse': item.badge_type === 'wicket' || item.badge === 'W',
+                                     'bg-purple-600 text-white shadow-purple-600/40': item.badge_type === 'six' || item.badge === '6',
+                                     'bg-blue-600 text-white shadow-blue-600/40': item.badge_type === 'four' || item.badge === '4',
+                                     'bg-amber-600 text-white shadow-amber-600/40': item.badge_type === 'extra',
+                                     'bg-slate-800 text-slate-300 border border-white/10': item.badge_type === 'dot' || item.badge === '0',
+                                     'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30': item.badge_type === 'run' || (!['wicket','six','four','extra','dot'].includes(item.badge_type))
+                                 }">
+                                <span x-text="item.badge"></span>
+                            </div>
+
+                            <!-- Right: Heading, Tags, and Commentary Prose -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex flex-wrap items-center justify-between gap-1.5">
+                                    <h5 class="text-xs sm:text-sm font-black text-white" x-text="item.heading"></h5>
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <template x-if="item.shot">
+                                            <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30" x-text="'🏏 ' + item.shot"></span>
+                                        </template>
+                                        <span class="text-[10px] font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-md" x-text="item.team_score"></span>
+                                    </div>
+                                </div>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans" x-text="item.text"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div> <!-- End of Tab 2: Commentary -->
+
+        <!-- ============================================================== -->
+        <!-- TAB 3: SQUADS & PLAYING XI -->
+        <!-- ============================================================== -->
+        <div x-show="activeMainTab === 'squads'" x-cloak class="space-y-6">
 
         <!-- ============================================== -->
         <!-- MANUAL MATCH SITUATION & OVERRIDE CONTROLS -->
@@ -1438,6 +1662,7 @@
                 @endif
             </div>
         </div>
+        </div> <!-- End of Tab 3: Squads -->
 
     </div>
 

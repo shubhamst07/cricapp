@@ -381,6 +381,7 @@ class MatchController extends Controller
             'non_striker' => $nonStriker,
             'bowler' => $bowler,
             'this_over' => $state['this_over'] ?? [],
+            'commentary' => array_slice($state['commentary'] ?? [], 0, 30),
         ]);
     }
 
@@ -677,6 +678,7 @@ class MatchController extends Controller
                     'non_striker_id' => $state['non_striker_id'] ?? null,
                     'bowler_id' => $state['bowler_id'] ?? null,
                     'this_over' => $state['this_over'] ?? [],
+                    'commentary' => $state['commentary'] ?? [],
                 ],
                 'score' => [
                     'runs' => $score->runs,
@@ -748,6 +750,9 @@ class MatchController extends Controller
                 $state['non_striker_id'] = $last['state']['non_striker_id'];
                 $state['bowler_id'] = $last['state']['bowler_id'];
                 $state['this_over'] = $last['state']['this_over'];
+                if (isset($last['state']['commentary'])) {
+                    $state['commentary'] = $last['state']['commentary'];
+                }
                 $state['history'] = $history;
                 $state['needs_new_bowler'] = false;
 
@@ -996,6 +1001,32 @@ class MatchController extends Controller
         $thisOver[] = $overBallText;
         $state['this_over'] = $thisOver;
 
+        // Generate Dynamic CricHeroes/Cricbuzz Ball-by-Ball Commentary
+        $shot = $request->input('shot');
+        $customText = $request->input('commentary');
+        $deliveryBallNumber = $this->formatDeliveryBallNumber((string) $score->overs, $isLegalDelivery);
+        $runsForCommentary = ($action === 'run') ? $runsScored : (($action === 'wide' || $action === 'no_ball') ? ($extraRuns ?? 1) : (($action === 'bye' || $action === 'leg_bye') ? ($runs ?? 1) : 0));
+
+        $commentaryItem = $this->generateBallCommentary(
+            action: $action,
+            runs: $runsForCommentary,
+            shot: $shot,
+            howOut: $isWicket ? ($howOut ?? 'bowled') : null,
+            striker: $striker,
+            bowler: $bowler,
+            customText: $customText,
+            deliveryBall: $deliveryBallNumber,
+            badge: $overBallText,
+            teamScore: "{$score->runs}/{$score->wickets}"
+        );
+
+        $commentaryList = $state['commentary'] ?? [];
+        array_unshift($commentaryList, $commentaryItem);
+        if (count($commentaryList) > 150) {
+            $commentaryList = array_slice($commentaryList, 0, 150);
+        }
+        $state['commentary'] = $commentaryList;
+
         // Check if over completed (legal ball % 6 == 0)
         if ($isLegalDelivery) {
             $parts = explode('.', (string) $score->overs);
@@ -1229,6 +1260,221 @@ class MatchController extends Controller
         }
         $bowler->overs_bowled = "{$ov}.{$bl}";
         return $bowler;
+    }
+
+    /**
+     * Compute delivery ball label (e.g. 0.1, 0.6, 1.2, etc.).
+     */
+    protected function formatDeliveryBallNumber(string $currentOvers, bool $isLegalDelivery): string
+    {
+        $parts = explode('.', $currentOvers ?: '0.0');
+        $ov = (int) ($parts[0] ?? 0);
+        $bl = (int) ($parts[1] ?? 0);
+        if ($isLegalDelivery && $bl === 0 && $ov > 0) {
+            return ($ov - 1) . '.6';
+        }
+        return "{$ov}.{$bl}";
+    }
+
+    /**
+     * Generate dynamic CricHeroes / Cricbuzz style ball-by-ball commentary.
+     */
+    protected function generateBallCommentary(
+        string $action,
+        int $runs,
+        ?string $shot,
+        ?string $howOut,
+        ?\App\Models\MatchPlayer $striker,
+        ?\App\Models\MatchPlayer $bowler,
+        ?string $customText,
+        string $deliveryBall,
+        string $badge,
+        string $teamScore
+    ): array {
+        $strikerName = $striker ? $striker->player_name : 'Batter';
+        $bowlerName = $bowler ? $bowler->player_name : 'Bowler';
+        $shot = strtolower(trim((string) $shot));
+
+        $badgeType = 'dot';
+        if ($action === 'wicket') {
+            $badgeType = 'wicket';
+        } elseif ($action === 'wide' || $action === 'no_ball') {
+            $badgeType = 'extra';
+        } elseif ($action === 'bye' || $action === 'leg_bye') {
+            $badgeType = 'bye';
+        } elseif ($runs === 4) {
+            $badgeType = 'four';
+        } elseif ($runs === 6) {
+            $badgeType = 'six';
+        } elseif ($runs > 0) {
+            $badgeType = 'run';
+        }
+
+        // Custom commentary entered by scorer takes top priority
+        if (!empty($customText)) {
+            $desc = trim($customText);
+            $heading = "{$bowlerName} to {$strikerName}";
+            if ($badgeType === 'four') $heading .= ', FOUR!';
+            elseif ($badgeType === 'six') $heading .= ', SIX!';
+            elseif ($badgeType === 'wicket') $heading .= ', OUT!';
+            return [
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'ball' => $deliveryBall,
+                'badge' => $badge,
+                'badge_type' => $badgeType,
+                'bowler' => $bowlerName,
+                'striker' => $strikerName,
+                'heading' => $heading,
+                'text' => $desc,
+                'shot' => $shot ?: null,
+                'team_score' => $teamScore,
+                'time' => now()->format('h:i A'),
+            ];
+        }
+
+        // Automatic smart commentary generation
+        $heading = "{$bowlerName} to {$strikerName}";
+        $desc = '';
+
+        if ($action === 'wicket') {
+            $howOutNorm = strtolower(trim((string) $howOut));
+            $heading .= ', OUT!';
+            if ($howOutNorm === 'bowled') {
+                $lines = [
+                    "Clean bowled! Stumps shattered as {$strikerName} plays all over a good length ball. Absolute timber!",
+                    "Bowled 'em! What a peach of a delivery, breaches the defence and knocks back middle stump!",
+                    "Knocked him over! Right through the gate, {$strikerName} has to walk back disappointed!"
+                ];
+                $desc = $lines[array_rand($lines)];
+            } elseif ($howOutNorm === 'caught') {
+                $lines = [
+                    "In the air... and TAKEN! Mistimed lofted stroke, the fielder under it makes no mistake!",
+                    "Edged and taken! Thick edge carried safely to the fielder, huge breakthrough for {$bowlerName}!",
+                    "Caught! Tried to clear the infield but didn't get enough elevation, safe hands in the outfield!"
+                ];
+                $desc = $lines[array_rand($lines)];
+            } elseif ($howOutNorm === 'lbw') {
+                $lines = [
+                    "Loud shout for LBW and the finger goes UP! Plumb in front of the middle stump!",
+                    "Trapped on the crease! Full and skidding through, beat the inside edge, umpire raises the finger!"
+                ];
+                $desc = $lines[array_rand($lines)];
+            } elseif ($howOutNorm === 'run out') {
+                $lines = [
+                    "RUN OUT! Direct hit! Total hesitation between the batters and {$strikerName} is caught well short of the crease!",
+                    "Run out! Superb athletic pick-up and throw, bails removed in a flash! What a piece of fielding!"
+                ];
+                $desc = $lines[array_rand($lines)];
+            } elseif ($howOutNorm === 'stumped') {
+                $desc = "Stumped! Danced down the wicket, beaten by the flight and turn, keeper whips the bails off in a flash!";
+            } else {
+                $desc = "Wicket falls! Significant breakthrough as {$strikerName} departs ({$howOutNorm}).";
+            }
+        } elseif ($runs === 6) {
+            $heading .= ', SIX!';
+            if (str_contains($shot, 'cover')) {
+                $desc = "Inside out over extra cover! Stood tall and lofted with immense style, clears the boundary ropes!";
+            } elseif (str_contains($shot, 'straight') || str_contains($shot, 'long_on')) {
+                $desc = "Straight as an arrow! Lofted cleanly right back over the bowler's head into the sightscreen for a massive six!";
+            } elseif (str_contains($shot, 'pull') || str_contains($shot, 'midwicket') || str_contains($shot, 'hook')) {
+                $desc = "Dispatched with immense authority! Short ball hammered high and deep over mid-wicket into the stands!";
+            } elseif (str_contains($shot, 'point') || str_contains($shot, 'cut')) {
+                $desc = "Carved over backward point! Tremendous bat speed, sliced high and clears the rope for half a dozen!";
+            } elseif (str_contains($shot, 'sweep')) {
+                $desc = "Smoked over deep square leg! Got down on one knee and slog-swept high into the crowd!";
+            } else {
+                $lines = [
+                    "Massive hit! Got right under the delivery and launched it high into the night sky for a colossal maximum!",
+                    "Smoked into the stands! Sweet sound off the bat as {$strikerName} clears the boundary with ease!",
+                    "Dispatched! In the slot and punished handsomely over the ropes for a 6!"
+                ];
+                $desc = $lines[array_rand($lines)];
+            }
+        } elseif ($runs === 4) {
+            $heading .= ', FOUR!';
+            if (str_contains($shot, 'cover')) {
+                $desc = "Glorious cover drive! Leans into the drive with high elbow and creams it through extra cover to the fence!";
+            } elseif (str_contains($shot, 'cut') || str_contains($shot, 'point')) {
+                $desc = "Square cut! Short and wide outside off, {$strikerName} pounces on it and slashes it past backward point!";
+            } elseif (str_contains($shot, 'pull') || str_contains($shot, 'hook')) {
+                $desc = "Pulled away with disdain! Rocked onto the backfoot and hammered firmly through mid-wicket for four!";
+            } elseif (str_contains($shot, 'straight') || str_contains($shot, 'drive')) {
+                $desc = "Pure textbook straight drive! Driven on the up past mid-on and mid-off, races to the boundary!";
+            } elseif (str_contains($shot, 'midwicket') || str_contains($shot, 'flick')) {
+                $desc = "Whipped off the pads! Sublime wristwork, finds the gap through mid-wicket for a boundary!";
+            } elseif (str_contains($shot, 'sweep')) {
+                $desc = "Swept cleanly! Down on one knee, rolls the wrists and beats the fielder in the deep!";
+            } elseif (str_contains($shot, 'edge')) {
+                $desc = "Edged and away! Thick outside edge flies safely past the slip cordon down to the third man fence!";
+            } else {
+                $lines = [
+                    "Crunched through the gap! Superb timing and placement, beating the diving fielders to the ropes!",
+                    "Cracking boundary! Found the gap to perfection and races across the outfield!",
+                    "Class written all over that stroke! Pierces the infield and races away for four!"
+                ];
+                $desc = $lines[array_rand($lines)];
+            }
+        } elseif ($action === 'wide') {
+            $heading .= ', WIDE';
+            $desc = "Slipped down the leg side, well past the tramline. Umpire signals wide delivery, extra run.";
+        } elseif ($action === 'no_ball') {
+            $heading .= ', NO BALL';
+            $desc = "Overstepped the bowling crease! Umpire calls No Ball, extra run awarded and Free Hit coming up!";
+        } elseif ($action === 'bye') {
+            $heading .= ', Bye';
+            $desc = "Beats the bat and keeper fails to collect cleanly, batters steal a bye.";
+        } elseif ($action === 'leg_bye') {
+            $heading .= ', Leg Bye';
+            $desc = "Struck on the pad, deflected away on the on-side, batters hustle across for a leg bye.";
+        } elseif ($runs === 1) {
+            $heading .= ', 1 run';
+            if (str_contains($shot, 'cover')) {
+                $desc = "Pushed gently into the covers with soft hands for a quick single.";
+            } elseif (str_contains($shot, 'point') || str_contains($shot, 'cut')) {
+                $desc = "Guided towards backward point, rotates the strike nicely.";
+            } elseif (str_contains($shot, 'straight')) {
+                $desc = "Punched down the ground to long-on for an easy single.";
+            } elseif (str_contains($shot, 'midwicket') || str_contains($shot, 'flick')) {
+                $desc = "Tucked away off the hips towards mid-wicket to rotate strike.";
+            } else {
+                $lines = [
+                    "Worked into the gap on the leg side for a sensible single.",
+                    "Tapped softly into the off-side and scampered through for a brisk single.",
+                    "Pushed into the gap, easy single taken to rotate the strike."
+                ];
+                $desc = $lines[array_rand($lines)];
+            }
+        } elseif ($runs === 2) {
+            $heading .= ', 2 runs';
+            $desc = "Driven into the deep pocket, excellent hustle between the wickets to turn one into two.";
+        } elseif ($runs === 3) {
+            $heading .= ', 3 runs';
+            $desc = "Superb running between the wickets! Placed nicely into the outfield, batters push hard for three.";
+        } else {
+            // Dot ball (0 runs)
+            $heading .= ', no run';
+            $lines = [
+                "Defended solidly off the front foot back towards the bowler.",
+                "Beaten outside off! Pitched on a good length and zipped past the outside edge.",
+                "Punched towards cover, fielder cuts it off cleanly, no run.",
+                "Good length on middle, defended patiently into the pitch."
+            ];
+            $desc = $lines[array_rand($lines)];
+        }
+
+        return [
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'ball' => $deliveryBall,
+            'badge' => $badge,
+            'badge_type' => $badgeType,
+            'bowler' => $bowlerName,
+            'striker' => $strikerName,
+            'heading' => $heading,
+            'text' => $desc,
+            'shot' => $shot ?: null,
+            'team_score' => $teamScore,
+            'time' => now()->format('h:i A'),
+        ];
     }
 
     protected function cricHeroesResponse(CricketMatch $match, string $msg, array $extra = []): JsonResponse
