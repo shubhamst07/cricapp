@@ -31,7 +31,9 @@ class PageController extends Controller
             'message' => 'required|string|min:5|max:2000',
         ]);
 
-        // 1. Permanently save to Database so no message is ever lost
+        Log::info('Contact message received:', $validated);
+
+        // 1. Permanently store in database so no message is ever lost
         try {
             ContactInquiry::create([
                 'name' => $validated['name'],
@@ -40,66 +42,75 @@ class PageController extends Controller
                 'inquiry_type' => $validated['inquiry_type'],
                 'message' => $validated['message'],
                 'ip_address' => $request->ip(),
+                'is_read' => false,
             ]);
         } catch (\Throwable $e) {
-            Log::warning('Could not save ContactInquiry to DB: ' . $e->getMessage());
+            Log::warning('Could not save contact message to DB: ' . $e->getMessage());
         }
 
-        Log::info('Contact message received:', $validated);
-
+        // 2. Send email notification to Shubham Thakur
         $adminEmail = config('mail.admin_address', env('ADMIN_EMAIL', 'shubhamthakurst07@gmail.com'));
-        $mailable = new ContactInquiryMail($validated);
-        $emailSent = false;
+        $mailSent = false;
 
-        // 2. If RESEND_API_KEY is provided, send via HTTPS API (Port 443 - 100% works on Render free tier)
-        $resendKey = env('RESEND_API_KEY');
-        if (!empty($resendKey)) {
+        // A. Resend HTTPS API (Port 443 - Never blocked on Render Free Tier)
+        if (env('RESEND_API_KEY')) {
             try {
-                $response = Http::timeout(5)
-                    ->withToken($resendKey)
-                    ->post('https://api.resend.com/emails', [
-                        'from' => env('RESEND_FROM', 'LiveCricket <onboarding@resend.dev>'),
-                        'to' => [$adminEmail],
-                        'reply_to' => $validated['email'],
-                        'subject' => "[LiveCricket] New Contact: {$validated['inquiry_type']} from {$validated['name']}",
-                        'html' => $mailable->render(),
-                    ]);
-
+                $response = Http::timeout(5)->withToken(env('RESEND_API_KEY'))->post('https://api.resend.com/emails', [
+                    'from' => env('MAIL_FROM_NAME', 'LiveCricket') . ' <' . (env('RESEND_FROM_EMAIL', 'onboarding@resend.dev')) . '>',
+                    'to' => [$adminEmail],
+                    'reply_to' => $validated['email'],
+                    'subject' => "[LiveCricket] New Contact Message: {$validated['inquiry_type']} from {$validated['name']}",
+                    'html' => (new ContactInquiryMail($validated))->render(),
+                ]);
                 if ($response->successful()) {
-                    $emailSent = true;
-                    Log::info("Email sent via Resend HTTPS API to {$adminEmail}");
+                    $mailSent = true;
+                    Log::info("Contact message delivered via Resend HTTPS API to {$adminEmail}");
                 } else {
-                    Log::warning("Resend API response error: " . $response->body());
+                    Log::warning("Resend API response failed: " . $response->body());
                 }
             } catch (\Throwable $e) {
-                Log::warning("Resend HTTPS API error: " . $e->getMessage());
+                Log::warning("Resend API delivery error: " . $e->getMessage());
             }
         }
 
-        // 3. If not sent via Resend, attempt SMTP with a strict 2s socket check
-        // This GUARANTEES the request will NEVER hang or hit Nginx 504 Gateway Timeout!
-        if (!$emailSent) {
+        // B. Brevo HTTPS API (Port 443 - Never blocked on Render Free Tier)
+        if (!$mailSent && env('BREVO_API_KEY')) {
             try {
-                $mailer = config('mail.default');
-                if ($mailer === 'smtp') {
-                    $host = config('mail.mailers.smtp.host', 'smtp.gmail.com');
-                    $port = (int) config('mail.mailers.smtp.port', 587);
-
-                    // Test socket connection with 2 second timeout
-                    $connection = @fsockopen($host, $port, $errno, $errstr, 2);
-
-                    if ($connection) {
-                        fclose($connection);
-                        Mail::to($adminEmail)->send($mailable);
-                        Log::info("Contact inquiry email dispatched via SMTP to: {$adminEmail}");
-                    } else {
-                        Log::warning("SMTP port {$host}:{$port} blocked by hosting firewall (Error: {$errstr}). Message safely logged and stored in DB.");
-                    }
-                } else {
-                    Mail::to($adminEmail)->send($mailable);
+                $response = Http::timeout(5)->withHeaders([
+                    'api-key' => env('BREVO_API_KEY'),
+                    'Content-Type' => 'application/json',
+                ])->post('https://api.brevo.com/v3/smtp/email', [
+                    'sender' => [
+                        'name' => env('MAIL_FROM_NAME', 'LiveCricket'),
+                        'email' => env('MAIL_FROM_ADDRESS', 'shubhamthakurst07@gmail.com'),
+                    ],
+                    'to' => [
+                        ['email' => $adminEmail, 'name' => 'Shubham Thakur'],
+                    ],
+                    'replyTo' => [
+                        'email' => $validated['email'],
+                        'name' => $validated['name'],
+                    ],
+                    'subject' => "[LiveCricket] New Contact Message: {$validated['inquiry_type']} from {$validated['name']}",
+                    'htmlContent' => (new ContactInquiryMail($validated))->render(),
+                ]);
+                if ($response->successful()) {
+                    $mailSent = true;
+                    Log::info("Contact message delivered via Brevo HTTPS API to {$adminEmail}");
                 }
             } catch (\Throwable $e) {
-                Log::error("Failed to send contact inquiry email: " . $e->getMessage());
+                Log::warning("Brevo API delivery error: " . $e->getMessage());
+            }
+        }
+
+        // C. Standard SMTP (with strict 4s timeout guard to prevent 504 Gateway Timeouts)
+        if (!$mailSent) {
+            try {
+                config(['mail.mailers.smtp.timeout' => 4]);
+                Mail::to($adminEmail)->send(new ContactInquiryMail($validated));
+                Log::info("Contact inquiry email dispatched via SMTP to: {$adminEmail}");
+            } catch (\Throwable $e) {
+                Log::warning("SMTP delivery failed (expected on Render Free tier due to port 587/465 restriction): " . $e->getMessage());
             }
         }
 
