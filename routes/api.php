@@ -8,6 +8,7 @@ Route::get('/matches/summary', [MatchesController::class, 'summary'])->name('api
 Route::get('/matches/current', [MatchesController::class, 'current'])->name('api.matches.current');
 Route::get('/matches/{matchId}', [MatchesController::class, 'show'])->name('api.matches.show');
 Route::get('/matches/{matchId}/scorecard', [MatchesController::class, 'scorecard'])->name('api.matches.scorecard');
+Route::get('/matches/{matchId}/commentary', [MatchesController::class, 'commentary'])->name('api.matches.commentary');
 
 // CricHeroes Squad & Player WhatsApp Lookup APIs
 Route::get('/players/lookup', [MatchesController::class, 'lookupPlayer'])->name('api.players.lookup');

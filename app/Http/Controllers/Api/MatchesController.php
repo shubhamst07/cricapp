@@ -195,6 +195,26 @@ class MatchesController extends Controller
         return response()->json($scorecard);
     }
 
+    public function commentary(string $matchId, CricketDataService $cricket): JsonResponse
+    {
+        if (str_starts_with($matchId, 'local_') || (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists())) {
+            $localId = (int) str_replace('local_', '', $matchId);
+            $localMatch = CricketMatch::with(['scores', 'players'])->find($localId);
+            if ($localMatch) {
+                return response()->json([
+                    'status' => 'success',
+                    'matchId' => $matchId,
+                    'isLocal' => true,
+                    'miniscore' => null,
+                    'data' => []
+                ]);
+            }
+        }
+
+        $commentary = $cricket->getMatchCommentary($matchId);
+        return response()->json($commentary);
+    }
+
     public function player(string $playerId, Request $request, CricketDataService $cricket): JsonResponse
     {
         $name = (string) $request->get('name', '');

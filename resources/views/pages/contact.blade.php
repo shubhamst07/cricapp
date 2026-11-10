@@ -88,7 +88,7 @@
                         <div>
                             <span class="block text-slate-400 text-[10px] uppercase font-bold">Location</span>
                             <span class="font-bold text-slate-800 dark:text-slate-200">
-                                Shimla, Himachal Pradesh & Mumbai, India
+                                Shimla, Himachal Pradesh, India
                             </span>
                         </div>
                     </div>

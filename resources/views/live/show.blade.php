@@ -4,6 +4,7 @@
     <div id="match-detail-root"
          data-match='@json($match)'
          data-scorecard='@json($scorecard)'
+         data-commentary='@json($commentary ?? [])'
          data-match-id='{{ $match["id"] ?? "" }}'>
         {{-- Loading Skeleton while React mounts --}}
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse space-y-6">

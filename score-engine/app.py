@@ -991,6 +991,202 @@ class ScoreService:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    @classmethod
+    async def fetch_commentary(cls, match_id: str) -> Dict[str, Any]:
+        cached = get_cached(f"commentary_{match_id}", ttl=5)
+        if cached:
+            return cached
+
+        try:
+            url = f"https://www.cricbuzz.com/live-cricket-scores/{match_id}?_={time.time_ns()}"
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                response = await client.get(url, headers=cls.HEADERS)
+                response.raise_for_status()
+
+            text = response.text
+            marker = "commentaryPageData"
+            idx = text.find(marker)
+            if idx == -1:
+                return {"status": "success", "matchId": match_id, "miniscore": None, "data": []}
+
+            brace_start = text.find("{", idx)
+            if brace_start == -1:
+                return {"status": "success", "matchId": match_id, "miniscore": None, "data": []}
+
+            depth = 0
+            brace_end = -1
+            text_len = len(text)
+            for i in range(brace_start, text_len):
+                if text[i] == "{":
+                    depth += 1
+                elif text[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        brace_end = i
+                        break
+
+            if brace_end == -1:
+                return {"status": "success", "matchId": match_id, "miniscore": None, "data": []}
+
+            raw_json = text[brace_start:brace_end+1].replace('\\\\\\"', '"').replace('\\"', '"').replace('\\\\\\\\', '\\')
+            data = json.loads(raw_json)
+
+            match_comm = data.get("matchCommentary", {})
+            miniscore = data.get("miniscore", {})
+
+            formatted = []
+            for comm_id, item in match_comm.items():
+                ctype = item.get("commType", "commentary")
+                timestamp = item.get("timestamp") or 0
+                events = item.get("event") or []
+                if isinstance(events, str):
+                    events = [events]
+
+                if ctype == "over-separator":
+                    over_sep = item.get("overSeparator") or {}
+                    over_num = over_sep.get("overNumber")
+                    over_runs = over_sep.get("overRuns", 0)
+                    summary = (over_sep.get("overSummary") or "").strip()
+                    bat_team = over_sep.get("batTeamObj", {}).get("teamName", "")
+                    bat_score = over_sep.get("batTeamObj", {}).get("teamScore", "")
+                    striker = over_sep.get("batStrikerObj", {})
+                    non_striker = over_sep.get("batNonStrikerObj", {})
+                    bowler = over_sep.get("bowlerObj", {})
+
+                    sub_title = f"End of Over {over_num}"
+                    if bat_team and bat_score:
+                        sub_title += f" • {bat_team} {bat_score}"
+
+                    desc_parts = []
+                    if summary:
+                        desc_parts.append(f"Over summary: {summary} ({over_runs} runs)")
+                    else:
+                        desc_parts.append(f"{over_runs} runs in over {over_num}")
+
+                    if bowler and bowler.get("playerName"):
+                        desc_parts.append(f"Bowler: {bowler.get('playerName')} ({bowler.get('playerScore', '')})")
+                    if striker and striker.get("playerName"):
+                        desc_parts.append(f"Batting: {striker.get('playerName')} {striker.get('playerScore', '')}")
+
+                    formatted.append({
+                        "id": f"over-{over_num}-{comm_id}",
+                        "type": "over-separator",
+                        "over": f"Over {over_num}",
+                        "overNumber": over_num,
+                        "badge": "OV",
+                        "badgeType": "expert",
+                        "title": sub_title,
+                        "desc": " | ".join(desc_parts),
+                        "overSummary": summary,
+                        "overRuns": over_runs,
+                        "timestamp": timestamp,
+                        "time": "Over Break",
+                        "tag": f"Over {over_num}"
+                    })
+                elif ctype == "commentary":
+                    ball = item.get("ballMetric")
+                    over_str = str(ball) if ball is not None else ""
+                    raw_text = item.get("commText", "")
+                    clean_text = re.sub(r"<[^>]+>", "", raw_text).strip()
+
+                    badge = "0"
+                    badge_type = "dot"
+                    tag = None
+
+                    text_lower = raw_text.lower()
+                    if "four" in events or "four" in text_lower or ", four" in text_lower:
+                        badge = "4"
+                        badge_type = "four"
+                        tag = "Boundary 4"
+                    elif "six" in events or "six" in text_lower or ", six" in text_lower:
+                        badge = "6"
+                        badge_type = "six"
+                        tag = "Maximum 6"
+                    elif any(e in ["wicket", "out", "wk"] for e in events) or any(w in text_lower for w in ["out,", "caught", "bowled", "lbw", "run out"]):
+                        badge = "W"
+                        badge_type = "wicket"
+                        tag = "Wicket 🎯"
+                    elif "wide" in events or "wide" in text_lower or "wd" in text_lower:
+                        badge = "Wd"
+                        badge_type = "extra"
+                        tag = "Wide"
+                    elif "no-ball" in events or "no ball" in text_lower or "nb" in text_lower:
+                        badge = "Nb"
+                        badge_type = "extra"
+                        tag = "No Ball"
+                    elif "1 run" in text_lower or "one" in events:
+                        badge = "1"
+                        badge_type = "run"
+                    elif "2 runs" in text_lower or "two" in events:
+                        badge = "2"
+                        badge_type = "run"
+                    elif "3 runs" in text_lower or "three" in events:
+                        badge = "3"
+                        badge_type = "run"
+                    elif "leg bye" in text_lower or "bye" in text_lower:
+                        badge = "B"
+                        badge_type = "run"
+                    else:
+                        badge = "0"
+                        badge_type = "dot"
+
+                    batsman = item.get("batsmanDetails", {}).get("playerName") if isinstance(item.get("batsmanDetails"), dict) else None
+                    bowler = item.get("bowlerDetails", {}).get("playerName") if isinstance(item.get("bowlerDetails"), dict) else None
+
+                    parts = clean_text.split(",", 2)
+                    if len(parts) >= 2 and ("to" in parts[0] or badge_type in ["four", "six", "wicket"]):
+                        title = f"{parts[0].strip()}, {parts[1].strip()}"
+                        desc = parts[2].strip() if len(parts) > 2 else ""
+                    else:
+                        title = clean_text
+                        desc = ""
+
+                    formatted.append({
+                        "id": f"ball-{comm_id}",
+                        "type": "ball",
+                        "over": over_str if over_str else "LIVE",
+                        "ballMetric": ball,
+                        "badge": badge,
+                        "badgeType": badge_type,
+                        "title": title,
+                        "desc": desc or clean_text,
+                        "rawText": clean_text,
+                        "batsman": batsman,
+                        "bowler": bowler,
+                        "tag": tag,
+                        "timestamp": timestamp,
+                        "time": f"Ball {over_str}" if over_str else "Live"
+                    })
+                else:
+                    raw_text = item.get("commText", "")
+                    clean_text = re.sub(r"<[^>]+>", "", raw_text).strip()
+                    if clean_text:
+                        formatted.append({
+                            "id": f"note-{comm_id}",
+                            "type": "note",
+                            "over": "NOTE",
+                            "badge": "💡",
+                            "badgeType": "expert",
+                            "title": clean_text,
+                            "desc": clean_text,
+                            "tag": "Match Note",
+                            "timestamp": timestamp,
+                            "time": "Update"
+                        })
+
+            formatted.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+
+            res = {
+                "status": "success",
+                "matchId": match_id,
+                "miniscore": miniscore,
+                "data": formatted
+            }
+            set_cached(f"commentary_{match_id}", res)
+            return res
+        except Exception as e:
+            return {"status": "error", "message": str(e), "data": []}
+
 
 @app.get("/news")
 async def get_news():
@@ -1064,6 +1260,16 @@ async def get_scorecard(match_id: str):
         return JSONResponse(status_code=422, content={"status": "error", "message": "invalid match id"})
 
     return await ScoreService.fetch_scorecard(match_id)
+
+
+@app.get("/commentary/{match_id}")
+async def get_commentary(match_id: str):
+    try:
+        MatchValidator(score=match_id)
+    except Exception:
+        return JSONResponse(status_code=422, content={"status": "error", "message": "invalid match id"})
+
+    return await ScoreService.fetch_commentary(match_id)
 
 
 @app.get("/player/{player_id}")

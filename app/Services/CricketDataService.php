@@ -190,6 +190,254 @@ class CricketDataService
         return $raw;
     }
 
+    public function getMatchCommentary(string $matchId): array
+    {
+        $cacheKey = $this->cacheKey("commentary_{$matchId}");
+        return Cache::remember($cacheKey, 6, function () use ($matchId) {
+            // 1. Try local service first
+            if ($this->provider === 'local') {
+                try {
+                    $response = Http::timeout(8)->get("{$this->localUrl}/commentary/{$matchId}");
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        if (!empty($data) && ($data['status'] ?? '') === 'success' && !empty($data['data'])) {
+                            return $data;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // fallback to direct scraper
+                }
+            }
+
+            // 2. Direct Cricbuzz scraper fallback in PHP
+            return $this->scrapeCricbuzzCommentaryDirectly($matchId);
+        });
+    }
+
+    public function scrapeCricbuzzCommentaryDirectly(string $matchId): array
+    {
+        try {
+            $url = "https://www.cricbuzz.com/live-cricket-scores/{$matchId}?_=" . round(microtime(true) * 1000);
+            $response = Http::timeout(10)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language' => 'en-US,en;q=0.9',
+                    'Referer' => 'https://www.cricbuzz.com/',
+                ])
+                ->get($url);
+
+            if (!$response->successful()) {
+                return ['status' => 'error', 'message' => 'Unable to fetch Cricbuzz stream', 'data' => []];
+            }
+
+            $html = $response->body();
+            $marker = 'commentaryPageData';
+            $idx = strpos($html, $marker);
+            if ($idx === false) {
+                return ['status' => 'success', 'matchId' => $matchId, 'miniscore' => null, 'data' => []];
+            }
+
+            $braceStart = strpos($html, '{', $idx);
+            if ($braceStart === false) {
+                return ['status' => 'success', 'matchId' => $matchId, 'miniscore' => null, 'data' => []];
+            }
+
+            $depth = 0;
+            $braceEnd = -1;
+            $len = strlen($html);
+            for ($i = $braceStart; $i < $len; $i++) {
+                if ($html[$i] === '{') {
+                    $depth++;
+                } elseif ($html[$i] === '}') {
+                    $depth--;
+                    if ($depth === 0) {
+                        $braceEnd = $i;
+                        break;
+                    }
+                }
+            }
+
+            if ($braceEnd === -1) {
+                return ['status' => 'success', 'matchId' => $matchId, 'miniscore' => null, 'data' => []];
+            }
+
+            $rawJson = substr($html, $braceStart, $braceEnd - $braceStart + 1);
+            $cleaned = str_replace(["\\\\\\\"", "\\\"", "\\\\\\\\"], ["\"", "\"", "\\"], $rawJson);
+            $parsed = json_decode($cleaned, true);
+
+            if (!$parsed || !isset($parsed['matchCommentary'])) {
+                return ['status' => 'success', 'matchId' => $matchId, 'miniscore' => null, 'data' => []];
+            }
+
+            $matchComm = $parsed['matchCommentary'];
+            $miniscore = $parsed['miniscore'] ?? null;
+            $formatted = [];
+
+            foreach ($matchComm as $commId => $item) {
+                $ctype = $item['commType'] ?? 'commentary';
+                $timestamp = $item['timestamp'] ?? 0;
+                $events = $item['event'] ?? [];
+                if (is_string($events)) {
+                    $events = [$events];
+                }
+
+                if ($ctype === 'over-separator') {
+                    $overSep = $item['overSeparator'] ?? [];
+                    $overNum = $overSep['overNumber'] ?? null;
+                    $overRuns = $overSep['overRuns'] ?? 0;
+                    $summary = trim($overSep['overSummary'] ?? '');
+                    $batTeam = $overSep['batTeamObj']['teamName'] ?? '';
+                    $batScore = $overSep['batTeamObj']['teamScore'] ?? '';
+                    $striker = $overSep['batStrikerObj'] ?? [];
+                    $bowler = $overSep['bowlerObj'] ?? [];
+
+                    $subTitle = "End of Over {$overNum}";
+                    if ($batTeam && $batScore) {
+                        $subTitle .= " • {$batTeam} {$batScore}";
+                    }
+
+                    $descParts = [];
+                    if ($summary) {
+                        $descParts[] = "Over summary: {$summary} ({$overRuns} runs)";
+                    } else {
+                        $descParts[] = "{$overRuns} runs in over {$overNum}";
+                    }
+                    if (!empty($bowler['playerName'])) {
+                        $descParts[] = "Bowler: {$bowler['playerName']} (" . ($bowler['playerScore'] ?? '') . ")";
+                    }
+                    if (!empty($striker['playerName'])) {
+                        $descParts[] = "Batting: {$striker['playerName']} " . ($striker['playerScore'] ?? '');
+                    }
+
+                    $formatted[] = [
+                        'id' => "over-{$overNum}-{$commId}",
+                        'type' => 'over-separator',
+                        'over' => "Over {$overNum}",
+                        'overNumber' => $overNum,
+                        'badge' => 'OV',
+                        'badgeType' => 'expert',
+                        'title' => $subTitle,
+                        'desc' => implode(' | ', $descParts),
+                        'overSummary' => $summary,
+                        'overRuns' => $overRuns,
+                        'timestamp' => $timestamp,
+                        'time' => 'Over Break',
+                        'tag' => "Over {$overNum}",
+                    ];
+                } elseif ($ctype === 'commentary') {
+                    $ball = $item['ballMetric'] ?? null;
+                    $overStr = $ball !== null ? (string) $ball : '';
+                    $rawText = $item['commText'] ?? '';
+                    $cleanText = trim(strip_tags($rawText));
+
+                    $badge = '0';
+                    $badgeType = 'dot';
+                    $tag = null;
+                    $textLower = strtolower($rawText);
+
+                    if (in_array('four', $events) || str_contains($textLower, 'four') || str_contains($textLower, ', four')) {
+                        $badge = '4';
+                        $badgeType = 'four';
+                        $tag = 'Boundary 4';
+                    } elseif (in_array('six', $events) || str_contains($textLower, 'six') || str_contains($textLower, ', six')) {
+                        $badge = '6';
+                        $badgeType = 'six';
+                        $tag = 'Maximum 6';
+                    } elseif (
+                        array_intersect(['wicket', 'out', 'wk'], $events) ||
+                        preg_match('/(out,|caught|bowled|lbw|run out)/i', $textLower)
+                    ) {
+                        $badge = 'W';
+                        $badgeType = 'wicket';
+                        $tag = 'Wicket 🎯';
+                    } elseif (in_array('wide', $events) || str_contains($textLower, 'wide') || str_contains($textLower, 'wd')) {
+                        $badge = 'Wd';
+                        $badgeType = 'extra';
+                        $tag = 'Wide';
+                    } elseif (in_array('no-ball', $events) || str_contains($textLower, 'no ball') || str_contains($textLower, 'nb')) {
+                        $badge = 'Nb';
+                        $badgeType = 'extra';
+                        $tag = 'No Ball';
+                    } elseif (str_contains($textLower, '1 run') || in_array('one', $events)) {
+                        $badge = '1';
+                        $badgeType = 'run';
+                    } elseif (str_contains($textLower, '2 runs') || in_array('two', $events)) {
+                        $badge = '2';
+                        $badgeType = 'run';
+                    } elseif (str_contains($textLower, '3 runs') || in_array('three', $events)) {
+                        $badge = '3';
+                        $badgeType = 'run';
+                    } elseif (str_contains($textLower, 'leg bye') || str_contains($textLower, 'bye')) {
+                        $badge = 'B';
+                        $badgeType = 'run';
+                    }
+
+                    $batsman = $item['batsmanDetails']['playerName'] ?? null;
+                    $bowler = $item['bowlerDetails']['playerName'] ?? null;
+
+                    $parts = explode(',', $cleanText, 3);
+                    if (count($parts) >= 2 && (str_contains($parts[0], 'to') || in_array($badgeType, ['four', 'six', 'wicket']))) {
+                        $title = trim($parts[0]) . ', ' . trim($parts[1]);
+                        $desc = isset($parts[2]) ? trim($parts[2]) : '';
+                    } else {
+                        $title = $cleanText;
+                        $desc = '';
+                    }
+
+                    $formatted[] = [
+                        'id' => "ball-{$commId}",
+                        'type' => 'ball',
+                        'over' => $overStr ?: 'LIVE',
+                        'ballMetric' => $ball,
+                        'badge' => $badge,
+                        'badgeType' => $badgeType,
+                        'title' => $title,
+                        'desc' => $desc ?: $cleanText,
+                        'rawText' => $cleanText,
+                        'batsman' => $batsman,
+                        'bowler' => $bowler,
+                        'tag' => $tag,
+                        'timestamp' => $timestamp,
+                        'time' => $overStr ? "Ball {$overStr}" : 'Live',
+                    ];
+                } else {
+                    $rawText = $item['commText'] ?? '';
+                    $cleanText = trim(strip_tags($rawText));
+                    if ($cleanText) {
+                        $formatted[] = [
+                            'id' => "note-{$commId}",
+                            'type' => 'note',
+                            'over' => 'NOTE',
+                            'badge' => '💡',
+                            'badgeType' => 'expert',
+                            'title' => $cleanText,
+                            'desc' => $cleanText,
+                            'tag' => 'Match Note',
+                            'timestamp' => $timestamp,
+                            'time' => 'Update',
+                        ];
+                    }
+                }
+            }
+
+            usort($formatted, fn($a, $b) => ($b['timestamp'] ?? 0) <=> ($a['timestamp'] ?? 0));
+
+            return [
+                'status' => 'success',
+                'matchId' => $matchId,
+                'miniscore' => $miniscore,
+                'data' => $formatted,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ];
+        }
+    }
+
     public function getPlayerProfile(string $playerId, string $name = ''): array
     {
         $cacheKey = $this->cacheKey("player_{$playerId}");

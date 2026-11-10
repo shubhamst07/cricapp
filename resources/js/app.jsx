@@ -38,12 +38,14 @@ if (matchDetailRoot) {
     try {
         const match = JSON.parse(matchDetailRoot.getAttribute('data-match') || '{}');
         const scorecard = JSON.parse(matchDetailRoot.getAttribute('data-scorecard') || '{}');
+        const commentary = JSON.parse(matchDetailRoot.getAttribute('data-commentary') || '{}');
         const matchId = matchDetailRoot.getAttribute('data-match-id') || '';
 
         createRoot(matchDetailRoot).render(
             <MatchDetailApp
                 initialMatch={match}
                 initialScorecard={scorecard}
+                initialCommentary={commentary}
                 matchId={matchId}
             />
         );

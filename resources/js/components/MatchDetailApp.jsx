@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     ArrowLeft,
     RefreshCw,
@@ -27,237 +27,31 @@ import {
     Mic
 } from 'lucide-react';
 
-function generateMatchCommentary(match, scorecard, posts) {
-    const list = [];
-    const statusText = match?.status_text || '';
-    const innings = scorecard?.data?.innings || [];
+// Ball-by-ball commentary is loaded live directly from Cricbuzz API
 
-    // Extract all batsmen, bowlers and fall of wickets across all innings
-    const allBatting = [];
-    const allBowling = [];
-
-    if (Array.isArray(innings) && innings.length > 0) {
-        innings.forEach((inn, innIdx) => {
-            if (Array.isArray(inn.batting)) {
-                inn.batting.forEach((b, bIdx) => {
-                    allBatting.push({ ...b, team: inn.team, innIdx, bIdx });
-                });
-            }
-            if (Array.isArray(inn.bowling)) {
-                inn.bowling.forEach((bw, bwIdx) => {
-                    allBowling.push({ ...bw, team: inn.team, innIdx, bwIdx });
-                });
-            }
-        });
-    }
-
-    // Fallback if batting/bowling is directly under scorecard data
-    if (allBatting.length === 0 && Array.isArray(scorecard?.data?.batting)) {
-        scorecard.data.batting.forEach((b, bIdx) => allBatting.push({ ...b, bIdx }));
-    }
-    if (allBowling.length === 0 && Array.isArray(scorecard?.data?.bowling)) {
-        scorecard.data.bowling.forEach((bw, bwIdx) => allBowling.push({ ...bw, bwIdx }));
-    }
-
-    // 1. User & Fan Custom Commentary Posts
-    const commentaryPosts = (posts || []).filter(p => p.post_type === 'commentary' || (p.content && p.content.startsWith('[Commentary]')));
-    commentaryPosts.forEach(cp => {
-        const rawContent = cp.content ? cp.content.replace(/^\[Commentary\]\s*/, '') : '';
-        const tag = cp.team_tag || 'Live Note';
-        const isWicket = tag.includes('Wicket');
-        const isSix = tag.includes('6');
-        const isFour = tag.includes('4');
-
-        list.push({
-            id: 'post-' + cp.id,
-            over: tag.includes('.') ? tag : 'LIVE',
-            badge: isWicket ? 'W' : (isSix ? '6' : (isFour ? '4' : '🎙️')),
-            badgeType: isWicket ? 'wicket' : (isSix ? 'six' : (isFour ? 'four' : 'expert')),
-            title: `${cp.user_name || 'Live Blogger'} (Community Update)`,
-            desc: rawContent,
-            type: 'fan_update',
-            tag: tag,
-            time: cp.created_at ? new Date(cp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'
-        });
-    });
-
-    // 2. Fall of Wickets (FOW) & All Batsmen Dismissals
-    allBatting.forEach((b, idx) => {
-        const dismissal = String(b.out || b.dismissal || '').trim();
-        const isDismissed = dismissal && !['not out', 'batting', 'dnb', 'yet to bat', 'did not bat', ''].includes(dismissal.toLowerCase());
-        if (isDismissed) {
-            const ballsFaced = parseInt(b.balls || 0, 10);
-            const approxOver = Math.max(1, Math.min(49, Math.floor((ballsFaced + idx * 7 + 4) / 6))) + '.' + ((idx % 6) + 1);
-            list.push({
-                id: `wicket-${b.name || idx}-${idx}`,
-                over: approxOver,
-                badge: 'W',
-                badgeType: 'wicket',
-                title: `OUT! ${b.name} (${dismissal})`,
-                desc: `WICKET! ${b.name} falls! Score: ${b.runs} off ${b.balls || 0} balls (${b.fours || 0}x4, ${b.sixes || 0}x6). Dismissal: ${dismissal}. Vital breakthrough in the match!`,
-                type: 'wicket',
-                tag: 'Wicket ☝️',
-                time: 'Wicket'
-            });
-        }
-    });
-
-    // 3. Boundaries (Fours & Sixes across all batsmen)
-    allBatting.forEach((b, idx) => {
-        const sixes = parseInt(b.sixes || 0, 10);
-        const fours = parseInt(b.fours || 0, 10);
-        const batterName = b.name || 'Batter';
-
-        // Sixes
-        for (let s = 1; s <= Math.min(sixes, 4); s++) {
-            const overNum = Math.max(1, Math.min(49, Math.floor((parseInt(b.balls || 30, 10) * s / (sixes + 1)) / 6))) + '.' + ((s * 2) % 6 + 1);
-            list.push({
-                id: `six-${batterName}-${idx}-${s}`,
-                over: overNum,
-                badge: '6',
-                badgeType: 'six',
-                title: `${batterName}, MAXIMUM SIX! 💥`,
-                desc: `BOOM! Right in the slot! ${batterName} clears the front foot and hammers it high into the night sky, clears the deep mid-wicket ropes for a colossal 6!`,
-                type: 'ball',
-                tag: 'Six 💥',
-                time: 'Boundary'
-            });
-        }
-
-        // Fours
-        for (let f = 1; f <= Math.min(fours, 4); f++) {
-            const overNum = Math.max(1, Math.min(49, Math.floor((parseInt(b.balls || 25, 10) * f / (fours + 1)) / 6))) + '.' + (f % 6 + 1);
-            const shotNames = ['Cover Drive', 'Square Cut', 'Pull Shot', 'Straight Drive', 'Swept Cleanly'];
-            const shot = shotNames[f % shotNames.length];
-            list.push({
-                id: `four-${batterName}-${idx}-${f}`,
-                over: overNum,
-                badge: '4',
-                badgeType: 'four',
-                title: `${batterName}, FOUR! 🏏`,
-                desc: `Cracking boundary! Leans into the ${shot.toLowerCase()} with exquisite timing, finds the gap and beats the sweeper on the boundary cushions!`,
-                type: 'ball',
-                tag: shot,
-                time: 'Boundary'
-            });
-        }
-    });
-
-    // 4. Milestones (50s & 100s)
-    allBatting.forEach((b, idx) => {
-        const runs = parseInt(b.runs || 0, 10);
-        if (runs >= 50 && runs < 100) {
-            list.push({
-                id: `milestone-50-${b.name}-${idx}`,
-                over: Math.floor((b.balls || 40) / 6) + '.2',
-                badge: '50',
-                badgeType: 'milestone',
-                title: `FIFTY! Sensational half-century for ${b.name}! 🌟`,
-                desc: `${b.name} raises the bat to loud cheers! Reaches a composed fifty off ${b.balls} balls (${b.fours || 0}x4, ${b.sixes || 0}x6). Splendid innings under pressure!`,
-                type: 'milestone',
-                tag: 'Half-Century',
-                time: 'Milestone'
-            });
-        } else if (runs >= 100) {
-            list.push({
-                id: `milestone-100-${b.name}-${idx}`,
-                over: Math.floor((b.balls || 85) / 6) + '.4',
-                badge: '100',
-                badgeType: 'milestone',
-                title: `HUNDRED! Masterclass Century by ${b.name}! 🏆`,
-                desc: `Take a bow! ${b.name} brings up a magnificent 100! Complete mastery with the willow, celebrated with a roar!`,
-                type: 'milestone',
-                tag: 'Century',
-                time: 'Milestone'
-            });
-        }
-    });
-
-    // 5. Over Checkpoints (Every 10 overs across match)
-    const matchOversInt = Math.ceil(parseFloat(innings[0]?.overs || 50));
-    const checkpoints = [10, 20, 30, 40, matchOversInt];
-    checkpoints.forEach((ov) => {
-        if (ov <= matchOversInt) {
-            const teamName = innings[0]?.team || 'Batting Team';
-            list.push({
-                id: `over-summary-${ov}`,
-                over: `${ov}.0`,
-                badge: 'OV',
-                badgeType: 'expert',
-                title: `End of Over ${ov} • ${teamName}`,
-                desc: `Over ${ov} completed. Field restrictions adjust and bowling team looks to build sustained pressure in this phase.`,
-                type: 'milestone',
-                tag: `Over ${ov}`,
-                time: 'Over Break'
-            });
-        }
-    });
-
-    // 6. Recent Over Deliveries
-    const topBatters = allBatting.slice(0, 2);
-    const topBowlers = allBowling.slice(0, 2);
-    const primaryBatter = topBatters[0]?.name || 'Batter';
-    const primaryBowler = topBowlers[0]?.name || 'Bowler';
-    const currentOvers = innings[0]?.overs || '49.5';
-    const overParts = String(currentOvers).split('.');
-    const baseOv = parseInt(overParts[0] || '49', 10);
-
-    const ballSamples = [
-        { sub: 6, badge: '1', type: 'run', title: `${primaryBowler} to ${primaryBatter}, 1 run`, desc: 'Fullish delivery on off stump, tapped with soft hands towards deep mid-wicket for a single to rotate strike.' },
-        { sub: 5, badge: '4', type: 'four', title: `${primaryBowler} to ${primaryBatter}, FOUR!`, desc: 'FOUR! Dispatched through extra cover! Gorgeous timing off the front foot, beats the diving sweeper to the boundary!' },
-        { sub: 4, badge: '0', type: 'dot', title: `${primaryBowler} to ${primaryBatter}, no run`, desc: 'Good length delivery outside off, pitches and zips through. Batter attempts a tentative poke and gets beaten.' },
-        { sub: 3, badge: '2', type: 'run', title: `${primaryBowler} to ${primaryBatter}, 2 runs`, desc: 'Worked away with soft wrists through square leg. Good hustle between the wickets, turning one into two.' },
-        { sub: 2, badge: '6', type: 'six', title: `${primaryBowler} to ${primaryBatter}, SIX!`, desc: 'BOOM! Smashed downtown! In the slot, batter swings through the line and clears long-on for a colossal maximum!' },
-        { sub: 1, badge: '0', type: 'dot', title: `${primaryBowler} to ${primaryBatter}, no run`, desc: 'Defended solidly back down the pitch off the front foot. Good discipline shown by both bowler and batter.' }
-    ];
-
-    ballSamples.forEach((b) => {
-        list.push({
-            id: `live-ball-${baseOv}.${b.sub}`,
-            over: `${baseOv}.${b.sub}`,
-            badge: b.badge,
-            badgeType: b.type,
-            title: b.title,
-            desc: b.desc,
-            type: 'ball',
-            tag: b.badge === '4' ? 'Cover Drive' : (b.badge === '6' ? 'Six 💥' : null),
-            time: 'Recent Ball'
-        });
-    });
-
-    // 7. Match Status & Conclusion Banner
-    if (statusText) {
-        list.push({
-            id: 'match-status-banner',
-            over: 'RESULT',
-            badge: '🏆',
-            badgeType: 'expert',
-            title: `Match Conclusion: ${statusText}`,
-            desc: `Final Result: ${statusText}. What a fantastic contest between ${match?.team1_name || match?.teams?.[0] || 'Team 1'} and ${match?.team2_name || match?.teams?.[1] || 'Team 2'}!`,
-            type: 'result',
-            tag: 'Match Result',
-            time: 'Final'
-        });
-    }
-
-    // Sort by over descending (newest / highest over on top)
-    list.sort((a, b) => {
-        if (a.type === 'fan_update' && b.type !== 'fan_update') return -1;
-        if (b.type === 'fan_update' && a.type !== 'fan_update') return 1;
-        if (a.over === 'RESULT') return -1;
-        if (b.over === 'RESULT') return 1;
-        if (a.over === 'LIVE') return -1;
-        if (b.over === 'LIVE') return 1;
-        return parseFloat(b.over || 0) - parseFloat(a.over || 0);
-    });
-
-    return list;
-}
-
-export default function MatchDetailApp({ initialMatch, initialScorecard, matchId }) {
+export default function MatchDetailApp({ initialMatch, initialScorecard, initialCommentary, matchId }) {
     const [match, setMatch] = useState(initialMatch || {});
     const [scorecard, setScorecard] = useState(initialScorecard || {});
-    const [activeTab, setActiveTab] = useState('scorecard'); // Default or switchable: 'scorecard', 'live', 'buzz', 'info'
+    const [realCommentary, setRealCommentary] = useState(() => {
+        if (initialCommentary && Array.isArray(initialCommentary.data)) {
+            return initialCommentary.data;
+        }
+        return [];
+    });
+    const [miniscore, setMiniscore] = useState(() => initialCommentary?.miniscore || null);
+    const [isCommentaryLoading, setIsCommentaryLoading] = useState(false);
+
+    const getInitialTab = () => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const t = params.get('tab');
+            if (t === 'live' || t === 'commentary') return 'commentary';
+            if (t === 'buzz' || t === 'info' || t === 'scorecard') return t;
+            if (t === 'summary') return 'live';
+        }
+        return 'scorecard';
+    };
+    const [activeTab, setActiveTab] = useState(getInitialTab);
     const [selectedInningIdx, setSelectedInningIdx] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastRefreshMsg, setLastRefreshMsg] = useState(null);
@@ -358,6 +152,62 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
             fileInputRef.current.value = '';
         }
     };
+
+    const fetchCommentary = async (isSilent = false) => {
+        if (!matchId) return;
+        if (!isSilent) setIsCommentaryLoading(true);
+        try {
+            const res = await fetch(`/api/matches/${matchId}/commentary`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (res.ok) {
+                const json = await res.json();
+                if (json.status === 'success' && Array.isArray(json.data)) {
+                    setRealCommentary(json.data);
+                    if (json.miniscore) {
+                        setMiniscore(json.miniscore);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch live commentary:', err);
+        } finally {
+            if (!isSilent) setIsCommentaryLoading(false);
+        }
+    };
+
+    const fetchMatchScore = async () => {
+        if (!matchId) return;
+        try {
+            const res = await fetch(`/api/matches/${matchId}`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (res.ok) {
+                const updatedMatch = await res.json();
+                setMatch(prev => ({ ...prev, ...updatedMatch }));
+            }
+        } catch (e) {
+            // ignore
+        }
+    };
+
+    // Live Ball-by-Ball Commentary Polling (Every 8 seconds)
+    useEffect(() => {
+        if (matchId && (!realCommentary || realCommentary.length === 0)) {
+            fetchCommentary();
+        }
+
+        const pollTimer = setInterval(() => {
+            fetchCommentary(true);
+            const isMatchLive = match?.status === 'live' ||
+                (match?.status_text && (match.status_text.toLowerCase().includes('need') || match.status_text.toLowerCase().includes('batting') || match.status_text.toLowerCase().includes('trail') || match.status_text.toLowerCase().includes('lead') || match.status_text.toLowerCase().includes('progress')));
+            if (isMatchLive || activeTab === 'commentary') {
+                fetchMatchScore();
+            }
+        }, 8000);
+
+        return () => clearInterval(pollTimer);
+    }, [matchId, match?.status, match?.status_text, activeTab]);
 
     useEffect(() => {
         fetchPosts();
@@ -506,15 +356,26 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
         setIsRefreshing(true);
         setLastRefreshMsg(null);
         try {
-            const res = await fetch(`/api/matches/${matchId}`, { headers: { 'Accept': 'application/json' } });
-            if (res.ok) {
-                const updatedMatch = await res.json();
+            const [mRes, scRes, cRes] = await Promise.allSettled([
+                fetch(`/api/matches/${matchId}`, { headers: { 'Accept': 'application/json' } }),
+                fetch(`/api/matches/${matchId}/scorecard`, { headers: { 'Accept': 'application/json' } }),
+                fetch(`/api/matches/${matchId}/commentary`, { headers: { 'Accept': 'application/json' } })
+            ]);
+
+            if (mRes.status === 'fulfilled' && mRes.value.ok) {
+                const updatedMatch = await mRes.value.json();
                 setMatch(updatedMatch);
             }
-            const scRes = await fetch(`/api/matches/${matchId}/scorecard`, { headers: { 'Accept': 'application/json' } });
-            if (scRes.ok) {
-                const updatedSc = await scRes.json();
+            if (scRes.status === 'fulfilled' && scRes.value.ok) {
+                const updatedSc = await scRes.value.json();
                 setScorecard(updatedSc);
+            }
+            if (cRes.status === 'fulfilled' && cRes.value.ok) {
+                const updatedComm = await cRes.value.json();
+                if (updatedComm.status === 'success' && Array.isArray(updatedComm.data)) {
+                    setRealCommentary(updatedComm.data);
+                    if (updatedComm.miniscore) setMiniscore(updatedComm.miniscore);
+                }
             }
             setLastRefreshMsg('Refreshed just now');
         } catch (err) {
@@ -573,20 +434,65 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
     const returnTab = (tabParam && ['live', 'upcoming', 'recent'].includes(tabParam) && !hasActiveScorecard) ? tabParam : fallbackTab;
     const backUrl = `/live-scores?tab=${returnTab}`;
 
-    // Ball-by-Ball Live Commentary Synthesis
-    const allCommentaryList = generateMatchCommentary(match, scorecard, posts);
-    const filteredCommentaryList = allCommentaryList.filter(item => {
-        if (commentaryFilter === 'boundaries') {
-            return item.badge === '4' || item.badge === '6' || item.badgeType === 'four' || item.badgeType === 'six';
+    // 1. Fan Posts formatted as community commentary
+    const fanCommentaryList = useMemo(() => {
+        return (posts || [])
+            .filter(p => p.post_type === 'commentary' || (p.content && p.content.startsWith('[Commentary]')))
+            .map(cp => {
+                const rawContent = cp.content ? cp.content.replace(/^\[Commentary\]\s*/, '') : '';
+                return {
+                    id: `fan-${cp.id}`,
+                    over: 'FAN',
+                    badge: '💬',
+                    badgeType: 'expert',
+                    title: `${cp.user_name || 'Fan'} (Community):`,
+                    desc: rawContent,
+                    type: 'fan_update',
+                    tag: cp.team_tag || 'Live Take',
+                    time: cp.created_at ? new Date(cp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+                    timestamp: new Date(cp.created_at || Date.now()).getTime()
+                };
+            });
+    }, [posts]);
+
+    // 2. Real Cricbuzz Live Commentary + Fan commentary combined
+    const allCommentaryList = useMemo(() => {
+        if (realCommentary && realCommentary.length > 0) {
+            return [...fanCommentaryList, ...realCommentary];
         }
-        if (commentaryFilter === 'wickets') {
-            return item.badge === 'W' || item.badgeType === 'wicket';
+
+        const list = [...fanCommentaryList];
+        if (match?.status_text) {
+            list.push({
+                id: 'match-status-banner',
+                over: 'RESULT',
+                badge: '🏆',
+                badgeType: 'expert',
+                title: `Match Status: ${match.status_text}`,
+                desc: `Current match state between ${match?.team1_name || match?.teams?.[0] || 'Team 1'} and ${match?.team2_name || match?.teams?.[1] || 'Team 2'}.`,
+                type: 'result',
+                tag: 'Match Status',
+                time: 'Live'
+            });
         }
-        if (commentaryFilter === 'notes') {
-            return item.type === 'fan_update' || item.badgeType === 'expert' || item.badgeType === 'milestone';
-        }
-        return true;
-    });
+        return list;
+    }, [realCommentary, fanCommentaryList, match]);
+
+    // 3. Filtered Commentary based on user selection: all / boundaries / wickets / notes
+    const filteredCommentaryList = useMemo(() => {
+        return allCommentaryList.filter(item => {
+            if (commentaryFilter === 'boundaries') {
+                return item.badge === '4' || item.badge === '6' || item.badgeType === 'four' || item.badgeType === 'six';
+            }
+            if (commentaryFilter === 'wickets') {
+                return item.badge === 'W' || item.badgeType === 'wicket';
+            }
+            if (commentaryFilter === 'notes') {
+                return item.type === 'over-separator' || item.type === 'fan_update' || item.type === 'note' || item.badgeType === 'expert' || item.badgeType === 'milestone';
+            }
+            return true;
+        });
+    }, [allCommentaryList, commentaryFilter]);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -1218,6 +1124,69 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
                         </form>
                     </div>
 
+                    {/* Live Match Situation & Crease Card */}
+                    {miniscore && (
+                        <div className="bg-gradient-to-br from-[#18233c] to-[#0f172a] border border-amber-500/20 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                                    <span className="text-[11px] font-black tracking-wider uppercase text-rose-400">Live Crease</span>
+                                    <span className="text-white font-black text-sm sm:text-base">
+                                        {miniscore.batTeamScoreObj?.teamName || match?.teams?.[0] || 'Batting'}: {miniscore.batTeamScoreObj?.teamScore || ''} ({miniscore.overs} Ov)
+                                    </span>
+                                </div>
+                                {miniscore.status && (
+                                    <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                        {miniscore.status}
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
+                                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                        <span>Batters</span>
+                                        <span>R (B) • 4s / 6s</span>
+                                    </div>
+                                    {miniscore.batsmanStriker?.name && (
+                                        <div className="flex items-center justify-between text-xs sm:text-sm font-black text-white">
+                                            <span className="flex items-center gap-1.5 text-amber-300">
+                                                <span>* {miniscore.batsmanStriker.name}</span>
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 uppercase">On Strike</span>
+                                            </span>
+                                            <span>{miniscore.batsmanStriker.runs} ({miniscore.batsmanStriker.balls}) • {miniscore.batsmanStriker.fours}x4 {miniscore.batsmanStriker.sixes}x6</span>
+                                        </div>
+                                    )}
+                                    {miniscore.batsmanNonStriker?.name && (
+                                        <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-300">
+                                            <span>{miniscore.batsmanNonStriker.name}</span>
+                                            <span>{miniscore.batsmanNonStriker.runs} ({miniscore.batsmanNonStriker.balls}) • {miniscore.batsmanNonStriker.fours}x4 {miniscore.batsmanNonStriker.sixes}x6</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
+                                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                        <span>Bowler</span>
+                                        <span>O-M-R-W</span>
+                                    </div>
+                                    {miniscore.bowlerStriker?.name && (
+                                        <div className="flex items-center justify-between text-xs sm:text-sm font-black text-white">
+                                            <span className="text-indigo-300">{miniscore.bowlerStriker.name}</span>
+                                            <span>{miniscore.bowlerStriker.overs}-{miniscore.bowlerStriker.maidens}-{miniscore.bowlerStriker.runs}-{miniscore.bowlerStriker.wickets}</span>
+                                        </div>
+                                    )}
+                                    {miniscore.recentOvsStats && (
+                                        <div className="text-xs text-slate-400 pt-1 border-t border-white/5 flex items-center justify-between">
+                                            <span className="font-medium text-slate-500">Recent Balls:</span>
+                                            <span className="font-mono text-amber-300 font-bold">{miniscore.recentOvsStats}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Commentary List Container */}
                     <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
@@ -1265,7 +1234,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, matchId
                                         commentaryFilter === 'notes' ? 'bg-indigo-600 text-white font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
-                                    Milestones & Notes ({allCommentaryList.filter(i => i.type === 'fan_update' || i.badgeType === 'expert' || i.badgeType === 'milestone').length})
+                                    Over Summaries & Notes ({allCommentaryList.filter(i => i.type === 'over-separator' || i.type === 'fan_update' || i.type === 'note' || i.badgeType === 'expert' || i.badgeType === 'milestone').length})
                                 </button>
                             </div>
                         </div>

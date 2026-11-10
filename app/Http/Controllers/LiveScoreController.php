@@ -99,6 +99,7 @@ class LiveScoreController extends Controller
         }
 
         $scorecard = $cricket->getMatchScorecard($matchId);
+        $commentary = $cricket->getMatchCommentary($matchId);
 
         if (empty($match['player_of_the_match']) && !empty($scorecard['data']['player_of_the_match'])) {
             $match['player_of_the_match'] = $scorecard['data']['player_of_the_match'];
@@ -118,6 +119,6 @@ class LiveScoreController extends Controller
             }
         }
 
-        return view('live.show', compact('match', 'scorecard', 'forceRefresh'));
+        return view('live.show', compact('match', 'scorecard', 'commentary', 'forceRefresh'));
     }
 }
