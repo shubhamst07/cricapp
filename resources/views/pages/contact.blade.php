@@ -75,8 +75,8 @@
                         </div>
                         <div>
                             <span class="block text-slate-400 text-[10px] uppercase font-bold">Official Email</span>
-                            <a href="mailto:shubhamthakurst0007@gmail.com" class="font-extrabold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 break-all">
-                                shubhamthakurst0007@gmail.com
+                            <a href="mailto:shubhamthakurst07@gmail.com" class="font-extrabold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 break-all">
+                                shubhamthakurst07@gmail.com
                             </a>
                         </div>
                     </div>
@@ -123,10 +123,10 @@
                             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                                 Your Full Name <span class="text-rose-500">*</span>
                             </label>
-                            <input type="text" 
-                                   name="name" 
-                                   required 
-                                   placeholder="e.g. Shubham Sharma" 
+                            <input type="text"
+                                   name="name"
+                                   required
+                                   placeholder="e.g. Shubham Sharma"
                                    value="{{ old('name', auth()->user()?->name ?? '') }}"
                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
                             @error('name')
@@ -138,9 +138,9 @@
                             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                                 Phone Number
                             </label>
-                            <input type="text" 
-                                   name="phone" 
-                                   placeholder="e.g. +91 98765 43210" 
+                            <input type="text"
+                                   name="phone"
+                                   placeholder="e.g. +91 98765 43210"
                                    value="{{ old('phone') }}"
                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
                             @error('phone')
@@ -154,10 +154,10 @@
                             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                                 Email Address <span class="text-rose-500">*</span>
                             </label>
-                            <input type="email" 
-                                   name="email" 
-                                   required 
-                                   placeholder="e.g. you@example.com" 
+                            <input type="email"
+                                   name="email"
+                                   required
+                                   placeholder="e.g. you@example.com"
                                    value="{{ old('email', auth()->user()?->email ?? '') }}"
                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
                             @error('email')
@@ -169,7 +169,7 @@
                             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                                 Inquiry Topic <span class="text-rose-500">*</span>
                             </label>
-                            <select name="inquiry_type" 
+                            <select name="inquiry_type"
                                     class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-[#131b2e] text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
                                 <option value="Tournament Live Scoring">Tournament Live Scoring 🏏</option>
                                 <option value="Ground & Turf Booking">Ground & Turf Booking 🏟️</option>
@@ -188,10 +188,10 @@
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                             Your Message <span class="text-rose-500">*</span>
                         </label>
-                        <textarea name="message" 
-                                  rows="5" 
-                                  required 
-                                  placeholder="Describe how we can help you with matches, venues, or live scoring..." 
+                        <textarea name="message"
+                                  rows="5"
+                                  required
+                                  placeholder="Describe how we can help you with matches, venues, or live scoring..."
                                   class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition leading-relaxed">{{ old('message') }}</textarea>
                         @error('message')
                             <span class="text-rose-500 text-[11px] font-bold mt-1 block">{{ $message }}</span>
@@ -199,7 +199,7 @@
                     </div>
 
                     <div class="pt-2 flex items-center justify-between">
-                        <button type="submit" 
+                        <button type="submit"
                                 class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 transition transform active:scale-95 cursor-pointer">
                             <span>Send Message 🚀</span>
                         </button>

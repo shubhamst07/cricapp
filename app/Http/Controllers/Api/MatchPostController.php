@@ -340,7 +340,7 @@ class MatchPostController extends Controller
                 'match_id' => $matchId,
                 'user_name' => 'Red Ball Memes Hub 😂',
                 'avatar_color' => 'amber',
-                'content' => "{$team2} bowlers checking the pitch after bowling 30 tight overs in Cape Town heat: 'Pitch hai ya highway bhai?' 🥵 Starc and Cummins waiting for second new ball already! 😂",
+                'content' => "{$team2} bowlers checking the pitch after bowling 30 tight overs in scorching heat: 'Is this a pitch or a highway?' 🥵 Starc and Cummins waiting for the second new ball already! 😂",
                 'post_type' => 'meme',
                 'media_url' => 'https://images.unsplash.com/photo-1531415074868-036b107e7752?w=800&auto=format&fit=crop&q=80',
                 'insta_url' => null,

@@ -29,6 +29,6 @@ class PageController extends Controller
 
         Log::info('Contact message received:', $validated);
 
-        return back()->with('success', 'Dhanyawad ' . e($validated['name']) . '! Aapka sandesh Shubham Thakur aur LiveCricket team tak pahunch gaya hai. Hum jald hi aapse sampark karenge.');
+        return back()->with('success', 'Thank you ' . e($validated['name']) . '! Your message has been received by Shubham Thakur and the LiveCricket team. We will get in touch with you shortly.');
     }
 }
