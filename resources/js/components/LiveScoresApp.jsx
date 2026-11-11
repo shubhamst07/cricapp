@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import AdSlot from './AdSlot';
 import {
     Radio,
     Calendar,
@@ -372,6 +373,9 @@ export default function LiveScoresApp({
                 </nav>
             </div>
 
+            {/* Google AdSense / Sponsor Leaderboard Banner */}
+            <AdSlot type="leaderboard" slotId="livescores-top-leaderboard" />
+
             {/* Series Filter & Selector Bar */}
             {seriesStats.length > 0 && (
                 <div className="bg-[#111827]/80 rounded-2xl shadow-xl border border-white/10 p-4 space-y-3">
@@ -706,6 +710,9 @@ export default function LiveScoresApp({
                     </div>
                 </div>
             )}
+
+            {/* Mobile Sticky Bottom Sponsor Banner */}
+            <AdSlot type="sticky-bottom" slotId="livescores-sticky" />
         </div>
     );
 }

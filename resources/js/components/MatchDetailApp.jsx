@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import AdSlot from './AdSlot';
 import {
     ArrowLeft,
     RefreshCw,
@@ -677,6 +678,9 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                 )}
             </div>
 
+            {/* Google AdSense / Sponsor Leaderboard Banner */}
+            <AdSlot type="leaderboard" slotId="match-detail-leaderboard" />
+
             {/* Cricbuzz Style Navigation Tabs */}
             <div className="border-b border-white/10 bg-[#111827]/90 rounded-2xl px-6 pt-3 shadow-xl">
                 <nav className="flex space-x-8" aria-label="Tabs">
@@ -1260,137 +1264,151 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     <p className="text-xs text-slate-500">Live events, deliveries, and post-match notes will appear here.</p>
                                 </div>
                             ) : (
-                                filteredCommentaryList.map((item) => {
+                                filteredCommentaryList.map((item, idx) => {
+                                    const showInfeedAd = idx === 3 || (idx > 3 && idx % 10 === 0);
+
                                     // Custom Presentation / Quote Card
                                     if (item.type === 'interview') {
                                         return (
-                                            <div
-                                                key={item.id}
-                                                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/40 border border-amber-500/30 shadow-md flex items-start gap-3 sm:gap-4"
-                                            >
-                                                <div className="shrink-0 text-center w-12 sm:w-14">
-                                                    <span className="px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-mono font-black text-xs text-amber-300 block">
-                                                        QUOTE
-                                                    </span>
-                                                    <span className="text-[9px] text-amber-400/80 mt-1 block truncate font-semibold">
-                                                        Speech
-                                                    </span>
-                                                </div>
-
-                                                <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300 text-base shadow-sm">
-                                                    🎙️
-                                                </div>
-
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                                        <h5 className="text-xs sm:text-sm font-black text-amber-200 flex items-center gap-1.5">
-                                                            <span>🎙️</span>
-                                                            <span>{item.title}</span>
-                                                        </h5>
-                                                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                                            {item.tag || 'Post-Match Quote'}
+                                            <React.Fragment key={item.id || idx}>
+                                                <div
+                                                    className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/40 border border-amber-500/30 shadow-md flex items-start gap-3 sm:gap-4"
+                                                >
+                                                    <div className="shrink-0 text-center w-12 sm:w-14">
+                                                        <span className="px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-mono font-black text-xs text-amber-300 block">
+                                                            QUOTE
+                                                        </span>
+                                                        <span className="text-[9px] text-amber-400/80 mt-1 block truncate font-semibold">
+                                                            Speech
                                                         </span>
                                                     </div>
-                                                    <p className="text-xs sm:text-sm text-slate-200 mt-1.5 leading-relaxed font-sans italic border-l-2 border-amber-500/40 pl-3">
-                                                        “{item.desc}”
-                                                    </p>
+
+                                                    <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300 text-base shadow-sm">
+                                                        🎙️
+                                                    </div>
+
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                                            <h5 className="text-xs sm:text-sm font-black text-amber-200 flex items-center gap-1.5">
+                                                                <span>🎙️</span>
+                                                                <span>{item.title}</span>
+                                                            </h5>
+                                                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                                                {item.tag || 'Post-Match Quote'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs sm:text-sm text-slate-200 mt-1.5 leading-relaxed font-sans italic border-l-2 border-amber-500/40 pl-3">
+                                                            “{item.desc}”
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                                {showInfeedAd && (
+                                                    <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
+                                                )}
+                                            </React.Fragment>
                                         );
                                     }
 
                                     // Custom Match Wrap-up Card
                                     if (item.type === 'match_wrap') {
                                         return (
+                                            <React.Fragment key={item.id || idx}>
+                                                <div
+                                                    className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-md flex items-start gap-3 sm:gap-4"
+                                                >
+                                                    <div className="shrink-0 text-center w-12 sm:w-14">
+                                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-mono font-black text-xs text-emerald-300 block">
+                                                            FINAL
+                                                        </span>
+                                                        <span className="text-[9px] text-emerald-400/80 mt-1 block truncate font-semibold">
+                                                            Result
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-base shadow-sm">
+                                                        🏆
+                                                    </div>
+
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                                            <h5 className="text-xs sm:text-sm font-black text-emerald-200 flex items-center gap-1.5">
+                                                                <span>🏆</span>
+                                                                <span>{item.title}</span>
+                                                            </h5>
+                                                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shrink-0">
+                                                                {item.tag || 'Match Conclusion'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
+                                                            {item.desc}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {showInfeedAd && (
+                                                    <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    }
+
+                                    // Regular Deliveries, Over Separators, and Notes
+                                    return (
+                                        <React.Fragment key={item.id || idx}>
                                             <div
-                                                key={item.id}
-                                                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-md flex items-start gap-3 sm:gap-4"
+                                                className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4"
                                             >
+                                                {/* Over Badge */}
                                                 <div className="shrink-0 text-center w-12 sm:w-14">
-                                                    <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-mono font-black text-xs text-emerald-300 block">
-                                                        FINAL
+                                                    <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
+                                                        {item.over}
                                                     </span>
-                                                    <span className="text-[9px] text-emerald-400/80 mt-1 block truncate font-semibold">
-                                                        Result
+                                                    <span className="text-[9px] text-slate-500 mt-1 block truncate">
+                                                        {item.time}
                                                     </span>
                                                 </div>
 
-                                                <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-base shadow-sm">
-                                                    🏆
+                                                {/* Badge */}
+                                                <div
+                                                    className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
+                                                        item.badgeType === 'wicket' || item.badge === 'W'
+                                                            ? 'bg-rose-600 text-white shadow-rose-600/40 animate-pulse'
+                                                            : item.badgeType === 'six' || item.badge === '6'
+                                                            ? 'bg-purple-600 text-white shadow-purple-600/40'
+                                                            : item.badgeType === 'four' || item.badge === '4'
+                                                            ? 'bg-blue-600 text-white shadow-blue-600/40'
+                                                            : item.badgeType === 'extra' || item.badge === 'Wd' || item.badge === 'Nb'
+                                                            ? 'bg-amber-600 text-white shadow-amber-600/40'
+                                                            : item.badgeType === 'milestone'
+                                                            ? 'bg-amber-500 text-slate-950 shadow-amber-500/40 font-black'
+                                                            : item.badgeType === 'expert'
+                                                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold'
+                                                            : item.badgeType === 'dot' || item.badge === '0'
+                                                            ? 'bg-slate-800 text-slate-300 border border-white/10'
+                                                            : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
+                                                    }`}
+                                                >
+                                                    <span>{item.badge}</span>
                                                 </div>
 
+                                                {/* Prose */}
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                                        <h5 className="text-xs sm:text-sm font-black text-emerald-200 flex items-center gap-1.5">
-                                                            <span>🏆</span>
-                                                            <span>{item.title}</span>
-                                                        </h5>
-                                                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shrink-0">
-                                                            {item.tag || 'Match Conclusion'}
-                                                        </span>
+                                                        <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
+                                                        {item.tag && (
+                                                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                                                {item.tag}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
                                                         {item.desc}
                                                     </p>
                                                 </div>
                                             </div>
-                                        );
-                                    }
-
-                                    // Regular Deliveries, Over Separators, and Notes
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4"
-                                        >
-                                            {/* Over Badge */}
-                                            <div className="shrink-0 text-center w-12 sm:w-14">
-                                                <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
-                                                    {item.over}
-                                                </span>
-                                                <span className="text-[9px] text-slate-500 mt-1 block truncate">
-                                                    {item.time}
-                                                </span>
-                                            </div>
-
-                                            {/* Badge */}
-                                            <div
-                                                className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
-                                                    item.badgeType === 'wicket' || item.badge === 'W'
-                                                        ? 'bg-rose-600 text-white shadow-rose-600/40 animate-pulse'
-                                                        : item.badgeType === 'six' || item.badge === '6'
-                                                        ? 'bg-purple-600 text-white shadow-purple-600/40'
-                                                        : item.badgeType === 'four' || item.badge === '4'
-                                                        ? 'bg-blue-600 text-white shadow-blue-600/40'
-                                                        : item.badgeType === 'extra' || item.badge === 'Wd' || item.badge === 'Nb'
-                                                        ? 'bg-amber-600 text-white shadow-amber-600/40'
-                                                        : item.badgeType === 'milestone'
-                                                        ? 'bg-amber-500 text-slate-950 shadow-amber-500/40 font-black'
-                                                        : item.badgeType === 'expert'
-                                                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold'
-                                                        : item.badgeType === 'dot' || item.badge === '0'
-                                                        ? 'bg-slate-800 text-slate-300 border border-white/10'
-                                                        : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
-                                                }`}
-                                            >
-                                                <span>{item.badge}</span>
-                                            </div>
-
-                                            {/* Prose */}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                                    <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
-                                                    {item.tag && (
-                                                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                                            {item.tag}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
-                                                    {item.desc}
-                                                </p>
-                                            </div>
-                                        </div>
+                                            {showInfeedAd && (
+                                                <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
+                                            )}
+                                        </React.Fragment>
                                     );
                                 })
                             )}
@@ -2245,6 +2263,9 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     </div>
                 </div>
             )}
+
+            {/* Mobile Sticky Bottom Sponsor Banner */}
+            <AdSlot type="sticky-bottom" slotId="match-detail-sticky" />
         </div>
     );
 }

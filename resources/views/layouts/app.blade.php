@@ -19,6 +19,12 @@
         <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
         <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png">
 
+        <!-- Google AdSense Ready Tag -->
+        @if(env('ADSENSE_CLIENT_ID'))
+            <meta name="adsense-client" content="{{ env('ADSENSE_CLIENT_ID') }}">
+            <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ env('ADSENSE_CLIENT_ID') }}" crossorigin="anonymous"></script>
+        @endif
+
         <!-- Theme Initialization to prevent FOUC -->
         <script>
             if (localStorage.theme === 'light') {
@@ -135,6 +141,8 @@
                             <ul class="space-y-2 text-xs font-medium">
                                 <li><a href="{{ route('about') }}" class="hover:text-indigo-600 dark:hover:text-white transition font-bold text-indigo-600 dark:text-indigo-400">📖 About Us</a></li>
                                 <li><a href="{{ route('contact') }}" class="hover:text-indigo-600 dark:hover:text-white transition font-bold text-indigo-600 dark:text-indigo-400">📬 Contact Us</a></li>
+                                <li><a href="{{ route('privacy') }}" class="hover:text-indigo-600 dark:hover:text-white transition">🔒 Privacy Policy</a></li>
+                                <li><a href="{{ route('terms') }}" class="hover:text-indigo-600 dark:hover:text-white transition">⚖️ Terms of Service</a></li>
                                 <li><a href="https://wa.me/919876543210?text=Hi%20Shubham,%20I%20have%20an%20enquiry%20regarding%20LiveCricket" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-500 transition text-emerald-600 dark:text-emerald-400 font-bold">💬 WhatsApp Founder</a></li>
                             </ul>
                             <div class="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 flex items-center gap-2">
@@ -147,9 +155,11 @@
 
                     <div class="border-t border-slate-200 dark:border-white/10 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
                         <p>© {{ date('Y') }} LiveCricket. Created by <strong class="text-slate-800 dark:text-slate-200">Shubham Thakur</strong> (+91 98765 43210). All rights reserved.</p>
-                        <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-4 flex-wrap">
                             <a href="{{ route('about') }}" class="hover:underline">About</a>
                             <a href="{{ route('contact') }}" class="hover:underline">Contact</a>
+                            <a href="{{ route('privacy') }}" class="hover:underline">Privacy Policy</a>
+                            <a href="{{ route('terms') }}" class="hover:underline">Terms of Service</a>
                             <a href="tel:+919876543210" class="hover:underline">+91 98765 43210</a>
                         </div>
                     </div>
