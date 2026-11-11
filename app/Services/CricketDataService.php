@@ -282,6 +282,12 @@ class CricketDataService
                     $events = [$events];
                 }
 
+                $rawText = $item['commText'] ?? '';
+                // Skip duplicate flash alerts
+                if (str_contains($rawText, 'THATS OUT!!')) {
+                    continue;
+                }
+
                 if ($ctype === 'over-separator') {
                     $overSep = $item['overSeparator'] ?? [];
                     $overNum = $overSep['overNumber'] ?? null;
@@ -325,98 +331,131 @@ class CricketDataService
                         'time' => 'Over Break',
                         'tag' => "Over {$overNum}",
                     ];
-                } elseif ($ctype === 'commentary') {
-                    $ball = $item['ballMetric'] ?? null;
-                    $overStr = $ball !== null ? (string) $ball : '';
-                    $rawText = $item['commText'] ?? '';
-                    $cleanText = trim(strip_tags($rawText));
-
-                    $badge = '0';
-                    $badgeType = 'dot';
-                    $tag = null;
-                    $textLower = strtolower($rawText);
-
-                    if (in_array('four', $events) || str_contains($textLower, 'four') || str_contains($textLower, ', four')) {
-                        $badge = '4';
-                        $badgeType = 'four';
-                        $tag = 'Boundary 4';
-                    } elseif (in_array('six', $events) || str_contains($textLower, 'six') || str_contains($textLower, ', six')) {
-                        $badge = '6';
-                        $badgeType = 'six';
-                        $tag = 'Maximum 6';
-                    } elseif (
-                        array_intersect(['wicket', 'out', 'wk'], $events) ||
-                        preg_match('/(out,|caught|bowled|lbw|run out)/i', $textLower)
-                    ) {
-                        $badge = 'W';
-                        $badgeType = 'wicket';
-                        $tag = 'Wicket 🎯';
-                    } elseif (in_array('wide', $events) || str_contains($textLower, 'wide') || str_contains($textLower, 'wd')) {
-                        $badge = 'Wd';
-                        $badgeType = 'extra';
-                        $tag = 'Wide';
-                    } elseif (in_array('no-ball', $events) || str_contains($textLower, 'no ball') || str_contains($textLower, 'nb')) {
-                        $badge = 'Nb';
-                        $badgeType = 'extra';
-                        $tag = 'No Ball';
-                    } elseif (str_contains($textLower, '1 run') || in_array('one', $events)) {
-                        $badge = '1';
-                        $badgeType = 'run';
-                    } elseif (str_contains($textLower, '2 runs') || in_array('two', $events)) {
-                        $badge = '2';
-                        $badgeType = 'run';
-                    } elseif (str_contains($textLower, '3 runs') || in_array('three', $events)) {
-                        $badge = '3';
-                        $badgeType = 'run';
-                    } elseif (str_contains($textLower, 'leg bye') || str_contains($textLower, 'bye')) {
-                        $badge = 'B';
-                        $badgeType = 'run';
-                    }
-
-                    $batsman = $item['batsmanDetails']['playerName'] ?? null;
-                    $bowler = $item['bowlerDetails']['playerName'] ?? null;
-
-                    $parts = explode(',', $cleanText, 3);
-                    if (count($parts) >= 2 && (str_contains($parts[0], 'to') || in_array($badgeType, ['four', 'six', 'wicket']))) {
-                        $title = trim($parts[0]) . ', ' . trim($parts[1]);
-                        $desc = isset($parts[2]) ? trim($parts[2]) : '';
-                    } else {
-                        $title = $cleanText;
-                        $desc = '';
-                    }
-
-                    $formatted[] = [
-                        'id' => "ball-{$commId}",
-                        'type' => 'ball',
-                        'over' => $overStr ?: 'LIVE',
-                        'ballMetric' => $ball,
-                        'badge' => $badge,
-                        'badgeType' => $badgeType,
-                        'title' => $title,
-                        'desc' => $desc ?: $cleanText,
-                        'rawText' => $cleanText,
-                        'batsman' => $batsman,
-                        'bowler' => $bowler,
-                        'tag' => $tag,
-                        'timestamp' => $timestamp,
-                        'time' => $overStr ? "Ball {$overStr}" : 'Live',
-                    ];
                 } else {
-                    $rawText = $item['commText'] ?? '';
+                    $ball = $item['ballMetric'] ?? null;
                     $cleanText = trim(strip_tags($rawText));
-                    if ($cleanText) {
+
+                    // Verify if this is an actual ball delivery
+                    $isBall = false;
+                    $ballFloat = null;
+                    if (!empty($ball) && $ball !== '$undefined' && is_numeric($ball)) {
+                        $ballFloat = (float) $ball;
+                        $isBall = true;
+                    }
+
+                    if ($isBall) {
+                        $overStr = (string) $ball;
+                        $badge = '0';
+                        $badgeType = 'dot';
+                        $tag = null;
+                        $textLower = strtolower($cleanText);
+
+                        if (in_array('four', $events) || str_contains(strtolower($rawText), '<b>four</b>') || str_contains($textLower, ', four') || str_ends_with($textLower, ', four')) {
+                            $badge = '4';
+                            $badgeType = 'four';
+                            $tag = 'Boundary 4';
+                        } elseif (in_array('six', $events) || str_contains(strtolower($rawText), '<b>six</b>') || str_contains($textLower, ', six') || str_ends_with($textLower, ', six')) {
+                            $badge = '6';
+                            $badgeType = 'six';
+                            $tag = 'Maximum 6';
+                        } elseif (in_array('wicket', $events) || str_contains(strtolower($rawText), '<b>out</b>') || str_contains($textLower, ', out ') || preg_match('/,\s*out\s+(bowled|caught|lbw|run out|stumped)/i', $textLower)) {
+                            $badge = 'W';
+                            $badgeType = 'wicket';
+                            $tag = 'Wicket ☝️';
+                        } elseif (in_array('wide', $events) || str_contains($textLower, 'wide') || str_contains($textLower, 'wd')) {
+                            $badge = 'Wd';
+                            $badgeType = 'extra';
+                            $tag = 'Wide';
+                        } elseif (in_array('no-ball', $events) || str_contains($textLower, 'no ball') || str_contains($textLower, 'nb')) {
+                            $badge = 'Nb';
+                            $badgeType = 'extra';
+                            $tag = 'No Ball';
+                        } elseif (str_contains($textLower, '1 run') || in_array('one', $events)) {
+                            $badge = '1';
+                            $badgeType = 'run';
+                        } elseif (str_contains($textLower, '2 runs') || in_array('two', $events)) {
+                            $badge = '2';
+                            $badgeType = 'run';
+                        } elseif (str_contains($textLower, '3 runs') || in_array('three', $events)) {
+                            $badge = '3';
+                            $badgeType = 'run';
+                        } elseif (str_contains($textLower, 'leg bye') || str_contains($textLower, 'bye')) {
+                            $badge = 'B';
+                            $badgeType = 'run';
+                        }
+
+                        $batsman = $item['batsmanDetails']['playerName'] ?? null;
+                        $bowler = $item['bowlerDetails']['playerName'] ?? null;
+
+                        $parts = explode(',', $cleanText, 3);
+                        if (count($parts) >= 2 && (str_contains($parts[0], 'to') || in_array($badgeType, ['four', 'six', 'wicket']))) {
+                            $title = trim($parts[0]) . ', ' . trim($parts[1]);
+                            $desc = isset($parts[2]) ? trim($parts[2]) : '';
+                        } else {
+                            $title = $cleanText;
+                            $desc = '';
+                        }
+
                         $formatted[] = [
-                            'id' => "note-{$commId}",
-                            'type' => 'note',
-                            'over' => 'NOTE',
-                            'badge' => '💡',
-                            'badgeType' => 'expert',
-                            'title' => $cleanText,
-                            'desc' => $cleanText,
-                            'tag' => 'Match Note',
+                            'id' => "ball-{$commId}",
+                            'type' => 'ball',
+                            'over' => $overStr,
+                            'ballMetric' => $ballFloat,
+                            'badge' => $badge,
+                            'badgeType' => $badgeType,
+                            'title' => $title,
+                            'desc' => $desc ?: $cleanText,
+                            'rawText' => $cleanText,
+                            'batsman' => $batsman,
+                            'bowler' => $bowler,
+                            'tag' => $tag,
                             'timestamp' => $timestamp,
-                            'time' => 'Update',
+                            'time' => "Ball {$overStr}",
                         ];
+                    } else {
+                        // Non-ball item: Post-match interview quote, match wrap-up, or tactical note
+                        if (preg_match('/^([A-Za-z\s.\-]+):\s*(.+)$/s', $cleanText, $matchesQuote)) {
+                            $speaker = trim($matchesQuote[1]);
+                            $speech = trim($matchesQuote[2]);
+                            $formatted[] = [
+                                'id' => "speech-{$commId}",
+                                'type' => 'interview',
+                                'over' => 'QUOTE',
+                                'badge' => '🎙️',
+                                'badgeType' => 'expert',
+                                'title' => "{$speaker} (Post-Match Take)",
+                                'desc' => $speech,
+                                'tag' => 'Player Quote 🎙️',
+                                'timestamp' => $timestamp,
+                                'time' => 'Presentation',
+                            ];
+                        } elseif (preg_match('/(clinch|win|local time|semis|champions|victory)/i', $cleanText)) {
+                            $formatted[] = [
+                                'id' => "wrap-{$commId}",
+                                'type' => 'match_wrap',
+                                'over' => 'FINAL',
+                                'badge' => '🏆',
+                                'badgeType' => 'expert',
+                                'title' => 'Match Summary & Wrap-up',
+                                'desc' => $cleanText,
+                                'tag' => 'Match Result 🏆',
+                                'timestamp' => $timestamp,
+                                'time' => 'Wrap-up',
+                            ];
+                        } else {
+                            $formatted[] = [
+                                'id' => "note-{$commId}",
+                                'type' => 'note',
+                                'over' => 'NOTE',
+                                'badge' => '📋',
+                                'badgeType' => 'expert',
+                                'title' => 'Match Note',
+                                'desc' => $cleanText,
+                                'tag' => 'Tactical Note',
+                                'timestamp' => $timestamp,
+                                'time' => 'Update',
+                            ];
+                        }
                     }
                 }
             }

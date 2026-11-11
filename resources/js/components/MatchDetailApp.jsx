@@ -478,17 +478,20 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         return list;
     }, [realCommentary, fanCommentaryList, match]);
 
-    // 3. Filtered Commentary based on user selection: all / boundaries / wickets / notes
+    // 3. Filtered Commentary based on user selection: all / balls / boundaries / wickets / notes
     const filteredCommentaryList = useMemo(() => {
         return allCommentaryList.filter(item => {
+            if (commentaryFilter === 'balls') {
+                return item.type === 'ball';
+            }
             if (commentaryFilter === 'boundaries') {
-                return item.badge === '4' || item.badge === '6' || item.badgeType === 'four' || item.badgeType === 'six';
+                return item.type === 'ball' && (item.badge === '4' || item.badge === '6' || item.badgeType === 'four' || item.badgeType === 'six');
             }
             if (commentaryFilter === 'wickets') {
-                return item.badge === 'W' || item.badgeType === 'wicket';
+                return item.type === 'ball' && (item.badge === 'W' || item.badgeType === 'wicket');
             }
             if (commentaryFilter === 'notes') {
-                return item.type === 'over-separator' || item.type === 'fan_update' || item.type === 'note' || item.badgeType === 'expert' || item.badgeType === 'milestone';
+                return item.type !== 'ball';
             }
             return true;
         });
@@ -1207,7 +1210,16 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                         commentaryFilter === 'all' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
-                                    All Balls ({allCommentaryList.length})
+                                    All ({allCommentaryList.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCommentaryFilter('balls')}
+                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                        commentaryFilter === 'balls' ? 'bg-emerald-600 text-white font-black' : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    Deliveries ({allCommentaryList.filter(i => i.type === 'ball').length})
                                 </button>
                                 <button
                                     type="button"
@@ -1216,7 +1228,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                         commentaryFilter === 'boundaries' ? 'bg-blue-600 text-white font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
-                                    4s & 6s 💥 ({allCommentaryList.filter(i => i.badge === '4' || i.badge === '6' || i.badgeType === 'four' || i.badgeType === 'six').length})
+                                    4s & 6s 💥 ({allCommentaryList.filter(i => i.type === 'ball' && (i.badge === '4' || i.badge === '6' || i.badgeType === 'four' || i.badgeType === 'six')).length})
                                 </button>
                                 <button
                                     type="button"
@@ -1225,7 +1237,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                         commentaryFilter === 'wickets' ? 'bg-rose-600 text-white font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
-                                    Wickets ☝️ ({allCommentaryList.filter(i => i.badge === 'W' || i.badgeType === 'wicket').length})
+                                    Wickets ☝️ ({allCommentaryList.filter(i => i.type === 'ball' && (i.badge === 'W' || i.badgeType === 'wicket')).length})
                                 </button>
                                 <button
                                     type="button"
@@ -1234,7 +1246,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                         commentaryFilter === 'notes' ? 'bg-indigo-600 text-white font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
-                                    Over Summaries & Notes ({allCommentaryList.filter(i => i.type === 'over-separator' || i.type === 'fan_update' || i.type === 'note' || i.badgeType === 'expert' || i.badgeType === 'milestone').length})
+                                    Speeches & Notes 🎙️ ({allCommentaryList.filter(i => i.type !== 'ball').length})
                                 </button>
                             </div>
                         </div>
@@ -1245,61 +1257,142 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 <div className="py-12 text-center text-slate-500 space-y-2">
                                     <Radio className="w-8 h-8 mx-auto text-slate-600 animate-pulse" />
                                     <p className="text-sm font-bold text-slate-400">No commentary entries found for this filter.</p>
-                                    <p className="text-xs text-slate-500">Live events and fan commentary notes will appear here.</p>
+                                    <p className="text-xs text-slate-500">Live events, deliveries, and post-match notes will appear here.</p>
                                 </div>
                             ) : (
-                                filteredCommentaryList.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4"
-                                    >
-                                        {/* Over Badge */}
-                                        <div className="shrink-0 text-center w-12 sm:w-14">
-                                            <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
-                                                {item.over}
-                                            </span>
-                                            <span className="text-[9px] text-slate-500 mt-1 block truncate">
-                                                {item.time}
-                                            </span>
-                                        </div>
-
-                                        {/* Badge */}
-                                        <div
-                                            className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
-                                                item.badgeType === 'wicket' || item.badge === 'W'
-                                                    ? 'bg-rose-600 text-white shadow-rose-600/40 animate-pulse'
-                                                    : item.badgeType === 'six' || item.badge === '6'
-                                                    ? 'bg-purple-600 text-white shadow-purple-600/40'
-                                                    : item.badgeType === 'four' || item.badge === '4'
-                                                    ? 'bg-blue-600 text-white shadow-blue-600/40'
-                                                    : item.badgeType === 'milestone'
-                                                    ? 'bg-amber-500 text-slate-950 shadow-amber-500/40 font-black'
-                                                    : item.badgeType === 'expert'
-                                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold'
-                                                    : item.badgeType === 'dot' || item.badge === '0'
-                                                    ? 'bg-slate-800 text-slate-300 border border-white/10'
-                                                    : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
-                                            }`}
-                                        >
-                                            <span>{item.badge}</span>
-                                        </div>
-
-                                        {/* Prose */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                                <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
-                                                {item.tag && (
-                                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                                        {item.tag}
+                                filteredCommentaryList.map((item) => {
+                                    // Custom Presentation / Quote Card
+                                    if (item.type === 'interview') {
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/40 border border-amber-500/30 shadow-md flex items-start gap-3 sm:gap-4"
+                                            >
+                                                <div className="shrink-0 text-center w-12 sm:w-14">
+                                                    <span className="px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-mono font-black text-xs text-amber-300 block">
+                                                        QUOTE
                                                     </span>
-                                                )}
+                                                    <span className="text-[9px] text-amber-400/80 mt-1 block truncate font-semibold">
+                                                        Speech
+                                                    </span>
+                                                </div>
+
+                                                <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300 text-base shadow-sm">
+                                                    🎙️
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                                        <h5 className="text-xs sm:text-sm font-black text-amber-200 flex items-center gap-1.5">
+                                                            <span>🎙️</span>
+                                                            <span>{item.title}</span>
+                                                        </h5>
+                                                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                                            {item.tag || 'Post-Match Quote'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs sm:text-sm text-slate-200 mt-1.5 leading-relaxed font-sans italic border-l-2 border-amber-500/40 pl-3">
+                                                        “{item.desc}”
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
-                                                {item.desc}
-                                            </p>
+                                        );
+                                    }
+
+                                    // Custom Match Wrap-up Card
+                                    if (item.type === 'match_wrap') {
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-md flex items-start gap-3 sm:gap-4"
+                                            >
+                                                <div className="shrink-0 text-center w-12 sm:w-14">
+                                                    <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-mono font-black text-xs text-emerald-300 block">
+                                                        FINAL
+                                                    </span>
+                                                    <span className="text-[9px] text-emerald-400/80 mt-1 block truncate font-semibold">
+                                                        Result
+                                                    </span>
+                                                </div>
+
+                                                <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-base shadow-sm">
+                                                    🏆
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                                        <h5 className="text-xs sm:text-sm font-black text-emerald-200 flex items-center gap-1.5">
+                                                            <span>🏆</span>
+                                                            <span>{item.title}</span>
+                                                        </h5>
+                                                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shrink-0">
+                                                            {item.tag || 'Match Conclusion'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
+                                                        {item.desc}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    // Regular Deliveries, Over Separators, and Notes
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4"
+                                        >
+                                            {/* Over Badge */}
+                                            <div className="shrink-0 text-center w-12 sm:w-14">
+                                                <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
+                                                    {item.over}
+                                                </span>
+                                                <span className="text-[9px] text-slate-500 mt-1 block truncate">
+                                                    {item.time}
+                                                </span>
+                                            </div>
+
+                                            {/* Badge */}
+                                            <div
+                                                className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
+                                                    item.badgeType === 'wicket' || item.badge === 'W'
+                                                        ? 'bg-rose-600 text-white shadow-rose-600/40 animate-pulse'
+                                                        : item.badgeType === 'six' || item.badge === '6'
+                                                        ? 'bg-purple-600 text-white shadow-purple-600/40'
+                                                        : item.badgeType === 'four' || item.badge === '4'
+                                                        ? 'bg-blue-600 text-white shadow-blue-600/40'
+                                                        : item.badgeType === 'extra' || item.badge === 'Wd' || item.badge === 'Nb'
+                                                        ? 'bg-amber-600 text-white shadow-amber-600/40'
+                                                        : item.badgeType === 'milestone'
+                                                        ? 'bg-amber-500 text-slate-950 shadow-amber-500/40 font-black'
+                                                        : item.badgeType === 'expert'
+                                                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold'
+                                                        : item.badgeType === 'dot' || item.badge === '0'
+                                                        ? 'bg-slate-800 text-slate-300 border border-white/10'
+                                                        : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
+                                                }`}
+                                            >
+                                                <span>{item.badge}</span>
+                                            </div>
+
+                                            {/* Prose */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                                    <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
+                                                    {item.tag && (
+                                                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                                            {item.tag}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
+                                                    {item.desc}
+                                                </p>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>

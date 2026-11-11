@@ -1042,6 +1042,11 @@ class ScoreService:
                 if isinstance(events, str):
                     events = [events]
 
+                # Skip duplicate flash alert lines
+                raw_text = item.get("commText", "")
+                if "THATS OUT!!" in raw_text:
+                    continue
+
                 if ctype == "over-separator":
                     over_sep = item.get("overSeparator") or {}
                     over_num = over_sep.get("overNumber")
@@ -1083,96 +1088,131 @@ class ScoreService:
                         "time": "Over Break",
                         "tag": f"Over {over_num}"
                     })
-                elif ctype == "commentary":
+                else:
                     ball = item.get("ballMetric")
-                    over_str = str(ball) if ball is not None else ""
-                    raw_text = item.get("commText", "")
                     clean_text = re.sub(r"<[^>]+>", "", raw_text).strip()
 
-                    badge = "0"
-                    badge_type = "dot"
-                    tag = None
+                    # Determine if this item is a genuine ball delivery
+                    is_ball = False
+                    ball_float = None
+                    if ball is not None and str(ball) != "$undefined":
+                        try:
+                            ball_float = float(ball)
+                            is_ball = True
+                        except ValueError:
+                            is_ball = False
 
-                    text_lower = raw_text.lower()
-                    if "four" in events or "four" in text_lower or ", four" in text_lower:
-                        badge = "4"
-                        badge_type = "four"
-                        tag = "Boundary 4"
-                    elif "six" in events or "six" in text_lower or ", six" in text_lower:
-                        badge = "6"
-                        badge_type = "six"
-                        tag = "Maximum 6"
-                    elif any(e in ["wicket", "out", "wk"] for e in events) or any(w in text_lower for w in ["out,", "caught", "bowled", "lbw", "run out"]):
-                        badge = "W"
-                        badge_type = "wicket"
-                        tag = "Wicket 🎯"
-                    elif "wide" in events or "wide" in text_lower or "wd" in text_lower:
-                        badge = "Wd"
-                        badge_type = "extra"
-                        tag = "Wide"
-                    elif "no-ball" in events or "no ball" in text_lower or "nb" in text_lower:
-                        badge = "Nb"
-                        badge_type = "extra"
-                        tag = "No Ball"
-                    elif "1 run" in text_lower or "one" in events:
-                        badge = "1"
-                        badge_type = "run"
-                    elif "2 runs" in text_lower or "two" in events:
-                        badge = "2"
-                        badge_type = "run"
-                    elif "3 runs" in text_lower or "three" in events:
-                        badge = "3"
-                        badge_type = "run"
-                    elif "leg bye" in text_lower or "bye" in text_lower:
-                        badge = "B"
-                        badge_type = "run"
-                    else:
+                    if is_ball:
+                        over_str = str(ball)
+                        text_lower = clean_text.lower()
                         badge = "0"
                         badge_type = "dot"
+                        tag = None
 
-                    batsman = item.get("batsmanDetails", {}).get("playerName") if isinstance(item.get("batsmanDetails"), dict) else None
-                    bowler = item.get("bowlerDetails", {}).get("playerName") if isinstance(item.get("bowlerDetails"), dict) else None
+                        if "four" in events or "<b>four</b>" in raw_text.lower() or ", four" in text_lower or text_lower.endswith(", four"):
+                            badge = "4"
+                            badge_type = "four"
+                            tag = "Boundary 4"
+                        elif "six" in events or "<b>six</b>" in raw_text.lower() or ", six" in text_lower or text_lower.endswith(", six"):
+                            badge = "6"
+                            badge_type = "six"
+                            tag = "Maximum 6"
+                        elif "wicket" in events or "<b>out</b>" in raw_text.lower() or ", out " in clean_text.lower() or re.search(r",\s*out\s+(bowled|caught|lbw|run out|stumped)", text_lower):
+                            badge = "W"
+                            badge_type = "wicket"
+                            tag = "Wicket ☝️"
+                        elif "wide" in events or "wide" in text_lower or "wd" in text_lower:
+                            badge = "Wd"
+                            badge_type = "extra"
+                            tag = "Wide"
+                        elif "no-ball" in events or "no ball" in text_lower or "nb" in text_lower:
+                            badge = "Nb"
+                            badge_type = "extra"
+                            tag = "No Ball"
+                        elif "1 run" in text_lower or "one" in events:
+                            badge = "1"
+                            badge_type = "run"
+                        elif "2 runs" in text_lower or "two" in events:
+                            badge = "2"
+                            badge_type = "run"
+                        elif "3 runs" in text_lower or "three" in events:
+                            badge = "3"
+                            badge_type = "run"
+                        elif "leg bye" in text_lower or "bye" in text_lower:
+                            badge = "B"
+                            badge_type = "run"
 
-                    parts = clean_text.split(",", 2)
-                    if len(parts) >= 2 and ("to" in parts[0] or badge_type in ["four", "six", "wicket"]):
-                        title = f"{parts[0].strip()}, {parts[1].strip()}"
-                        desc = parts[2].strip() if len(parts) > 2 else ""
-                    else:
-                        title = clean_text
-                        desc = ""
+                        batsman = item.get("batsmanDetails", {}).get("playerName") if isinstance(item.get("batsmanDetails"), dict) else None
+                        bowler = item.get("bowlerDetails", {}).get("playerName") if isinstance(item.get("bowlerDetails"), dict) else None
 
-                    formatted.append({
-                        "id": f"ball-{comm_id}",
-                        "type": "ball",
-                        "over": over_str if over_str else "LIVE",
-                        "ballMetric": ball,
-                        "badge": badge,
-                        "badgeType": badge_type,
-                        "title": title,
-                        "desc": desc or clean_text,
-                        "rawText": clean_text,
-                        "batsman": batsman,
-                        "bowler": bowler,
-                        "tag": tag,
-                        "timestamp": timestamp,
-                        "time": f"Ball {over_str}" if over_str else "Live"
-                    })
-                else:
-                    raw_text = item.get("commText", "")
-                    clean_text = re.sub(r"<[^>]+>", "", raw_text).strip()
-                    if clean_text:
+                        parts = clean_text.split(",", 2)
+                        if len(parts) >= 2 and ("to" in parts[0] or badge_type in ["four", "six", "wicket"]):
+                            title = f"{parts[0].strip()}, {parts[1].strip()}"
+                            desc = parts[2].strip() if len(parts) > 2 else ""
+                        else:
+                            title = clean_text
+                            desc = ""
+
                         formatted.append({
-                            "id": f"note-{comm_id}",
-                            "type": "note",
-                            "over": "NOTE",
-                            "badge": "💡",
-                            "badgeType": "expert",
-                            "title": clean_text,
-                            "desc": clean_text,
-                            "tag": "Match Note",
+                            "id": f"ball-{comm_id}",
+                            "type": "ball",
+                            "over": over_str,
+                            "ballMetric": ball_float,
+                            "badge": badge,
+                            "badgeType": badge_type,
+                            "title": title,
+                            "desc": desc or clean_text,
+                            "rawText": clean_text,
+                            "batsman": batsman,
+                            "bowler": bowler,
+                            "tag": tag,
                             "timestamp": timestamp,
-                            "time": "Update"
+                            "time": f"Ball {over_str}"
                         })
+                    else:
+                        # Non-ball item: Post-match quote, Match wrap-up, or Tactical note
+                        match_quote = re.match(r"^([A-Za-z\s.\-]+):\s*(.+)$", clean_text, re.DOTALL)
+                        if match_quote:
+                            speaker = match_quote.group(1).strip()
+                            speech = match_quote.group(2).strip()
+                            formatted.append({
+                                "id": f"speech-{comm_id}",
+                                "type": "interview",
+                                "over": "QUOTE",
+                                "badge": "🎙️",
+                                "badgeType": "expert",
+                                "title": f"{speaker} (Post-Match Take)",
+                                "desc": speech,
+                                "tag": "Player Quote 🎙️",
+                                "timestamp": timestamp,
+                                "time": "Presentation"
+                            })
+                        elif any(k in clean_text.lower() for k in ["clinch", "win", "local time", "semis", "champions", "victory"]):
+                            formatted.append({
+                                "id": f"wrap-{comm_id}",
+                                "type": "match_wrap",
+                                "over": "FINAL",
+                                "badge": "🏆",
+                                "badgeType": "expert",
+                                "title": "Match Summary & Wrap-up",
+                                "desc": clean_text,
+                                "tag": "Match Result 🏆",
+                                "timestamp": timestamp,
+                                "time": "Wrap-up"
+                            })
+                        else:
+                            formatted.append({
+                                "id": f"note-{comm_id}",
+                                "type": "note",
+                                "over": "NOTE",
+                                "badge": "📋",
+                                "badgeType": "expert",
+                                "title": "Match Note",
+                                "desc": clean_text,
+                                "tag": "Tactical Note",
+                                "timestamp": timestamp,
+                                "time": "Update"
+                            })
 
             formatted.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
 
