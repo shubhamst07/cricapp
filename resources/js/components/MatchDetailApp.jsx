@@ -622,12 +622,21 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 );
                             })
                         ) : (
-                            match.score?.map((s, idx) => (
-                                <div key={idx} className="p-4 rounded-2xl bg-[#0b101e]/90 border border-white/10 flex items-center justify-between shadow-lg">
-                                    <span className="font-black text-white text-base">{s.batting_team || s.inning || `Innings ${idx + 1}`}</span>
-                                    <span className="text-2xl font-black font-mono text-amber-300">{s.display_score || `${s.r || s.runs || 0}/${s.w || s.wickets || 0}`}</span>
-                                </div>
-                            ))
+                            match.score?.map((s, idx) => {
+                                const sRuns = s.r || s.runs || 0;
+                                let sWickets = s.w ?? s.wickets ?? 0;
+                                const isMatchFinished = effectiveStatus === 'completed' || (match.matchEnded ?? false) || (match.status_text || '').toLowerCase().includes('won by');
+                                if (isMatchFinished && idx === 1 && sWickets === 0 && (match.status_text || '').toLowerCase().includes('won by') && (match.status_text || '').toLowerCase().includes('run')) {
+                                    sWickets = 10;
+                                }
+                                const sDisplay = (s.display_score && s.display_score !== `${sRuns}/0`) ? s.display_score : (sWickets === 10 ? `${sRuns}/10` : `${sRuns}/${sWickets}`);
+                                return (
+                                    <div key={idx} className="p-4 rounded-2xl bg-[#0b101e]/90 border border-white/10 flex items-center justify-between shadow-lg">
+                                        <span className="font-black text-white text-base">{s.batting_team || s.inning || `Innings ${idx + 1}`}</span>
+                                        <span className="text-2xl font-black font-mono text-amber-300">{sDisplay}</span>
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
                 )}

@@ -495,14 +495,28 @@ class CricketDataService
         });
     }
 
-    public function normalizeScore(?array $rawScores): ?array
+    public function normalizeScore(?array $rawScores, ?string $statusText = '', ?bool $matchEnded = false, ?string $matchType = ''): ?array
     {
         if (empty($rawScores) || !is_array($rawScores)) {
             return null;
         }
 
         $scores = [];
-        foreach ($rawScores as $s) {
+        $isCompletedMatch = (bool) $matchEnded || (
+            !empty($statusText) && (
+                str_contains(strtolower($statusText), 'won by') ||
+                str_contains(strtolower($statusText), 'won the') ||
+                str_contains(strtolower($statusText), ' won') ||
+                str_contains(strtolower($statusText), 'beat') ||
+                str_contains(strtolower($statusText), 'tied') ||
+                str_contains(strtolower($statusText), 'drawn') ||
+                str_contains(strtolower($statusText), 'conceded') ||
+                str_contains(strtolower($statusText), 'complete') ||
+                str_contains(strtolower($statusText), 'result')
+            )
+        );
+
+        foreach ($rawScores as $idx => $s) {
             if (!is_array($s)) {
                 continue;
             }
@@ -512,7 +526,34 @@ class CricketDataService
             $wickets = isset($s['w']) ? (int) $s['w'] : (isset($s['wickets']) ? (int) $s['wickets'] : 0);
             $rawOvers = $s['o'] ?? $s['overs'] ?? null;
             $overs = ($rawOvers !== null && $rawOvers !== '' && $rawOvers !== '0' && $rawOvers !== 0 && $rawOvers !== '0.0') ? (string) $rawOvers : null;
-            $displayScore = (string) ($s['display_score'] ?? "{$runs}/{$wickets}");
+
+            // Intelligent correction for all-out teams:
+            // When a team is all out in cricket (10 wickets), some APIs omit wickets or return w: 0.
+            // 1. Chasing team (2nd innings) in a completed match won by runs:
+            //    If won by runs (e.g. India won by 70 runs, Pak won by 101 runs), chasing team lost!
+            //    They cannot have 0 wickets. If wickets == 0 or overs prematurely stopped, they were ALL OUT (10 wickets).
+            if ($isCompletedMatch && $idx === 1 && $wickets === 0) {
+                $isWonByRuns = str_contains(strtolower($statusText ?? ''), 'won by') && str_contains(strtolower($statusText ?? ''), 'run');
+                $floatOvers = $overs ? (float) $overs : 0;
+                $isLimitedOvers = str_contains(strtolower($matchType ?? ''), 'odi') || str_contains(strtolower($matchType ?? ''), 't20') || str_contains(strtolower($matchType ?? ''), 'match') || str_contains(strtolower($inningName), 'u19');
+                if ($isWonByRuns || ($floatOvers > 0 && $floatOvers < 50 && $isLimitedOvers)) {
+                    $wickets = 10;
+                }
+            }
+
+            // 2. First innings: If overs stopped prematurely (e.g. 43.4 ov in 50 ov match) in a completed match:
+            if ($idx === 0 && $wickets === 0 && $overs && $isCompletedMatch) {
+                $floatOvers = (float) $overs;
+                $isODI = str_contains(strtolower($matchType ?? ''), 'odi') || str_contains(strtolower($inningName), 'u19') || str_contains(strtolower($statusText ?? ''), 'u19');
+                if ($isODI && $floatOvers > 0 && $floatOvers < 49.5) {
+                    $wickets = 10;
+                }
+            }
+
+            $displayScore = (string) ($s['display_score'] ?? '');
+            if (empty($displayScore) || ($displayScore === "{$runs}/0" && $wickets > 0)) {
+                $displayScore = "{$runs}/{$wickets}";
+            }
 
             $scores[] = [
                 'inning' => $inningName,
@@ -542,13 +583,74 @@ class CricketDataService
             $statusText = (string) ($match['status_text'] ?? $match['status'] ?? '');
             $matchStarted = (bool) ($match['matchStarted'] ?? false);
             $matchEnded = (bool) ($match['matchEnded'] ?? false);
-            $score = $this->normalizeScore($match['score'] ?? null);
+            $matchType = (string) ($match['matchType'] ?? '');
 
-            // If score has any inning/runs/overs, match is actively underway
+            // Detect completed status from text keywords
+            $isCompletedByText = str_contains(strtolower($statusText), 'won by') ||
+                str_contains(strtolower($statusText), 'won the') ||
+                str_contains(strtolower($statusText), ' won') ||
+                str_contains(strtolower($statusText), 'beat') ||
+                str_contains(strtolower($statusText), 'tied') ||
+                str_contains(strtolower($statusText), 'drawn') ||
+                str_contains(strtolower($statusText), 'conceded') ||
+                str_contains(strtolower($statusText), 'complete') ||
+                str_contains(strtolower($statusText), 'result') ||
+                str_contains(strtolower($statusText), 'match ended');
+
+            // Date check: if match was scheduled > 12 hours ago and is not a multi-day test in progress
+            $dateTimeGMT = (string) ($match['dateTimeGMT'] ?? '');
+            $isPastDate = false;
+            if (!empty($dateTimeGMT)) {
+                $matchTimestamp = strtotime($dateTimeGMT);
+                if ($matchTimestamp && (time() - $matchTimestamp > 12 * 3600)) {
+                    $isTest = str_contains(strtolower($matchType), 'test') || str_contains(strtolower($statusText), 'day ');
+                    if (!$isTest) {
+                        $isPastDate = true;
+                    }
+                }
+            }
+
+            if ($isCompletedByText || $isPastDate) {
+                $matchEnded = true;
+            }
+
+            $score = $this->normalizeScore($match['score'] ?? null, $statusText, $matchEnded, $matchType);
+
+            // Check if both teams completed 50 overs (ODI) or 20 overs (T20)
+            if (!empty($score) && count($score) >= 2) {
+                $inn2Overs = (float) ($score[1]['overs'] ?? 0);
+                if ($inn2Overs >= 50 || ($inn2Overs >= 20 && str_contains(strtolower($matchType), 't20'))) {
+                    $matchEnded = true;
+                }
+            }
+
+            // ONLY if match is NOT ended, should score imply in progress
             if (!empty($score)) {
                 $matchStarted = true;
-                if (in_array(strtolower(trim($statusText)), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                if (!$matchEnded && in_array(strtolower(trim($statusText)), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
                     $statusText = 'In Progress';
+                }
+            }
+
+            // If match is ended, status_text must never be 'In Progress' or empty
+            if ($matchEnded) {
+                if (in_array(strtolower(trim($statusText)), ['', 'scheduled', 'match scheduled', 'upcoming', 'in progress'])) {
+                    // Try to generate result from scores if possible
+                    if (!empty($score) && count($score) >= 2) {
+                        $r1 = (int) ($score[0]['runs'] ?? 0);
+                        $r2 = (int) ($score[1]['runs'] ?? 0);
+                        $t1 = $score[0]['batting_team'] ?: ($match['teams'][0] ?? 'Team 1');
+                        $t2 = $score[1]['batting_team'] ?: ($match['teams'][1] ?? 'Team 2');
+                        if ($r1 > $r2) {
+                            $statusText = "{$t1} won by " . ($r1 - $r2) . " runs";
+                        } elseif ($r2 > $r1) {
+                            $statusText = "{$t2} won";
+                        } else {
+                            $statusText = "Match Tied";
+                        }
+                    } else {
+                        $statusText = 'Match Completed';
+                    }
                 }
             }
 
@@ -562,7 +664,7 @@ class CricketDataService
                 'series' => (string) ($match['series'] ?? $match['series_name'] ?? 'Other Matches'),
                 'series_name' => (string) ($match['series_name'] ?? $match['series'] ?? 'Other Matches'),
                 'venue' => (string) ($match['venue'] ?? ''),
-                'matchType' => (string) ($match['matchType'] ?? ''),
+                'matchType' => $matchType,
                 'teams' => $match['teams'] ?? [],
                 'score' => $score,
                 'dateTimeGMT' => (string) ($match['dateTimeGMT'] ?? ''),
@@ -586,7 +688,36 @@ class CricketDataService
         $statusText = (string) ($data['status_text'] ?? $data['status'] ?? '');
         $matchStarted = (bool) ($data['matchStarted'] ?? false);
         $matchEnded = (bool) ($data['matchEnded'] ?? false);
-        $score = $this->normalizeScore($data['score'] ?? null);
+        $matchType = (string) ($data['matchType'] ?? '');
+
+        // Detect completed status
+        $isCompletedByText = str_contains(strtolower($statusText), 'won by') ||
+            str_contains(strtolower($statusText), 'won the') ||
+            str_contains(strtolower($statusText), ' won') ||
+            str_contains(strtolower($statusText), 'beat') ||
+            str_contains(strtolower($statusText), 'tied') ||
+            str_contains(strtolower($statusText), 'drawn') ||
+            str_contains(strtolower($statusText), 'conceded') ||
+            str_contains(strtolower($statusText), 'complete') ||
+            str_contains(strtolower($statusText), 'result') ||
+            str_contains(strtolower($statusText), 'match ended');
+
+        $dateTimeGMT = (string) ($data['dateTimeGMT'] ?? '');
+        if (!empty($dateTimeGMT)) {
+            $matchTimestamp = strtotime($dateTimeGMT);
+            if ($matchTimestamp && (time() - $matchTimestamp > 12 * 3600)) {
+                $isTest = str_contains(strtolower($matchType), 'test') || str_contains(strtolower($statusText), 'day ');
+                if (!$isTest) {
+                    $matchEnded = true;
+                }
+            }
+        }
+
+        if ($isCompletedByText) {
+            $matchEnded = true;
+        }
+
+        $score = $this->normalizeScore($data['score'] ?? null, $statusText, $matchEnded, $matchType);
 
         // Check if there are active batsmen, live score display, or score data
         $hasActiveBatsmen = !empty($data['current_batsmen']) && collect($data['current_batsmen'])->contains(fn($b) => !empty($b['name']) && $b['name'] !== 'score not found');

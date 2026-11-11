@@ -31,12 +31,32 @@ class LiveScoreController extends Controller
         // 3. Merge: Local community & network matches lead the list, followed by external matches
         $matches = array_merge($localMatches, $externalMatches);
 
-        // Ensure any match with active score data is marked as live, not scheduled
+        // Ensure any match with active score data is marked correctly as completed or live
         $matches = array_map(function ($m) {
+            $isEnded = ($m['matchEnded'] ?? false) || in_array($m['status'] ?? '', ['completed', 'abandoned']);
+            $statusLower = strtolower(trim($m['status_text'] ?? ''));
+            $isCompletedText = str_contains($statusLower, 'won by') ||
+                str_contains($statusLower, 'won the') ||
+                str_contains($statusLower, ' won') ||
+                str_contains($statusLower, 'beat') ||
+                str_contains($statusLower, 'tied') ||
+                str_contains($statusLower, 'drawn') ||
+                str_contains($statusLower, 'conceded') ||
+                str_contains($statusLower, 'complete') ||
+                str_contains($statusLower, 'result') ||
+                str_contains($statusLower, 'match ended');
+
+            if ($isEnded || $isCompletedText) {
+                $m['status'] = 'completed';
+                $m['matchEnded'] = true;
+                $m['matchStarted'] = true;
+                return $m;
+            }
+
             if (($m['status'] ?? '') === 'scheduled' && !empty($m['score'])) {
                 $m['status'] = 'live';
                 $m['matchStarted'] = true;
-                if (in_array(strtolower(trim($m['status_text'] ?? '')), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                if (in_array($statusLower, ['', 'scheduled', 'match scheduled', 'upcoming'])) {
                     $m['status_text'] = 'In Progress';
                 }
             }

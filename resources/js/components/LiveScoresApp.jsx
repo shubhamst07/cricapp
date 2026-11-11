@@ -37,13 +37,40 @@ export default function LiveScoresApp({
         return (initialLive.length > 0 ? 'live' : (initialCompleted.length > 0 ? 'recent' : 'upcoming'));
     });
 
-    const wronglyScheduledInit = (initialScheduled || []).filter(m => m.score && Array.isArray(m.score) && m.score.length > 0);
-    const sanitizedInitLive = [...(initialLive || []), ...wronglyScheduledInit.map(m => ({ ...m, status: 'live' }))];
-    const sanitizedInitScheduled = (initialScheduled || []).filter(m => !(m.score && Array.isArray(m.score) && m.score.length > 0));
+    const isMatchEnded = (m) => {
+        if (!m) return false;
+        if (m.status === 'completed' || m.status === 'abandoned' || m.matchEnded) return true;
+        const st = (m.status_text || '').toLowerCase();
+        if (['won by', 'won the', ' won', 'beat', 'tied', 'drawn', 'conceded', 'complete', 'result', 'defeated', 'match ended', 'abandoned'].some(w => st.includes(w))) return true;
+        if (m.dateTimeGMT) {
+            const matchTime = new Date(m.dateTimeGMT).getTime();
+            if (!isNaN(matchTime) && Date.now() - matchTime > 12 * 3600 * 1000) {
+                const isTest = (m.matchType || '').toLowerCase().includes('test') || st.includes('day ');
+                if (!isTest) return true;
+            }
+        }
+        if (Array.isArray(m.score) && m.score.length >= 2) {
+            const o2 = parseFloat(m.score[1].overs || m.score[1].o || 0);
+            if (o2 >= 50 || (o2 >= 20 && (m.matchType || '').toLowerCase().includes('t20'))) return true;
+        }
+        return false;
+    };
+
+    // Filter scheduled matches: move genuinely live matches to live, and completed matches to completed
+    const wronglyScheduledLive = (initialScheduled || []).filter(m => m.score && Array.isArray(m.score) && m.score.length > 0 && !isMatchEnded(m));
+    const wronglyScheduledCompleted = (initialScheduled || []).filter(m => isMatchEnded(m));
+    const cleanScheduledInit = (initialScheduled || []).filter(m => !isMatchEnded(m) && !(m.score && Array.isArray(m.score) && m.score.length > 0));
+
+    // Also sanitize initialLive: if any match in initialLive is already completed, move to completed
+    const completedFromLive = (initialLive || []).filter(m => isMatchEnded(m));
+    const cleanLiveInit = (initialLive || []).filter(m => !isMatchEnded(m));
+
+    const sanitizedInitLive = [...cleanLiveInit, ...wronglyScheduledLive.map(m => ({ ...m, status: 'live' }))];
+    const sanitizedInitCompleted = [...(initialCompleted || []), ...wronglyScheduledCompleted.map(m => ({ ...m, status: 'completed' })), ...completedFromLive.map(m => ({ ...m, status: 'completed' }))];
 
     const [liveMatches, setLiveMatches] = useState(sanitizedInitLive);
-    const [scheduledMatches, setScheduledMatches] = useState(sanitizedInitScheduled);
-    const [completedMatches, setCompletedMatches] = useState(initialCompleted);
+    const [scheduledMatches, setScheduledMatches] = useState(cleanScheduledInit);
+    const [completedMatches, setCompletedMatches] = useState(sanitizedInitCompleted);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFormat, setSelectedFormat] = useState('all');
@@ -95,17 +122,30 @@ export default function LiveScoresApp({
             let scheduledList = data.scheduled || [];
             let completedList = data.completed || [];
 
-            // Move any wrongly scheduled matches with active score to live
-            const wronglyScheduled = scheduledList.filter(m => m.score && Array.isArray(m.score) && m.score.length > 0);
-            if (wronglyScheduled.length > 0) {
-                liveList = [...liveList, ...wronglyScheduled.map(m => ({ ...m, status: 'live' }))];
-                const movedIds = new Set(wronglyScheduled.map(m => m.id));
-                scheduledList = scheduledList.filter(m => !movedIds.has(m.id));
-            }
+            // Move any wrongly placed matches to their correct categories
+            const completedFromLive = liveList.filter(m => isMatchEnded(m));
+            const completedFromScheduled = scheduledList.filter(m => isMatchEnded(m));
+            const liveFromScheduled = scheduledList.filter(m => m.score && Array.isArray(m.score) && m.score.length > 0 && !isMatchEnded(m));
 
-            setLiveMatches(liveList);
-            setScheduledMatches(scheduledList);
-            setCompletedMatches(completedList);
+            const cleanLive = liveList.filter(m => !isMatchEnded(m));
+            const cleanScheduled = scheduledList.filter(m => !isMatchEnded(m) && !(m.score && Array.isArray(m.score) && m.score.length > 0));
+
+            const finalLive = [...cleanLive, ...liveFromScheduled.map(m => ({ ...m, status: 'live' }))];
+            const finalCompleted = [
+                ...completedList,
+                ...completedFromLive.map(m => ({ ...m, status: 'completed' })),
+                ...completedFromScheduled.map(m => ({ ...m, status: 'completed' }))
+            ];
+            const seenComp = new Set();
+            const dedupedCompleted = finalCompleted.filter(m => {
+                if (!m || !m.id || seenComp.has(m.id)) return false;
+                seenComp.add(m.id);
+                return true;
+            });
+
+            setLiveMatches(finalLive);
+            setScheduledMatches(cleanScheduled);
+            setCompletedMatches(dedupedCompleted);
             setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         } catch (err) {
             console.error('Error fetching live matches:', err);
@@ -818,10 +858,25 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                         {scores.map((inning, idx) => {
                             const inningName = inning.batting_team || inning.inning || `Team ${idx + 1}`;
                             const runs = inning.runs ?? inning.r ?? 0;
-                            const wickets = inning.wickets ?? inning.w ?? 0;
+                            let wickets = inning.wickets ?? inning.w ?? 0;
                             const overs = inning.overs ?? inning.o;
                             const hasOvers = overs && overs !== '0' && overs !== 0 && overs !== '0.0';
-                            const displayScore = inning.display_score || `${runs}/${wickets}`;
+
+                            // Correction: If match is completed, and team lost by runs or stopped chasing, wickets must be 10 (all out), not 0
+                            const isMatchFinished = isRecent || (match.matchEnded ?? false) || ['won by', ' won', 'beat', 'tied', 'drawn', 'complete', 'result'].some(w => (match.status_text || '').toLowerCase().includes(w));
+                            if (isMatchFinished && idx === 1 && wickets === 0) {
+                                const st = (match.status_text || '').toLowerCase();
+                                if (st.includes('won by') && st.includes('run')) {
+                                    wickets = 10;
+                                } else if (hasOvers && parseFloat(overs) < 50 && (match.matchType || '').toLowerCase().includes('odi')) {
+                                    wickets = 10;
+                                }
+                            }
+
+                            let displayScore = inning.display_score;
+                            if (!displayScore || (displayScore === `${runs}/0` && (wickets > 0 || isMatchFinished))) {
+                                displayScore = wickets === 10 ? `${runs}/10` : `${runs}/${wickets}`;
+                            }
 
                             return (
                                 <div

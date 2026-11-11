@@ -326,7 +326,14 @@ class ScoreService:
                                         if not inn:
                                             continue
                                         runs = inn.get('runs', 0)
-                                        wickets = inn.get('wickets', 0)
+                                        raw_w = inn.get('wickets')
+                                        is_all_out = bool(inn.get('isAllOut'))
+                                        if is_all_out:
+                                            wickets = 10
+                                        elif raw_w is not None:
+                                            wickets = int(raw_w)
+                                        else:
+                                            wickets = 0
                                         overs = str(inn.get('overs', '0'))
                                         scores.append({
                                             'inning': f"{team_name} Innings" if inngs_key == 'inngs1' else f"{team_name} 2nd Innings",
@@ -337,13 +344,13 @@ class ScoreService:
                                             'w': wickets,
                                             'overs': overs,
                                             'o': overs,
-                                            'display_score': f"{runs}/{wickets}" if wickets else str(runs)
+                                            'display_score': f"{runs}/{wickets}" if (wickets is not None and wickets > 0) else str(runs)
                                         })
 
                             state = str(info.get('state', '')).lower()
-                            status = info.get('status', '') or info.get('shortStatus', '')
+                            status = info.get('status', '') or info.get('shortStatus', '') or info.get('stateTitle', '')
+                            match_ended = state in ['complete', 'result', 'finished']
                             match_started = state in ['in progress', 'complete', 'toss'] or bool(scores)
-                            match_ended = state == 'complete'
                             series_name = info.get('seriesName', 'Other Matches')
                             match_desc = info.get('matchDesc', 'Match')
 
@@ -396,7 +403,22 @@ class ScoreService:
             children = [c for c in card.children if hasattr(c, "find_all")]
 
             meta_info = children[0].get_text(" ", strip=True) if len(children) > 0 else ""
-            status_text = children[2].get_text(" ", strip=True) if len(children) > 2 else ""
+            status_text = ""
+            for el in card.find_all(["div", "span", "p"]):
+                el_cls = " ".join(el.get("class", []))
+                if any(k in el_cls for k in ["cb-text-complete", "cb-text-live", "cb-text-preview", "cb-hm-scg-status", "text-cbTextSec"]):
+                    txt = el.get_text(" ", strip=True)
+                    if txt and txt != title and txt != series_name:
+                        status_text = txt
+                        break
+            if not status_text and len(children) > 2:
+                status_text = children[2].get_text(" ", strip=True)
+            if not status_text:
+                for el in card.find_all(["div", "span", "p"]):
+                    txt = el.get_text(" ", strip=True)
+                    if any(w in txt.lower() for w in ["won by", "won the", " beat ", "tied", "drawn", "abandon", "no result", "opt to", "elected to", "need ", "trail", "lead", "day ", "stump", "delay", "rain"]):
+                        status_text = txt
+                        break
 
             teams = []
             scores = []
@@ -424,8 +446,9 @@ class ScoreService:
                             sm = re.search(r"(\d+)(?:[-/](\d+))?\s*(?:\(([\d.]+)\s*(?:ov)?\))?", sp)
                             if sm:
                                 runs = int(sm.group(1))
-                                wickets = int(sm.group(2)) if sm.group(2) else 0
+                                raw_w = sm.group(2)
                                 overs = sm.group(3) if (sm.group(3) and sm.group(3) != "0" and sm.group(3) != "0.0") else None
+                                wickets = int(raw_w) if raw_w is not None else 10
                                 scores.append({
                                     "inning": f"{team_name} Inn {s_idx + 1}" if len(sub_parts) > 1 else f"{team_name} Inning 1",
                                     "batting_team": team_name,
@@ -435,14 +458,17 @@ class ScoreService:
                                     "w": wickets,
                                     "overs": overs,
                                     "o": overs,
-                                    "display_score": f"{runs}/{wickets}" if wickets else str(runs)
+                                    "display_score": f"{runs}/{wickets}"
                                 })
                     else:
                         sm = re.search(r"(\d+)(?:[-/](\d+))?\s*(?:\(([\d.]+)\s*(?:ov)?\))?", score_str)
                         if sm:
                             runs = int(sm.group(1))
-                            wickets = int(sm.group(2)) if sm.group(2) else 0
+                            raw_w = sm.group(2)
                             overs = sm.group(3) if (sm.group(3) and sm.group(3) != "0" and sm.group(3) != "0.0") else None
+                            # Cricbuzz omits wickets ONLY when a team is all out (10 wickets)!
+                            # e.g. "239 (50 Ovs)" or "174 (43.4 Ovs)" -> 10 wickets!
+                            wickets = int(raw_w) if raw_w is not None else 10
                             scores.append({
                                 "inning": f"{team_name} Inning 1",
                                 "batting_team": team_name,
@@ -464,11 +490,17 @@ class ScoreService:
             else:
                 venue = meta_info
 
+            # Match completed detection
+            is_completed = any(w in status_text.lower() for w in ["won by", "won the", " won", "beat", "tied", "drawn", "conceded", "complete", "result", "abandoned"])
+
             # Match started detection
-            match_started = bool(scores)
+            match_started = bool(scores) or is_completed
 
             # Normalize status_text for matches with active score or upcoming matches
-            if scores:
+            if is_completed:
+                # Keep completed status
+                pass
+            elif scores:
                 if not status_text or status_text.lower() in ["scheduled", "match scheduled", "upcoming"]:
                     status_text = "In Progress"
             elif not scores:
@@ -486,6 +518,7 @@ class ScoreService:
                 "teams": teams,
                 "score": scores if scores else None,
                 "matchStarted": match_started,
+                "matchEnded": is_completed,
                 "href": href
             })
 
@@ -515,24 +548,43 @@ class ScoreService:
             parsed = []
             parsed_ids = set()
 
-            for resp in resps[:3]:
+            sources = [
+                (resps[0] if len(resps) > 0 else None, "live"),
+                (resps[1] if len(resps) > 1 else None, "recent"),
+                (resps[2] if len(resps) > 2 else None, "upcoming")
+            ]
+
+            for resp, page_type in sources:
                 if isinstance(resp, httpx.Response) and resp.status_code == 200:
                     # 1. Parse high-fidelity RSC matches first (contains full series, state, and real-time scores)
                     rsc_matches = cls.parse_rsc_matches(resp.text)
                     for m in rsc_matches:
+                        if page_type == "recent":
+                            m["matchEnded"] = True
+                            m["matchStarted"] = True
+                            if not m.get("status_text") or m["status_text"].lower() == "in progress":
+                                m["status_text"] = "Match Completed"
+                        elif page_type == "upcoming":
+                            m["matchEnded"] = False
+                            m["matchStarted"] = False
+
                         if m["id"] not in parsed_ids:
                             parsed_ids.add(m["id"])
                             parsed.append(m)
                         else:
                             for idx, existing in enumerate(parsed):
                                 if existing.get("id") == m["id"]:
+                                    if page_type == "recent":
+                                        existing["matchEnded"] = True
+                                        existing["matchStarted"] = True
+                                        if not existing.get("status_text") or existing["status_text"].lower() == "in progress":
+                                            existing["status_text"] = m.get("status_text") or "Match Completed"
                                     if m.get("score"):
                                         existing["score"] = m["score"]
-                                        existing["matchStarted"] = True
                                     if m.get("series_name") and m["series_name"] != "Other Matches":
                                         existing["series"] = m["series_name"]
                                         existing["series_name"] = m["series_name"]
-                                    if m.get("status_text"):
+                                    if m.get("status_text") and (page_type != "live" or existing.get("status_text") != "Match Completed"):
                                         existing["status_text"] = m["status_text"]
                                     if m.get("teams") and not existing.get("teams"):
                                         existing["teams"] = m["teams"]
@@ -541,6 +593,15 @@ class ScoreService:
                     # 2. Parse traditional HTML cards
                     matches = cls.parse_cards_from_html(resp.text)
                     for m in matches:
+                        if page_type == "recent":
+                            m["matchEnded"] = True
+                            m["matchStarted"] = True
+                            if not m.get("status_text") or m["status_text"].lower() == "in progress":
+                                m["status_text"] = "Match Completed"
+                        elif page_type == "upcoming":
+                            m["matchEnded"] = False
+                            m["matchStarted"] = False
+
                         if m["id"] not in parsed_ids:
                             parsed_ids.add(m["id"])
                             parsed.append(m)
@@ -548,12 +609,16 @@ class ScoreService:
                             # Update existing match if this card has scores or better series name
                             for idx, existing in enumerate(parsed):
                                 if existing.get("id") == m["id"]:
+                                    if page_type == "recent":
+                                        existing["matchEnded"] = True
+                                        existing["matchStarted"] = True
                                     if m.get("score") and not existing.get("score"):
                                         existing["score"] = m["score"]
-                                        existing["matchStarted"] = True
                                     if m.get("series_name") and existing.get("series_name") in ["Other Matches", "Other Series"]:
                                         existing["series"] = m["series_name"]
                                         existing["series_name"] = m["series_name"]
+                                    if m.get("status_text") and m["status_text"].lower() != "in progress":
+                                        existing["status_text"] = m["status_text"]
                                     if m.get("teams") and not existing.get("teams"):
                                         existing["teams"] = m["teams"]
                                     break
