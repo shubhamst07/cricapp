@@ -61,27 +61,22 @@ export default function LiveScoresApp({
     // Helper: check if completed match is from past 2 days (48 hours)
     const isPastTwoDays = (m) => {
         if (!m) return false;
-        // Dismissed local matches always go to Archives!
-        if (m.is_dismissed || (m.status_text || '').toLowerCase() === 'match dismissed') {
-            return false;
-        }
         const dateVal = m.dateTimeGMT || m.match_date;
         if (!dateVal) return true; // fallback if no date
         const t = new Date(dateVal).getTime();
         if (isNaN(t)) return true;
-        // Past 2 days (48 hours)
+        // Past 3 days (72 hours) or dismissed match -> show in Recent Results
         const diffHours = (Date.now() - t) / (3600 * 1000);
-        return diffHours <= 48;
+        return diffHours <= 72;
     };
 
     const isMatchEnded = (m) => {
         if (!m) return false;
+        const st = (m.status_text || '').toLowerCase();
         // Local platform matches: status is set by umpire / admin or auto-dismissal
         if (isLocalMatch(m)) {
-            return m.status === 'completed' || m.status === 'abandoned' || Boolean(m.is_dismissed);
+            return m.status === 'completed' || m.status === 'abandoned' || Boolean(m.is_dismissed) || st.includes('dismiss');
         }
-
-        const st = (m.status_text || '').toLowerCase();
 
         // 1. Abandoned / Cancelled / No Result matches are ALWAYS ended, NEVER live or toss!
         if (m.status === 'abandoned' || ['abandon', 'cancel', 'no result'].some(w => st.includes(w))) {
@@ -472,43 +467,32 @@ export default function LiveScoresApp({
                 </div>
             </div>
 
-            {/* Primary Section Switcher: International vs Local Cricket */}
-            <div className="bg-[#111827]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-2xl flex flex-col sm:flex-row gap-2">
-                <button
-                    type="button"
-                    onClick={() => handleSectionChange('international')}
-                    className={`flex-1 flex items-center justify-center gap-3 py-3 px-5 rounded-xl text-xs sm:text-sm font-black transition border ${
-                        currentSection === 'international'
-                            ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-indigo-400/40 shadow-lg shadow-indigo-600/30'
-                            : 'bg-white/5 border-transparent text-slate-400 hover:text-white hover:bg-white/10'
-                    }`}
-                >
-                    <Globe className={`w-4 h-4 ${currentSection === 'international' ? 'text-white' : 'text-indigo-400'}`} />
-                    <span>🌍 International Cricket</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
-                        currentSection === 'international' ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-400'
-                    }`}>
-                        {internationalCounts.total}
-                    </span>
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => handleSectionChange('local')}
-                    className={`flex-1 flex items-center justify-center gap-3 py-3 px-5 rounded-xl text-xs sm:text-sm font-black transition border ${
-                        currentSection === 'local'
-                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400/40 shadow-lg shadow-emerald-600/30'
-                            : 'bg-white/5 border-transparent text-slate-400 hover:text-white hover:bg-white/10'
-                    }`}
-                >
-                    <Shield className={`w-4 h-4 ${currentSection === 'local' ? 'text-white' : 'text-emerald-400'}`} />
-                    <span>🏏 Local Cricket</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
-                        currentSection === 'local' ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-400'
-                    }`}>
-                        {localCounts.total}
-                    </span>
-                </button>
+            {/* Active Section Banner Header (Seamless with Top Navbar) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-1">
+                <div className="flex items-center gap-3">
+                    {currentSection === 'local' ? (
+                        <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-sm shadow-lg shadow-emerald-500/5">
+                            <Shield className="w-4 h-4 text-emerald-400" />
+                            <span>🏏 Local Cricket Arena</span>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs bg-emerald-500/20 text-emerald-300">
+                                {localCounts.total} Matches
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-black text-sm shadow-lg shadow-indigo-500/5">
+                            <Globe className="w-4 h-4 text-indigo-400" />
+                            <span>🌍 International Cricket</span>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs bg-indigo-500/20 text-indigo-300">
+                                {internationalCounts.total} Matches
+                            </span>
+                        </div>
+                    )}
+                </div>
+                <div className="text-xs text-slate-400 font-medium hidden sm:block">
+                    {currentSection === 'local' 
+                        ? 'Grassroots, Turf & Club Cricket' 
+                        : 'Worldwide ICC & Domestic Matches • Real-Time Ball-by-Ball'}
+                </div>
             </div>
 
             {/* Sub-Navigation Tabs (Live, Upcoming, Recent Results, Archives) */}

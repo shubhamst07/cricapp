@@ -172,13 +172,24 @@ class CricketMatch extends Model
                 });
         }
 
-        $status = $this->status === 'live' ? 'live' : ($this->status === 'completed' ? 'completed' : 'scheduled');
-        $statusText = $this->match_result ?: ($status === 'live' ? 'Live in progress' : ($status === 'completed' ? 'Match Finished' : 'Match Scheduled'));
+        $rawStatus = strtolower(trim((string)$this->status));
+        $rawResult = strtolower(trim((string)$this->match_result));
+        $isDismissed = $rawStatus === 'abandoned' || str_contains($rawResult, 'dismiss') || str_contains($rawStatus, 'dismiss');
+
+        if ($rawStatus === 'completed' || $rawStatus === 'abandoned' || $isDismissed) {
+            $status = 'completed';
+            $statusText = $this->match_result ?: ($isDismissed ? 'Match Dismissed' : 'Match Finished');
+        } elseif ($rawStatus === 'live') {
+            $status = 'live';
+            $statusText = $this->match_result ?: 'Live in progress';
+        } else {
+            $status = 'scheduled';
+            $statusText = $this->match_result ?: 'Match Scheduled';
+        }
 
         // Local live match auto-dismissal:
-        // Non-Test matches live for > 1 day -> Match Dismissed (moved to Archives)
-        // Test matches live for > 5 days -> Match Dismissed (moved to Archives)
-        $isDismissed = false;
+        // Non-Test matches live for > 1 day -> Match Dismissed (moved to Recent/Completed)
+        // Test matches live for > 5 days -> Match Dismissed (moved to Recent/Completed)
         if ($status === 'live' && $this->match_date) {
             $isTest = str_contains(strtolower($this->match_type ?? ''), 'test')
                 || str_contains(strtolower($this->tournament_name ?? ''), 'test');
@@ -206,6 +217,8 @@ class CricketMatch extends Model
             'local_id' => $this->id,
             'is_local' => true,
             'is_dismissed' => $isDismissed,
+            'matchEnded' => ($status === 'completed'),
+            'matchStarted' => in_array($status, ['live', 'completed']),
             'is_network_match' => $isNetworkMatch,
             'name' => "{$this->team1_name} vs {$this->team2_name}",
             'status' => $status,
