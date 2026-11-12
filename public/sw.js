@@ -1,5 +1,5 @@
 // LiveCricket Progressive Web App Service Worker
-const CACHE_NAME = 'livecricket-cache-v2';
+const CACHE_NAME = 'livecricket-cache-v3';
 const OFFLINE_URL = '/offline';
 
 const PRECACHE_ASSETS = [
@@ -22,18 +22,23 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate Event - Clean old caches
+// Activate Event - Clean old caches and enable Navigation Preload
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
+    (async () => {
+      const cacheNames = await caches.keys();
+      await Promise.all(
         cacheNames.map((name) => {
           if (name !== CACHE_NAME) {
             return caches.delete(name);
           }
         })
       );
-    }).then(() => self.clients.claim())
+      if (self.registration.navigationPreload) {
+        await self.registration.navigationPreload.enable();
+      }
+      await self.clients.claim();
+    })()
   );
 });
 
@@ -47,21 +52,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. Navigation requests (HTML pages): Network-First, fallback to Offline page
+  // 1. Navigation requests (HTML pages): Use Preload response or Network, fallback to Offline page
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((networkResponse) => {
-          return networkResponse;
-        })
-        .catch(async () => {
+      (async () => {
+        try {
+          const preloadResponse = await event.preloadResponse;
+          if (preloadResponse) {
+            return preloadResponse;
+          }
+          return await fetch(request);
+        } catch (error) {
           const cache = await caches.open(CACHE_NAME);
           const cachedResponse = await cache.match(request);
           if (cachedResponse) {
             return cachedResponse;
           }
-          return cache.match(OFFLINE_URL);
-        })
+          return await cache.match(OFFLINE_URL);
+        }
+      })()
     );
     return;
   }

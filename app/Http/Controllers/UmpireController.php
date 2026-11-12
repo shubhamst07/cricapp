@@ -63,10 +63,24 @@ class UmpireController extends Controller
             $query->where('fee_per_match', '<=', (float) $maxFee);
         }
 
-        $umpires = $query->orderByDesc('rating')->orderByDesc('matches_umpired')->paginate(9)->withQueryString();
+        $isDefaultGuest = empty($search) && (empty($city) || $city === 'all') && (empty($level) || $level === 'all') && (empty($ballType) || $ballType === 'all') && empty($maxFee) && !$user;
+        $page = (int) $request->get('page', 1);
 
-        // Unique cities for filter dropdown
-        $cities = UmpireProfile::select('city')->distinct()->pluck('city')->filter()->values();
+        if ($isDefaultGuest) {
+            $bundle = \Illuminate\Support\Facades\Cache::remember("umpires_index_page_{$page}", 60, function () use ($query) {
+                return [
+                    'umpires' => $query->orderByDesc('rating')->orderByDesc('matches_umpired')->paginate(9),
+                    'cities' => UmpireProfile::select('city')->distinct()->pluck('city')->filter()->values(),
+                ];
+            });
+            $umpires = $bundle['umpires'];
+            $cities = $bundle['cities'];
+        } else {
+            $umpires = $query->orderByDesc('rating')->orderByDesc('matches_umpired')->paginate(9)->withQueryString();
+            $cities = \Illuminate\Support\Facades\Cache::remember('umpires_cities_list', 300, function () {
+                return UmpireProfile::select('city')->distinct()->pluck('city')->filter()->values();
+            });
+        }
 
         // User's own umpire profile if exists
         $myUmpireProfile = $user ? UmpireProfile::where('user_id', $user->id)->first() : null;

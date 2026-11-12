@@ -97,24 +97,44 @@ class MatchController extends Controller
             END ASC");
         }
 
-        $matches = $query->orderByDesc('match_date')
-            ->orderByDesc('created_at')
-            ->paginate(12)
-            ->withQueryString();
+        $isDefaultGuest = empty($search) && ($tab === 'all') && ($scope === 'all') && !$user;
+        $page = (int) $request->get('page', 1);
 
-        // 6. Overall stats snapshot
-        $baseStatsQuery = CricketMatch::query();
-        if ($scope === 'my' && $user) {
-            $baseStatsQuery->whereIn('id', !empty($networkMatchIds) ? $networkMatchIds : [0]);
+        if ($isDefaultGuest) {
+            $bundle = \Illuminate\Support\Facades\Cache::remember("matches_index_page_{$page}", 60, function () use ($query) {
+                return [
+                    'matches' => $query->orderByDesc('match_date')->orderByDesc('created_at')->paginate(12),
+                    'stats' => [
+                        'total' => CricketMatch::count(),
+                        'live' => CricketMatch::where('status', 'live')->count(),
+                        'upcoming' => CricketMatch::where('status', 'scheduled')->count(),
+                        'completed' => CricketMatch::where('status', 'completed')->count(),
+                        'my_network_count' => 0,
+                    ],
+                ];
+            });
+            $matches = $bundle['matches'];
+            $stats = $bundle['stats'];
+        } else {
+            $matches = $query->orderByDesc('match_date')
+                ->orderByDesc('created_at')
+                ->paginate(12)
+                ->withQueryString();
+
+            // Overall stats snapshot
+            $baseStatsQuery = CricketMatch::query();
+            if ($scope === 'my' && $user) {
+                $baseStatsQuery->whereIn('id', !empty($networkMatchIds) ? $networkMatchIds : [0]);
+            }
+
+            $stats = [
+                'total' => (clone $baseStatsQuery)->count(),
+                'live' => (clone $baseStatsQuery)->where('status', 'live')->count(),
+                'upcoming' => (clone $baseStatsQuery)->where('status', 'scheduled')->count(),
+                'completed' => (clone $baseStatsQuery)->where('status', 'completed')->count(),
+                'my_network_count' => count($networkMatchIds),
+            ];
         }
-
-        $stats = [
-            'total' => (clone $baseStatsQuery)->count(),
-            'live' => (clone $baseStatsQuery)->where('status', 'live')->count(),
-            'upcoming' => (clone $baseStatsQuery)->where('status', 'scheduled')->count(),
-            'completed' => (clone $baseStatsQuery)->where('status', 'completed')->count(),
-            'my_network_count' => count($networkMatchIds),
-        ];
 
         return view('matches.index', compact(
             'matches',
@@ -1625,6 +1645,24 @@ class MatchController extends Controller
     public function dashboard(Request $request, CricketDataService $cricket): View
     {
         $userId = $request->user()?->id ?? Auth::id();
+        $cacheKey = 'dashboard_view_data_' . ($userId ?: 'guest');
+        $staleKey = $cacheKey . '_stale';
+        $force = $request->get('refresh') === 'true';
+
+        if ($force) {
+            \Illuminate\Support\Facades\Cache::forget($cacheKey);
+            \Illuminate\Support\Facades\Cache::forget($staleKey);
+        }
+
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if ($cached && !$force) {
+            return view('dashboard', $cached);
+        }
+
+        $stale = \Illuminate\Support\Facades\Cache::get($staleKey);
+        if ($stale && !$force) {
+            return view('dashboard', $stale);
+        }
 
         $userMatches = $userId
             ? CricketMatch::with(['scores'])
@@ -1636,45 +1674,51 @@ class MatchController extends Controller
         $totalMatches = $userMatches->count();
         $liveMatches = $userMatches->where('status', 'live')->count();
 
-        // 1. Fetch real-time Cricbuzz editorial news
-        try {
-            $newsArticles = $cricket->getCricketNews();
-            if (!empty($newsArticles)) {
-                foreach (array_slice($newsArticles, 0, 10) as $news) {
-                    $newsTitle = $news['title'] ?? '';
-                    $newsImage = $news['image'] ?? null;
-                    $newsStory = $news['story'] ?? '';
-                    $newsContext = $news['context'] ?? 'CRICKET NEWS';
+        // 1. Sync Cricbuzz editorial news periodically in background (at most once every 10 mins)
+        \Illuminate\Support\Facades\Cache::remember('cricbuzz_news_periodic_sync', 600, function () use ($cricket) {
+            try {
+                $newsArticles = $cricket->getCricketNews();
+                if (!empty($newsArticles)) {
+                    foreach (array_slice($newsArticles, 0, 5) as $news) {
+                        $newsTitle = $news['title'] ?? '';
+                        $newsImage = $news['image'] ?? null;
+                        $newsStory = $news['story'] ?? '';
+                        $newsContext = $news['context'] ?? 'CRICKET NEWS';
 
-                    if (!empty($newsTitle)) {
-                        $fullContent = "📰 **" . $newsTitle . "**\n\n" . $newsStory;
-                        $existingPost = MatchPost::where('content', 'LIKE', '%' . substr($newsTitle, 0, 30) . '%')->first();
+                        if (!empty($newsTitle)) {
+                            $fullContent = "📰 **" . $newsTitle . "**\n\n" . $newsStory;
+                            $exists = MatchPost::where('content', 'LIKE', '%' . substr($newsTitle, 0, 25) . '%')->exists();
 
-                        if (!$existingPost) {
-                            MatchPost::create([
-                                'match_id' => '147942',
-                                'user_id' => null,
-                                'user_name' => 'Cricbuzz Editorial',
-                                'avatar_color' => 'emerald',
-                                'content' => $fullContent,
-                                'post_type' => 'news',
-                                'media_url' => $newsImage,
-                                'insta_url' => null,
-                                'team_tag' => strtoupper($newsContext),
-                                'likes_count' => rand(15, 85),
-                            ]);
+                            if (!$exists) {
+                                MatchPost::create([
+                                    'match_id' => '147942',
+                                    'user_id' => null,
+                                    'user_name' => 'Cricbuzz Editorial',
+                                    'avatar_color' => 'emerald',
+                                    'content' => $fullContent,
+                                    'post_type' => 'news',
+                                    'media_url' => $newsImage,
+                                    'insta_url' => null,
+                                    'team_tag' => strtoupper($newsContext),
+                                    'likes_count' => rand(15, 85),
+                                ]);
+                            }
                         }
                     }
                 }
+            } catch (\Throwable $e) {
+                // ignore
             }
-        } catch (\Throwable $e) {
-            // News sync optional
-        }
+            return true;
+        });
 
-        // 2. Fetch all real live matches from Cricbuzz
+        // 2. Fetch live matches (using fast cached matches first)
         $cricbuzzMatches = collect([]);
         try {
-            $fetched = $cricket->getCurrentMatches();
+            $fetched = $cricket->getCachedMatches();
+            if (empty($fetched)) {
+                $fetched = $cricket->getCurrentMatches();
+            }
             $cricbuzzMatches = collect($fetched)->map(function ($item) {
                 return [
                     'id' => (string) ($item['id'] ?? 'cric_' . rand(1000, 9999)),
@@ -1695,7 +1739,7 @@ class MatchController extends Controller
 
         $allPosts = MatchPost::with('comments')
             ->latest()
-            ->take(60)
+            ->take(50)
             ->get();
 
         $allPosts->transform(function ($post) use ($cricbuzzMatches) {
@@ -1706,11 +1750,16 @@ class MatchController extends Controller
             return $post;
         });
 
-        return view('dashboard', [
+        $data = [
             'totalMatches' => $totalMatches,
             'liveMatches' => $liveMatches,
             'cricbuzzMatches' => $cricbuzzMatches,
             'allPosts' => $allPosts,
-        ]);
+        ];
+
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $data, 60);
+        \Illuminate\Support\Facades\Cache::put($staleKey, $data, 600);
+
+        return view('dashboard', $data);
     }
 }
