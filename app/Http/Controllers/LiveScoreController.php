@@ -157,50 +157,49 @@ class LiveScoreController extends Controller
             $cricket->clearMatchCache($matchId);
         }
 
-        $pageCacheKey = "page_show_match_{$matchId}";
-        if ($forceRefresh) {
-            \Illuminate\Support\Facades\Cache::forget($pageCacheKey);
+        // Fast cached match lookup (never blocks for 10s on Cricbuzz round trips)
+        $match = null;
+        if (!$forceRefresh) {
+            $cachedList = $cricket->getCachedMatches();
+            if (!empty($cachedList)) {
+                $match = $cricket->findMatchById($cachedList, $matchId);
+            }
         }
 
-        $bundle = \Illuminate\Support\Facades\Cache::remember($pageCacheKey, 8, function () use ($cricket, $matchId, $forceRefresh) {
+        if (!$match) {
             $match = $cricket->findMatchById($cricket->getCurrentMatches($forceRefresh), $matchId);
+        }
 
-            // Only fetch details if match was not found in current matches list
-            if (!$match) {
-                $details = $cricket->getMatchDetails($matchId);
-                $match = $details;
-                if (empty($match)) {
-                    abort(404, 'Match not found.');
-                }
+        // Fallback: If match was not found in current matches list, fetch details
+        if (!$match) {
+            $details = $cricket->getMatchDetails($matchId);
+            $match = $details;
+            if (empty($match)) {
+                abort(404, 'Match not found.');
             }
+        }
 
-            $scorecard = $cricket->getMatchScorecard($matchId);
-            $commentary = $cricket->getMatchCommentary($matchId);
+        // Fast RAM/disk cache lookup for scorecard and commentary - progressive asynchronous loading
+        $scorecard = $cricket->getCachedScorecard($matchId) ?? ['status' => 'success', 'data' => []];
+        $commentary = $cricket->getCachedCommentary($matchId) ?? ['status' => 'success', 'data' => []];
 
-            if (empty($match['player_of_the_match']) && !empty($scorecard['data']['player_of_the_match'])) {
-                $match['player_of_the_match'] = $scorecard['data']['player_of_the_match'];
+        if (empty($match['player_of_the_match']) && !empty($scorecard['data']['player_of_the_match'])) {
+            $match['player_of_the_match'] = $scorecard['data']['player_of_the_match'];
+        }
+
+        // Auto-correct status if scorecard has live innings or batting data
+        $scInnings = $scorecard['data']['innings'] ?? [];
+        $scBatting = $scorecard['data']['batting'] ?? [];
+        $hasActiveScorecard = !empty($scInnings) || !empty($scBatting);
+
+        if ($hasActiveScorecard && in_array($match['status'] ?? '', ['scheduled', 'upcoming', ''])) {
+            $match['status'] = 'live';
+            $match['matchStarted'] = true;
+            if (in_array(strtolower(trim($match['status_text'] ?? '')), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                $firstInn = $scInnings[0] ?? null;
+                $match['status_text'] = $firstInn && !empty($firstInn['team']) ? "{$firstInn['team']} batting ({$firstInn['score']})" : 'Match in progress';
             }
-
-            // Auto-correct status if scorecard has live innings or batting data
-            $scInnings = $scorecard['data']['innings'] ?? [];
-            $scBatting = $scorecard['data']['batting'] ?? [];
-            $hasActiveScorecard = !empty($scInnings) || !empty($scBatting);
-
-            if ($hasActiveScorecard && in_array($match['status'] ?? '', ['scheduled', 'upcoming', ''])) {
-                $match['status'] = 'live';
-                $match['matchStarted'] = true;
-                if (in_array(strtolower(trim($match['status_text'] ?? '')), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
-                    $firstInn = $scInnings[0] ?? null;
-                    $match['status_text'] = $firstInn && !empty($firstInn['team']) ? "{$firstInn['team']} batting ({$firstInn['score']})" : 'Match in progress';
-                }
-            }
-
-            return compact('match', 'scorecard', 'commentary');
-        });
-
-        $match = $bundle['match'];
-        $scorecard = $bundle['scorecard'];
-        $commentary = $bundle['commentary'];
+        }
 
         return view('live.show', compact('match', 'scorecard', 'commentary', 'forceRefresh'));
     }

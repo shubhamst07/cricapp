@@ -30,7 +30,7 @@ class CricketDataService
         $this->scorecardTtl = (int) config('services.cricket.ttl.scorecard', $isLocal ? 10 : 1800);
     }
 
-    protected function cacheKey(string $key): string
+    public function cacheKey(string $key): string
     {
         return 'cricket_' . $key;
     }
@@ -1072,6 +1072,16 @@ class CricketDataService
     public function getCachedMatches(): array
     {
         return Cache::get($this->cacheKey('current_matches'), []);
+    }
+
+    public function getCachedScorecard(string $matchId): ?array
+    {
+        return Cache::get($this->cacheKey("scorecard_{$matchId}"));
+    }
+
+    public function getCachedCommentary(string $matchId): ?array
+    {
+        return Cache::get($this->cacheKey("commentary_{$matchId}"));
     }
 
     public function clearMatchCache(?string $matchId = null): void

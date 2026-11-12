@@ -45,6 +45,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
     });
     const [miniscore, setMiniscore] = useState(() => initialCommentary?.miniscore || null);
     const [isCommentaryLoading, setIsCommentaryLoading] = useState(false);
+    const [isScorecardLoading, setIsScorecardLoading] = useState(false);
 
     const getInitialTab = () => {
         if (typeof window !== 'undefined') {
@@ -183,6 +184,26 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         }
     };
 
+    const fetchScorecard = async (isSilent = false) => {
+        if (!matchId) return;
+        if (!isSilent) setIsScorecardLoading(true);
+        try {
+            const res = await fetch(`/api/matches/${matchId}/scorecard`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (res.ok) {
+                const json = await res.json();
+                if (json && (json.data || json.innings || json.status === 'success')) {
+                    setScorecard(json);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch live scorecard:', err);
+        } finally {
+            if (!isSilent) setIsScorecardLoading(false);
+        }
+    };
+
     const fetchMatchScore = async () => {
         if (!matchId) return;
         try {
@@ -215,6 +236,18 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
         return () => clearInterval(pollTimer);
     }, [matchId, match?.status, match?.status_text, activeTab]);
+
+    // On mount or tab switch to scorecard: fetch scorecard asynchronously if not yet loaded
+    useEffect(() => {
+        if (activeTab === 'scorecard' && matchId) {
+            const hasData = (scorecard?.data?.innings && scorecard.data.innings.length > 0) ||
+                            (scorecard?.data?.batting && scorecard.data.batting.length > 0) ||
+                            (scorecard?.innings && scorecard.innings.length > 0);
+            if (!hasData) {
+                fetchScorecard();
+            }
+        }
+    }, [activeTab, matchId]);
 
     useEffect(() => {
         fetchPosts();
@@ -1336,6 +1369,21 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     </div>
                                 </div>
                             )}
+                            {currentBatting.length === 0 && currentBowling.length === 0 && (
+                                isScorecardLoading ? (
+                                    <div className="bg-white rounded-3xl p-12 text-center shadow-sm border border-gray-100 space-y-4">
+                                        <Loader2 className="w-8 h-8 mx-auto text-indigo-600 animate-spin" />
+                                        <p className="text-base font-bold text-gray-800">Loading full scorecard...</p>
+                                        <p className="text-xs text-gray-500">Fetching player innings and bowling statistics...</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-3xl p-12 text-center shadow-sm border border-gray-100 space-y-2">
+                                        <FileText className="w-8 h-8 mx-auto text-gray-300" />
+                                        <p className="text-base font-bold text-gray-700">Detailed Scorecard Pending</p>
+                                        <p className="text-xs text-gray-500">Full scorecard figures will appear here once official innings records are recorded.</p>
+                                    </div>
+                                )
+                            )}
                         </div>
                     )}
                 </div>
@@ -1624,7 +1672,13 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                         {/* List: Either Over-Grouped Accordions or Flat List */}
                         <div className="space-y-4">
-                            {filteredCommentaryList.length === 0 ? (
+                            {isCommentaryLoading && filteredCommentaryList.length === 0 ? (
+                                <div className="py-12 text-center text-slate-400 space-y-4">
+                                    <Loader2 className="w-8 h-8 mx-auto text-amber-400 animate-spin" />
+                                    <p className="text-sm font-bold text-white">Loading live ball-by-ball commentary...</p>
+                                    <p className="text-xs text-slate-400">Fetching real-time updates from match engine...</p>
+                                </div>
+                            ) : filteredCommentaryList.length === 0 ? (
                                 <div className="py-12 text-center text-slate-500 space-y-2">
                                     <Radio className="w-8 h-8 mx-auto text-slate-600 animate-pulse" />
                                     <p className="text-sm font-bold text-slate-400">No commentary entries found for this filter.</p>
