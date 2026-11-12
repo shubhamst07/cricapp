@@ -38,8 +38,11 @@ ENV COMPOSER_ALLOW_SUPERUSER 1
 # Install composer packages at build time
 RUN composer install --no-dev --optimize-autoloader
 
-# Set storage permissions
-RUN chmod -R 777 storage bootstrap/cache
+# Set storage permissions and ensure startup script is executable
+RUN chmod -R 777 storage bootstrap/cache && \
+    chmod +x scripts/*.sh && \
+    mkdir -p /scripts && \
+    cp scripts/00-laravel-deploy.sh /scripts/00-laravel-deploy.sh 2>/dev/null || true
 
 EXPOSE 80
 
