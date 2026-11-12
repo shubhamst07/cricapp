@@ -494,8 +494,8 @@ export default function LiveScoresApp({
                     )}
                 </div>
                 <div className="text-xs text-slate-400 font-medium hidden sm:block">
-                    {currentSection === 'local' 
-                        ? 'Grassroots, Turf & Club Cricket' 
+                    {currentSection === 'local'
+                        ? 'Grassroots, Turf & Club Cricket'
                         : 'Worldwide ICC & Domestic Matches • Real-Time Ball-by-Ball'}
                 </div>
             </div>

@@ -63,21 +63,29 @@ class GroundController extends Controller
 
         $isDefaultGuest = empty($search) && (empty($city) || $city === 'all') && (empty($pitchType) || $pitchType === 'all') && empty($maxPrice) && (empty($amenity) || $amenity === 'all') && ($tab === 'all') && !$user;
         $page = (int) $request->get('page', 1);
+        $defaultPaginator = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 9, $page, ['path' => $request->url()]);
+        $defaultCities = collect();
 
-        if ($isDefaultGuest) {
-            $bundle = \Illuminate\Support\Facades\Cache::remember("grounds_index_page_{$page}", 60, function () use ($query) {
-                return [
-                    'grounds' => $query->orderByDesc('created_at')->paginate(9),
-                    'cities' => Ground::select('city')->distinct()->pluck('city')->filter()->values(),
-                ];
-            });
-            $grounds = $bundle['grounds'];
-            $cities = $bundle['cities'];
-        } else {
-            $grounds = $query->orderByDesc('created_at')->paginate(9)->withQueryString();
-            $cities = \Illuminate\Support\Facades\Cache::remember('grounds_cities_list', 300, function () {
-                return Ground::select('city')->distinct()->pluck('city')->filter()->values();
-            });
+        try {
+            if ($isDefaultGuest) {
+                $bundle = \Illuminate\Support\Facades\Cache::remember("grounds_index_page_{$page}", 60, function () use ($query) {
+                    return [
+                        'grounds' => $query->orderByDesc('created_at')->paginate(9),
+                        'cities' => Ground::select('city')->distinct()->pluck('city')->filter()->values(),
+                    ];
+                });
+                $grounds = $bundle['grounds'] ?? $defaultPaginator;
+                $cities = $bundle['cities'] ?? $defaultCities;
+            } else {
+                $grounds = $query->orderByDesc('created_at')->paginate(9)->withQueryString();
+                $cities = \Illuminate\Support\Facades\Cache::remember('grounds_cities_list', 300, function () {
+                    return Ground::select('city')->distinct()->pluck('city')->filter()->values();
+                });
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('DB error in GroundController index: ' . $e->getMessage());
+            $grounds = $defaultPaginator;
+            $cities = $defaultCities;
         }
 
         // My Bookings (if logged in)

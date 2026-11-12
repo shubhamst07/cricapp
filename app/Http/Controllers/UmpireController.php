@@ -65,21 +65,29 @@ class UmpireController extends Controller
 
         $isDefaultGuest = empty($search) && (empty($city) || $city === 'all') && (empty($level) || $level === 'all') && (empty($ballType) || $ballType === 'all') && empty($maxFee) && !$user;
         $page = (int) $request->get('page', 1);
+        $defaultPaginator = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 9, $page, ['path' => $request->url()]);
+        $defaultCities = collect();
 
-        if ($isDefaultGuest) {
-            $bundle = \Illuminate\Support\Facades\Cache::remember("umpires_index_page_{$page}", 60, function () use ($query) {
-                return [
-                    'umpires' => $query->orderByDesc('rating')->orderByDesc('matches_umpired')->paginate(9),
-                    'cities' => UmpireProfile::select('city')->distinct()->pluck('city')->filter()->values(),
-                ];
-            });
-            $umpires = $bundle['umpires'];
-            $cities = $bundle['cities'];
-        } else {
-            $umpires = $query->orderByDesc('rating')->orderByDesc('matches_umpired')->paginate(9)->withQueryString();
-            $cities = \Illuminate\Support\Facades\Cache::remember('umpires_cities_list', 300, function () {
-                return UmpireProfile::select('city')->distinct()->pluck('city')->filter()->values();
-            });
+        try {
+            if ($isDefaultGuest) {
+                $bundle = \Illuminate\Support\Facades\Cache::remember("umpires_index_page_{$page}", 60, function () use ($query) {
+                    return [
+                        'umpires' => $query->orderByDesc('rating')->orderByDesc('matches_umpired')->paginate(9),
+                        'cities' => UmpireProfile::select('city')->distinct()->pluck('city')->filter()->values(),
+                    ];
+                });
+                $umpires = $bundle['umpires'] ?? $defaultPaginator;
+                $cities = $bundle['cities'] ?? $defaultCities;
+            } else {
+                $umpires = $query->orderByDesc('rating')->orderByDesc('matches_umpired')->paginate(9)->withQueryString();
+                $cities = \Illuminate\Support\Facades\Cache::remember('umpires_cities_list', 300, function () {
+                    return UmpireProfile::select('city')->distinct()->pluck('city')->filter()->values();
+                });
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('DB error in UmpireController index: ' . $e->getMessage());
+            $umpires = $defaultPaginator;
+            $cities = $defaultCities;
         }
 
         // User's own umpire profile if exists

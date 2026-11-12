@@ -100,40 +100,49 @@ class MatchController extends Controller
         $isDefaultGuest = empty($search) && ($tab === 'all') && ($scope === 'all') && !$user;
         $page = (int) $request->get('page', 1);
 
-        if ($isDefaultGuest) {
-            $bundle = \Illuminate\Support\Facades\Cache::remember("matches_index_page_{$page}", 60, function () use ($query) {
-                return [
-                    'matches' => $query->orderByDesc('match_date')->orderByDesc('created_at')->paginate(12),
-                    'stats' => [
-                        'total' => CricketMatch::count(),
-                        'live' => CricketMatch::where('status', 'live')->count(),
-                        'upcoming' => CricketMatch::where('status', 'scheduled')->count(),
-                        'completed' => CricketMatch::where('status', 'completed')->count(),
-                        'my_network_count' => 0,
-                    ],
+        $defaultPaginator = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 12, $page, ['path' => $request->url()]);
+        $defaultStats = ['total' => 0, 'live' => 0, 'upcoming' => 0, 'completed' => 0, 'my_network_count' => 0];
+
+        try {
+            if ($isDefaultGuest) {
+                $bundle = \Illuminate\Support\Facades\Cache::remember("matches_index_page_{$page}", 60, function () use ($query) {
+                    return [
+                        'matches' => $query->orderByDesc('match_date')->orderByDesc('created_at')->paginate(12),
+                        'stats' => [
+                            'total' => CricketMatch::count(),
+                            'live' => CricketMatch::where('status', 'live')->count(),
+                            'upcoming' => CricketMatch::where('status', 'scheduled')->count(),
+                            'completed' => CricketMatch::where('status', 'completed')->count(),
+                            'my_network_count' => 0,
+                        ],
+                    ];
+                });
+                $matches = $bundle['matches'] ?? $defaultPaginator;
+                $stats = $bundle['stats'] ?? $defaultStats;
+            } else {
+                $matches = $query->orderByDesc('match_date')
+                    ->orderByDesc('created_at')
+                    ->paginate(12)
+                    ->withQueryString();
+
+                // Overall stats snapshot
+                $baseStatsQuery = CricketMatch::query();
+                if ($scope === 'my' && $user) {
+                    $baseStatsQuery->whereIn('id', !empty($networkMatchIds) ? $networkMatchIds : [0]);
+                }
+
+                $stats = [
+                    'total' => (clone $baseStatsQuery)->count(),
+                    'live' => (clone $baseStatsQuery)->where('status', 'live')->count(),
+                    'upcoming' => (clone $baseStatsQuery)->where('status', 'scheduled')->count(),
+                    'completed' => (clone $baseStatsQuery)->where('status', 'completed')->count(),
+                    'my_network_count' => count($networkMatchIds),
                 ];
-            });
-            $matches = $bundle['matches'];
-            $stats = $bundle['stats'];
-        } else {
-            $matches = $query->orderByDesc('match_date')
-                ->orderByDesc('created_at')
-                ->paginate(12)
-                ->withQueryString();
-
-            // Overall stats snapshot
-            $baseStatsQuery = CricketMatch::query();
-            if ($scope === 'my' && $user) {
-                $baseStatsQuery->whereIn('id', !empty($networkMatchIds) ? $networkMatchIds : [0]);
             }
-
-            $stats = [
-                'total' => (clone $baseStatsQuery)->count(),
-                'live' => (clone $baseStatsQuery)->where('status', 'live')->count(),
-                'upcoming' => (clone $baseStatsQuery)->where('status', 'scheduled')->count(),
-                'completed' => (clone $baseStatsQuery)->where('status', 'completed')->count(),
-                'my_network_count' => count($networkMatchIds),
-            ];
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('DB error in MatchController index: ' . $e->getMessage());
+            $matches = $defaultPaginator;
+            $stats = $defaultStats;
         }
 
         return view('matches.index', compact(
