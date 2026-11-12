@@ -78,9 +78,15 @@ export default function LiveScoresApp({
             return m.status === 'completed' || m.status === 'abandoned' || Boolean(m.is_dismissed) || st.includes('dismiss');
         }
 
-        // 1. Abandoned / Cancelled / No Result matches are ALWAYS ended, NEVER live or toss!
-        if (m.status === 'abandoned' || ['abandon', 'cancel', 'no result'].some(w => st.includes(w))) {
+        // 1. Any match with explicit completed text (won by, beat, tied, drawn, etc.) is ALWAYS ENDED!
+        const isCompletedText = ['won by', 'won the match', 'won the series', ' beat ', 'tied', 'drawn', 'conceded', 'match ended', 'abandon', 'cancel', 'no result'].some(w => st.includes(w));
+        if (isCompletedText) {
             return true;
+        }
+
+        if (m.status === 'completed' || m.status === 'abandoned' || m.matchEnded) {
+            const isChasingNow = ['need ', 'require ', 'target '].some(w => st.includes(w)) && !st.includes('won') && !st.includes('beat');
+            if (!isChasingNow) return true;
         }
 
         // Scheduled matches with no scores are definitely UPCOMING, never ended!
@@ -88,7 +94,7 @@ export default function LiveScoresApp({
             return false;
         }
 
-        // 2. Real toss is LIVE/upcoming, not ended (excluding abandoned)
+        // 2. Real toss is LIVE/upcoming, not ended
         const isToss = ['opt to', 'elected to', 'chose to'].some(w => st.includes(w)) || (st.includes('toss') && !st.includes('abandon'));
         if (isToss) return false;
 
@@ -102,13 +108,6 @@ export default function LiveScoresApp({
         const isChasing = ['need ', 'require ', 'target '].some(w => st.includes(w));
         const isInProgress = st.includes('in progress') || st.includes('rain') || st.includes('delay') || isChasing || isToss;
         if (isInProgress) return false;
-
-        if (m.status === 'completed' || m.matchEnded) {
-            return true;
-        }
-        if (['won by', 'won the match', ' beat ', 'tied', 'drawn', 'conceded', 'match ended'].some(w => st.includes(w))) {
-            return true;
-        }
         if (Array.isArray(m.score) && m.score.length >= 2) {
             const isTest = (m.matchType || '').toLowerCase().includes('test') || /day\s*[1-4]/.test(st);
             if (!isTest) {

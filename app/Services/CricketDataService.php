@@ -926,27 +926,28 @@ class CricketDataService
 
             // Detect status from text keywords
             $stLower = strtolower($statusText);
-            $isToss = str_contains($stLower, 'toss') || str_contains($stLower, 'opt to') || str_contains($stLower, 'elected to') || str_contains($stLower, 'chose to');
-            $isTestOngoing = (str_contains($stLower, 'stump') || str_contains($stLower, 'trail') || str_contains($stLower, 'lead') || preg_match('/day\s*[1-4]/i', $stLower))
-                && !str_contains($stLower, 'won') && !str_contains($stLower, 'beat') && !str_contains($stLower, 'drawn');
-            $isChasing = str_contains($stLower, 'need ') || str_contains($stLower, 'require ') || str_contains($stLower, 'target ');
-            $isInProgress = str_contains($stLower, 'in progress') || str_contains($stLower, 'rain') || str_contains($stLower, 'delay') || $isChasing || $isToss || $isTestOngoing;
 
-            $isCompletedByText = !$isToss && !$isTestOngoing && !$isChasing && (
-                str_contains($stLower, 'won by') ||
+            $isCompletedByText = str_contains($stLower, 'won by') ||
                 str_contains($stLower, 'won the match') ||
+                str_contains($stLower, 'won the series') ||
                 str_contains($stLower, 'beat') ||
                 str_contains($stLower, 'tied') ||
                 str_contains($stLower, 'drawn') ||
                 str_contains($stLower, 'conceded') ||
-                str_contains($stLower, 'match ended')
-            );
+                str_contains($stLower, 'match ended');
 
-            if ($isInProgress) {
+            $isChasing = (str_contains($stLower, 'need ') || str_contains($stLower, 'require ') || str_contains($stLower, 'target ')) && !$isCompletedByText;
+            $isToss = (str_contains($stLower, 'toss') || str_contains($stLower, 'opt to') || str_contains($stLower, 'elected to') || str_contains($stLower, 'chose to')) && !str_contains($stLower, 'abandon');
+            $isTestOngoing = (str_contains($stLower, 'stump') || str_contains($stLower, 'trail') || str_contains($stLower, 'lead') || preg_match('/day\s*[1-4]/i', $stLower))
+                && !$isCompletedByText;
+            $isInProgress = !$isCompletedByText && (str_contains($stLower, 'in progress') || str_contains($stLower, 'rain') || str_contains($stLower, 'delay') || $isChasing || $isToss || $isTestOngoing);
+
+            if ($isCompletedByText) {
+                $matchEnded = true;
+                $matchStarted = true;
+            } elseif ($isInProgress) {
                 $matchEnded = false;
                 $matchStarted = true;
-            } elseif ($isCompletedByText) {
-                $matchEnded = true;
             }
 
             $score = $this->normalizeScore($match['score'] ?? null, $statusText, $matchEnded, $matchType);
