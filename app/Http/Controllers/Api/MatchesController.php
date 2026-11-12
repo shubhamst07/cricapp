@@ -57,6 +57,16 @@ class MatchesController extends Controller
             $isEnded = ($m['matchEnded'] ?? false) || in_array($m['status'] ?? '', ['completed', 'abandoned']);
             $statusLower = strtolower(trim($m['status_text'] ?? ''));
             $isToss = str_contains($statusLower, 'toss');
+            $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
+                && !str_contains($statusLower, 'won') && !str_contains($statusLower, 'beat') && !str_contains($statusLower, 'drawn');
+
+            if ($isTestOngoing) {
+                $m['status'] = 'live';
+                $m['matchEnded'] = false;
+                $m['matchStarted'] = true;
+                return $m;
+            }
+
             $isCompletedText = !$isToss && (
                 str_contains($statusLower, 'won by') ||
                 str_contains($statusLower, 'won the match') ||

@@ -490,13 +490,14 @@ class ScoreService:
             else:
                 venue = meta_info
 
-            # Match completed detection (must not match toss events like "won the toss")
+            # Match completed detection (must not match toss events like "won the toss", or ongoing test events)
             st_lower = status_text.lower()
             is_toss = "toss" in st_lower
-            is_completed = not is_toss and any(w in st_lower for w in ["won by", "won the match", " beat ", "tied", "drawn", "conceded", "match ended", "abandoned"])
+            is_test_ongoing = any(w in st_lower for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in st_lower for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
+            is_completed = not is_toss and not is_test_ongoing and any(w in st_lower for w in ["won by", "won the match", " beat ", "tied", "drawn", "conceded", "match ended", "abandoned"])
 
             # Match started detection
-            match_started = is_toss or bool(scores) or is_completed
+            match_started = is_toss or is_test_ongoing or bool(scores) or is_completed
 
             # Normalize status_text for matches with active score or upcoming matches
             if is_completed:
@@ -564,11 +565,17 @@ class ScoreService:
                     # 1. Parse high-fidelity RSC matches first (contains full series, state, and real-time scores)
                     rsc_matches = cls.parse_rsc_matches(resp.text)
                     for m in rsc_matches:
+                        st = (m.get("status_text") or "").lower()
+                        is_test_ongoing = any(w in st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
                         if page_type == "recent":
-                            m["matchEnded"] = True
-                            m["matchStarted"] = True
-                            if not m.get("status_text") or m["status_text"].lower() == "in progress":
-                                m["status_text"] = "Match Completed"
+                            if not is_test_ongoing:
+                                m["matchEnded"] = True
+                                m["matchStarted"] = True
+                                if not m.get("status_text") or m["status_text"].lower() == "in progress":
+                                    m["status_text"] = "Match Completed"
+                            else:
+                                m["matchEnded"] = False
+                                m["matchStarted"] = True
                         elif page_type == "upcoming":
                             m["matchEnded"] = False
                             m["matchStarted"] = False
@@ -579,11 +586,17 @@ class ScoreService:
                         else:
                             for idx, existing in enumerate(parsed):
                                 if existing.get("id") == m["id"]:
+                                    comb_st = (existing.get("status_text", "") + " " + m.get("status_text", "")).lower()
+                                    is_comb_test_ongoing = any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
                                     if page_type == "recent":
-                                        existing["matchEnded"] = True
-                                        existing["matchStarted"] = True
-                                        if not existing.get("status_text") or existing["status_text"].lower() == "in progress":
-                                            existing["status_text"] = m.get("status_text") or "Match Completed"
+                                        if not is_comb_test_ongoing:
+                                            existing["matchEnded"] = True
+                                            existing["matchStarted"] = True
+                                            if not existing.get("status_text") or existing["status_text"].lower() == "in progress":
+                                                existing["status_text"] = m.get("status_text") or "Match Completed"
+                                        else:
+                                            existing["matchEnded"] = False
+                                            existing["matchStarted"] = True
                                     elif page_type == "upcoming" and not existing.get("score"):
                                         existing["matchEnded"] = False
                                         existing["matchStarted"] = False
@@ -601,11 +614,17 @@ class ScoreService:
                     # 2. Parse traditional HTML cards
                     matches = cls.parse_cards_from_html(resp.text)
                     for m in matches:
+                        st = (m.get("status_text") or "").lower()
+                        is_test_ongoing = any(w in st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
                         if page_type == "recent":
-                            m["matchEnded"] = True
-                            m["matchStarted"] = True
-                            if not m.get("status_text") or m["status_text"].lower() == "in progress":
-                                m["status_text"] = "Match Completed"
+                            if not is_test_ongoing:
+                                m["matchEnded"] = True
+                                m["matchStarted"] = True
+                                if not m.get("status_text") or m["status_text"].lower() == "in progress":
+                                    m["status_text"] = "Match Completed"
+                            else:
+                                m["matchEnded"] = False
+                                m["matchStarted"] = True
                         elif page_type == "upcoming":
                             m["matchEnded"] = False
                             m["matchStarted"] = False
@@ -617,9 +636,15 @@ class ScoreService:
                             # Update existing match if this card has scores or better series name
                             for idx, existing in enumerate(parsed):
                                 if existing.get("id") == m["id"]:
+                                    comb_st = (existing.get("status_text", "") + " " + m.get("status_text", "")).lower()
+                                    is_comb_test_ongoing = any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
                                     if page_type == "recent":
-                                        existing["matchEnded"] = True
-                                        existing["matchStarted"] = True
+                                        if not is_comb_test_ongoing:
+                                            existing["matchEnded"] = True
+                                            existing["matchStarted"] = True
+                                        else:
+                                            existing["matchEnded"] = False
+                                            existing["matchStarted"] = True
                                     elif page_type == "upcoming" and not existing.get("score"):
                                         existing["matchEnded"] = False
                                         existing["matchStarted"] = False

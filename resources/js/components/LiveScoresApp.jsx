@@ -15,7 +15,11 @@ import {
     Activity,
     Flame,
     Zap,
-    ExternalLink
+    ExternalLink,
+    Globe,
+    Archive,
+    FolderArchive,
+    AlertCircle
 } from 'lucide-react';
 
 export default function LiveScoresApp({
@@ -23,41 +27,84 @@ export default function LiveScoresApp({
     initialScheduled = [],
     initialCompleted = [],
     cacheTtl = 15,
-    initialTab = 'live'
+    initialTab = 'live',
+    initialSection = 'international'
 }) {
+    // Current primary section: 'international' or 'local'
+    const [currentSection, setCurrentSection] = useState(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const secParam = urlParams.get('section');
+        if (['international', 'local'].includes(secParam)) return secParam;
+        if (['international', 'local'].includes(initialSection)) return initialSection;
+        try {
+            const savedSec = localStorage.getItem('last_cricket_section');
+            if (['international', 'local'].includes(savedSec)) return savedSec;
+        } catch (e) {}
+        return 'international';
+    });
+
     const [activeTab, setActiveTab] = useState(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
-        if (['live', 'upcoming', 'recent'].includes(tabParam)) return tabParam;
-        if (initialTab && ['live', 'upcoming', 'recent'].includes(initialTab)) return initialTab;
+        if (['live', 'upcoming', 'recent', 'archives'].includes(tabParam)) return tabParam;
+        if (initialTab && ['live', 'upcoming', 'recent', 'archives'].includes(initialTab)) return initialTab;
         try {
             const saved = localStorage.getItem('last_cricket_tab');
-            if (['live', 'upcoming', 'recent'].includes(saved)) return saved;
+            if (['live', 'upcoming', 'recent', 'archives'].includes(saved)) return saved;
         } catch (e) {}
         return (initialLive.length > 0 ? 'live' : (initialCompleted.length > 0 ? 'recent' : 'upcoming'));
     });
 
+    // Helper: is match from local platform
+    const isLocalMatch = (m) => Boolean(m && (m.is_local || String(m.id || '').startsWith('local_')));
+
+    // Helper: check if completed match is from past 2 days (48 hours)
+    const isPastTwoDays = (m) => {
+        if (!m) return false;
+        // Dismissed local matches always go to Archives!
+        if (m.is_dismissed || (m.status_text || '').toLowerCase() === 'match dismissed') {
+            return false;
+        }
+        const dateVal = m.dateTimeGMT || m.match_date;
+        if (!dateVal) return true; // fallback if no date
+        const t = new Date(dateVal).getTime();
+        if (isNaN(t)) return true;
+        // Past 2 days (48 hours)
+        const diffHours = (Date.now() - t) / (3600 * 1000);
+        return diffHours <= 48;
+    };
+
     const isMatchEnded = (m) => {
         if (!m) return false;
-        // Never override local platform matches — their status is set by match admin
-        if (m.is_local || String(m.id || '').startsWith('local_')) {
-            return m.status === 'completed' || m.status === 'abandoned';
+        // Local platform matches: status is set by umpire / admin or auto-dismissal
+        if (isLocalMatch(m)) {
+            return m.status === 'completed' || m.status === 'abandoned' || Boolean(m.is_dismissed);
         }
         // Scheduled matches with no scores are definitely UPCOMING, never ended!
         if (m.status === 'scheduled' && (!m.score || !Array.isArray(m.score) || m.score.length === 0)) {
             return false;
         }
+        const st = (m.status_text || '').toLowerCase();
+        if (st.includes('toss')) return false;
+
+        // Ongoing Test match (Stumps, trail by, lead by, Day 1-4) is NOT ended!
+        if ((st.includes('stump') || st.includes('trail') || st.includes('lead') || /day\s*[1-4]/.test(st)) &&
+            !['won by', 'won the match', ' beat ', 'drawn', 'tied'].some(w => st.includes(w))) {
+            return false;
+        }
+
         if (m.status === 'completed' || m.status === 'abandoned' || m.matchEnded) {
             return true;
         }
-        const st = (m.status_text || '').toLowerCase();
-        if (st.includes('toss')) return false;
         if (['won by', 'won the match', ' beat ', 'tied', 'drawn', 'conceded', 'match ended'].some(w => st.includes(w))) {
             return true;
         }
         if (Array.isArray(m.score) && m.score.length >= 2) {
-            const o2 = parseFloat(m.score[1].overs || m.score[1].o || 0);
-            if (o2 >= 50 || (o2 >= 20 && (m.matchType || '').toLowerCase().includes('t20'))) return true;
+            const isTest = (m.matchType || '').toLowerCase().includes('test') || /day\s*[1-4]/.test(st);
+            if (!isTest) {
+                const o2 = parseFloat(m.score[1].overs || m.score[1].o || 0);
+                if (o2 >= 50 || (o2 >= 20 && (m.matchType || '').toLowerCase().includes('t20'))) return true;
+            }
         }
         return false;
     };
@@ -90,18 +137,34 @@ export default function LiveScoresApp({
     const [scorecardData, setScorecardData] = useState(null);
     const [loadingScorecard, setLoadingScorecard] = useState(false);
 
-    // Sync browser Back/Forward navigation with tab
+    // Sync browser Back/Forward navigation with section and tab
     useEffect(() => {
         const handlePopState = () => {
             const urlParams = new URLSearchParams(window.location.search);
+            const secParam = urlParams.get('section');
+            if (['international', 'local'].includes(secParam)) {
+                setCurrentSection(secParam);
+            }
             const tabParam = urlParams.get('tab');
-            if (['live', 'upcoming', 'recent'].includes(tabParam)) {
+            if (['live', 'upcoming', 'recent', 'archives'].includes(tabParam)) {
                 setActiveTab(tabParam);
             }
         };
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
     }, []);
+
+    // Sync section change
+    const handleSectionChange = (section) => {
+        setCurrentSection(section);
+        setSelectedSeries('all');
+        try {
+            localStorage.setItem('last_cricket_section', section);
+        } catch (e) {}
+        const url = new URL(window.location);
+        url.searchParams.set('section', section);
+        window.history.pushState({}, '', url);
+    };
 
     // Sync tab to URL and localStorage
     const handleTabChange = (tab) => {
@@ -187,12 +250,56 @@ export default function LiveScoresApp({
         }
     };
 
+    // Filter by Section (International vs Local)
+    const sectionLive = useMemo(() => {
+        return liveMatches.filter(m => currentSection === 'local' ? isLocalMatch(m) : !isLocalMatch(m));
+    }, [liveMatches, currentSection]);
+
+    const sectionScheduled = useMemo(() => {
+        return scheduledMatches.filter(m => currentSection === 'local' ? isLocalMatch(m) : !isLocalMatch(m));
+    }, [scheduledMatches, currentSection]);
+
+    // Section completed split into Recent (past 2 days) and Archives (older / dismissed)
+    const { sectionRecent, sectionArchives } = useMemo(() => {
+        const pool = completedMatches.filter(m => currentSection === 'local' ? isLocalMatch(m) : !isLocalMatch(m));
+        const recent = [];
+        const archives = [];
+        pool.forEach(m => {
+            if (isPastTwoDays(m)) {
+                recent.push(m);
+            } else {
+                archives.push(m);
+            }
+        });
+        return { sectionRecent: recent, sectionArchives: archives };
+    }, [completedMatches, currentSection]);
+
+    // Overall Section Counts for the top switcher
+    const internationalCounts = useMemo(() => {
+        const l = liveMatches.filter(m => !isLocalMatch(m)).length;
+        const u = scheduledMatches.filter(m => !isLocalMatch(m)).length;
+        const c = completedMatches.filter(m => !isLocalMatch(m));
+        const r = c.filter(m => isPastTwoDays(m)).length;
+        const a = c.filter(m => !isPastTwoDays(m)).length;
+        return { live: l, upcoming: u, recent: r, archives: a, total: l + u + r + a };
+    }, [liveMatches, scheduledMatches, completedMatches]);
+
+    const localCounts = useMemo(() => {
+        const l = liveMatches.filter(m => isLocalMatch(m)).length;
+        const u = scheduledMatches.filter(m => isLocalMatch(m)).length;
+        const c = completedMatches.filter(m => isLocalMatch(m));
+        const r = c.filter(m => isPastTwoDays(m)).length;
+        const a = c.filter(m => !isPastTwoDays(m)).length;
+        return { live: l, upcoming: u, recent: r, archives: a, total: l + u + r + a };
+    }, [liveMatches, scheduledMatches, completedMatches]);
+
     // Current list based on active tab
     const currentList = useMemo(() => {
-        if (activeTab === 'live') return liveMatches;
-        if (activeTab === 'upcoming') return scheduledMatches;
-        return completedMatches;
-    }, [activeTab, liveMatches, scheduledMatches, completedMatches]);
+        if (activeTab === 'live') return sectionLive;
+        if (activeTab === 'upcoming') return sectionScheduled;
+        if (activeTab === 'archives') return sectionArchives;
+        return sectionRecent;
+    }, [activeTab, sectionLive, sectionScheduled, sectionRecent, sectionArchives]);
 
     // Unique series for the active tab with match counts
     const seriesStats = useMemo(() => {
@@ -355,36 +462,77 @@ export default function LiveScoresApp({
                 </div>
             </div>
 
-            {/* Navigation Tabs (Live, Upcoming, Recent) */}
+            {/* Primary Section Switcher: International vs Local Cricket */}
+            <div className="bg-[#111827]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-2xl flex flex-col sm:flex-row gap-2">
+                <button
+                    type="button"
+                    onClick={() => handleSectionChange('international')}
+                    className={`flex-1 flex items-center justify-center gap-3 py-3 px-5 rounded-xl text-xs sm:text-sm font-black transition border ${
+                        currentSection === 'international'
+                            ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-indigo-400/40 shadow-lg shadow-indigo-600/30'
+                            : 'bg-white/5 border-transparent text-slate-400 hover:text-white hover:bg-white/10'
+                    }`}
+                >
+                    <Globe className={`w-4 h-4 ${currentSection === 'international' ? 'text-white' : 'text-indigo-400'}`} />
+                    <span>🌍 International Cricket</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                        currentSection === 'international' ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-400'
+                    }`}>
+                        {internationalCounts.total}
+                    </span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => handleSectionChange('local')}
+                    className={`flex-1 flex items-center justify-center gap-3 py-3 px-5 rounded-xl text-xs sm:text-sm font-black transition border ${
+                        currentSection === 'local'
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400/40 shadow-lg shadow-emerald-600/30'
+                            : 'bg-white/5 border-transparent text-slate-400 hover:text-white hover:bg-white/10'
+                    }`}
+                >
+                    <Shield className={`w-4 h-4 ${currentSection === 'local' ? 'text-white' : 'text-emerald-400'}`} />
+                    <span>🏏 Local Cricket</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                        currentSection === 'local' ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-400'
+                    }`}>
+                        {localCounts.total}
+                    </span>
+                </button>
+            </div>
+
+            {/* Sub-Navigation Tabs (Live, Upcoming, Recent Results, Archives) */}
             <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl shadow-xl border border-white/10 p-1.5">
-                <nav className="flex space-x-2" aria-label="Tabs">
+                <nav className="grid grid-cols-2 md:grid-cols-4 gap-2" aria-label="Tabs">
+                    {/* Live Matches */}
                     <button
                         type="button"
                         onClick={() => handleTabChange('live')}
-                        className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-xs sm:text-sm font-black transition ${
+                        className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition ${
                             activeTab === 'live'
                                 ? 'bg-gradient-to-r from-rose-600/25 to-red-600/20 text-rose-300 border border-rose-500/40 shadow-lg shadow-rose-600/20'
                                 : 'text-slate-400 hover:text-white hover:bg-white/5'
                         }`}
                     >
                         <span className="relative flex h-2.5 w-2.5">
-                            {liveMatches.length > 0 && (
+                            {sectionLive.length > 0 && (
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                             )}
-                            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${liveMatches.length > 0 ? 'bg-rose-500' : 'bg-slate-600'}`}></span>
+                            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${sectionLive.length > 0 ? 'bg-rose-500' : 'bg-slate-600'}`}></span>
                         </span>
                         <span>Live Matches</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
                             activeTab === 'live' ? 'bg-rose-500 text-white' : 'bg-white/10 text-slate-400'
                         }`}>
-                            {liveMatches.length}
+                            {sectionLive.length}
                         </span>
                     </button>
 
+                    {/* Upcoming Matches */}
                     <button
                         type="button"
                         onClick={() => handleTabChange('upcoming')}
-                        className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-xs sm:text-sm font-black transition ${
+                        className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition ${
                             activeTab === 'upcoming'
                                 ? 'bg-gradient-to-r from-indigo-600/25 to-blue-600/20 text-indigo-300 border border-indigo-500/40 shadow-lg shadow-indigo-600/20'
                                 : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -395,25 +543,51 @@ export default function LiveScoresApp({
                         <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
                             activeTab === 'upcoming' ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'
                         }`}>
-                            {scheduledMatches.length}
+                            {sectionScheduled.length}
                         </span>
                     </button>
 
+                    {/* Recent Results (Past 2 Days) */}
                     <button
                         type="button"
                         onClick={() => handleTabChange('recent')}
-                        className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-xs sm:text-sm font-black transition ${
+                        className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition ${
                             activeTab === 'recent'
                                 ? 'bg-gradient-to-r from-blue-600/25 to-cyan-600/20 text-blue-300 border border-blue-500/40 shadow-lg shadow-blue-600/20'
                                 : 'text-slate-400 hover:text-white hover:bg-white/5'
                         }`}
                     >
                         <Trophy className="w-4 h-4 text-blue-400" />
-                        <span>Recent Results</span>
+                        <div className="flex flex-col items-center">
+                            <span>Recent Results</span>
+                            <span className="text-[10px] font-medium text-blue-300/80 -mt-0.5">(Past 2 Days)</span>
+                        </div>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
                             activeTab === 'recent' ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-400'
                         }`}>
-                            {completedMatches.length}
+                            {sectionRecent.length}
+                        </span>
+                    </button>
+
+                    {/* Archives (Series-wise) */}
+                    <button
+                        type="button"
+                        onClick={() => handleTabChange('archives')}
+                        className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition ${
+                            activeTab === 'archives'
+                                ? 'bg-gradient-to-r from-amber-600/25 to-yellow-600/20 text-amber-300 border border-amber-500/40 shadow-lg shadow-amber-600/20'
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                    >
+                        <Archive className="w-4 h-4 text-amber-400" />
+                        <div className="flex flex-col items-center">
+                            <span>Archives</span>
+                            <span className="text-[10px] font-medium text-amber-300/80 -mt-0.5">(Series-wise)</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
+                            activeTab === 'archives' ? 'bg-amber-600 text-white' : 'bg-white/10 text-slate-400'
+                        }`}>
+                            {sectionArchives.length}
                         </span>
                     </button>
                 </nav>
@@ -592,6 +766,7 @@ export default function LiveScoresApp({
                         {activeTab === 'live' && <Radio className="w-7 h-7 text-rose-500 animate-pulse" />}
                         {activeTab === 'upcoming' && <Calendar className="w-7 h-7 text-indigo-400" />}
                         {activeTab === 'recent' && <Trophy className="w-7 h-7 text-blue-400" />}
+                        {activeTab === 'archives' && <Archive className="w-7 h-7 text-amber-400" />}
                     </div>
                     <h3 className="text-base font-bold text-white mb-1">
                         {selectedSeries !== 'all'
@@ -599,17 +774,21 @@ export default function LiveScoresApp({
                             : searchQuery || selectedFormat !== 'all'
                                 ? 'No matches match your filter criteria'
                                 : activeTab === 'live'
-                                    ? 'No live matches in progress right now'
+                                    ? (currentSection === 'local' ? 'No live local matches in progress right now' : 'No live international matches in progress right now')
                                     : activeTab === 'upcoming'
-                                        ? 'No upcoming matches scheduled'
-                                        : 'No recent match results available'}
+                                        ? (currentSection === 'local' ? 'No upcoming local matches scheduled' : 'No upcoming international matches scheduled')
+                                        : activeTab === 'archives'
+                                            ? (currentSection === 'local' ? 'No archived local tournament matches' : 'No archived international series matches')
+                                            : (currentSection === 'local' ? 'No recent local match results in the past 2 days' : 'No recent international results in the past 2 days')}
                     </h3>
                     <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
                         {selectedSeries !== 'all'
                             ? 'Try clearing the series filter to see all matches.'
                             : searchQuery
                                 ? 'Try searching with another team or format keyword'
-                                : 'Check back soon or hit refresh to see the latest schedules.'}
+                                : activeTab === 'recent'
+                                    ? 'Older tournament matches are stored safely in the Archives tab.'
+                                    : 'Check back soon or hit refresh to see the latest schedules.'}
                     </p>
                     {selectedSeries !== 'all' && (
                         <button
@@ -769,6 +948,8 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
     const isLive = type === 'live' || (type === 'upcoming' && hasLiveScore);
     const isUpcoming = type === 'upcoming' && !hasLiveScore;
     const isRecent = type === 'recent';
+    const isArchives = type === 'archives';
+    const isDismissed = Boolean(match.is_dismissed || (match.status_text || '').toLowerCase() === 'match dismissed');
 
     // Format teams & scores cleanly
     const scores = match.score || [];
@@ -778,7 +959,9 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
         <div className={`rounded-3xl border transition-all duration-300 flex flex-col justify-between overflow-hidden group relative bg-[#131b2e] ${
             isLive
                 ? 'border-rose-500/30 hover:border-rose-500/60 shadow-xl hover:shadow-2xl hover:shadow-rose-500/10'
-                : 'border-white/10 hover:border-indigo-500/50 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/10'
+                : isDismissed
+                    ? 'border-rose-500/20 hover:border-rose-500/40 shadow-lg'
+                    : 'border-white/10 hover:border-indigo-500/50 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/10'
         }`}>
             {/* Top Indicator Strip for Live Matches */}
             {isLive && (
@@ -818,6 +1001,17 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                         {isRecent && (
                             <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/40">
                                 {match.status === 'abandoned' ? 'ABANDONED' : 'RESULT'}
+                            </span>
+                        )}
+                        {isArchives && (
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black border ${
+                                isDismissed
+                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                    : match.status === 'abandoned'
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                            }`}>
+                                {isDismissed ? 'DISMISSED' : match.status === 'abandoned' ? 'ABANDONED' : 'ARCHIVE'}
                             </span>
                         )}
                         <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-300 truncate max-w-[140px]">
@@ -869,7 +1063,7 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                             const hasOvers = overs && overs !== '0' && overs !== 0 && overs !== '0.0';
 
                             // Correction: If match is completed, and team lost by runs or stopped chasing, wickets must be 10 (all out), not 0
-                            const isMatchFinished = isRecent || (match.matchEnded ?? false) || ['won by', ' won', 'beat', 'tied', 'drawn', 'complete', 'result'].some(w => (match.status_text || '').toLowerCase().includes(w));
+                            const isMatchFinished = isRecent || isArchives || (match.matchEnded ?? false) || ['won by', ' won', 'beat', 'tied', 'drawn', 'complete', 'result'].some(w => (match.status_text || '').toLowerCase().includes(w));
                             if (isMatchFinished && idx === 1 && wickets === 0) {
                                 const st = (match.status_text || '').toLowerCase();
                                 if (st.includes('won by') && st.includes('run')) {
@@ -923,17 +1117,32 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
 
                 {/* Status Text Banner */}
                 {match.status_text && (
-                    <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
-                        isLive
-                            ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                            : isRecent
-                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-slate-950/80 text-slate-300 border border-white/10'
+                    <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between gap-2 ${
+                        isDismissed
+                            ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                            : isLive
+                                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                : isRecent
+                                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                    : 'bg-slate-950/80 text-slate-300 border border-white/10'
                     }`}>
-                        <span className="shrink-0">
-                            {isLive ? <Flame className="w-3.5 h-3.5 text-amber-400" /> : <Shield className="w-3.5 h-3.5 text-emerald-400" />}
-                        </span>
-                        <span className="truncate">{match.status_text}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="shrink-0">
+                                {isDismissed ? (
+                                    <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                                ) : isLive ? (
+                                    <Flame className="w-3.5 h-3.5 text-amber-400" />
+                                ) : (
+                                    <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                                )}
+                            </span>
+                            <span className="truncate">{match.status_text}</span>
+                        </div>
+                        {match.dateTimeGMT && (
+                            <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                {match.dateTimeGMT}
+                            </span>
+                        )}
                     </div>
                 )}
             </div>

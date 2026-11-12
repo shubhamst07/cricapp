@@ -17,6 +17,7 @@ if (liveScoresRoot) {
         const completed = JSON.parse(liveScoresRoot.getAttribute('data-completed') || '[]');
         const cacheTtl = parseInt(liveScoresRoot.getAttribute('data-cache-ttl') || '15', 10);
         const initialTab = liveScoresRoot.getAttribute('data-initial-tab') || 'live';
+        const initialSection = liveScoresRoot.getAttribute('data-initial-section') || 'international';
 
         createRoot(liveScoresRoot).render(
             <LiveScoresApp
@@ -25,6 +26,7 @@ if (liveScoresRoot) {
                 initialCompleted={completed}
                 cacheTtl={cacheTtl}
                 initialTab={initialTab}
+                initialSection={initialSection}
             />
         );
     } catch (e) {

@@ -175,10 +175,37 @@ class CricketMatch extends Model
         $status = $this->status === 'live' ? 'live' : ($this->status === 'completed' ? 'completed' : 'scheduled');
         $statusText = $this->match_result ?: ($status === 'live' ? 'Live in progress' : ($status === 'completed' ? 'Match Finished' : 'Match Scheduled'));
 
+        // Local live match auto-dismissal:
+        // Non-Test matches live for > 1 day -> Match Dismissed (moved to Archives)
+        // Test matches live for > 5 days -> Match Dismissed (moved to Archives)
+        $isDismissed = false;
+        if ($status === 'live' && $this->match_date) {
+            $isTest = str_contains(strtolower($this->match_type ?? ''), 'test')
+                || str_contains(strtolower($this->tournament_name ?? ''), 'test');
+            $maxDays = $isTest ? 5 : 1;
+
+            $matchDateCarbon = \Carbon\Carbon::parse($this->match_date)->startOfDay();
+            $today = \Carbon\Carbon::now()->startOfDay();
+            $daysDiff = $matchDateCarbon->diffInDays($today, false);
+
+            if ($daysDiff > $maxDays) {
+                $status = 'completed';
+                $statusText = 'Match Dismissed';
+                $isDismissed = true;
+                try {
+                    $this->newQuery()->where('id', $this->id)->update([
+                        'status' => 'abandoned',
+                        'match_result' => 'Match Dismissed'
+                    ]);
+                } catch (\Throwable $e) {}
+            }
+        }
+
         return [
             'id' => 'local_' . $this->id,
             'local_id' => $this->id,
             'is_local' => true,
+            'is_dismissed' => $isDismissed,
             'is_network_match' => $isNetworkMatch,
             'name' => "{$this->team1_name} vs {$this->team2_name}",
             'status' => $status,

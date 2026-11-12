@@ -585,10 +585,13 @@ class CricketDataService
             $matchEnded = (bool) ($match['matchEnded'] ?? false);
             $matchType = (string) ($match['matchType'] ?? '');
 
-            // Detect completed status from text keywords (must not match toss events)
+            // Detect completed status from text keywords (must not match toss events or ongoing test events)
             $stLower = strtolower($statusText);
             $isToss = str_contains($stLower, 'toss');
-            $isCompletedByText = !$isToss && (
+            $isTestOngoing = (str_contains($stLower, 'stump') || str_contains($stLower, 'trail') || str_contains($stLower, 'lead') || preg_match('/day\s*[1-4]/i', $stLower))
+                && !str_contains($stLower, 'won') && !str_contains($stLower, 'beat') && !str_contains($stLower, 'drawn');
+
+            $isCompletedByText = !$isToss && !$isTestOngoing && (
                 str_contains($stLower, 'won by') ||
                 str_contains($stLower, 'won the match') ||
                 str_contains($stLower, 'beat') ||
@@ -600,12 +603,16 @@ class CricketDataService
 
             if ($isCompletedByText) {
                 $matchEnded = true;
+            } elseif ($isTestOngoing) {
+                $matchEnded = false;
+                $matchStarted = true;
             }
 
             $score = $this->normalizeScore($match['score'] ?? null, $statusText, $matchEnded, $matchType);
 
-            // Check if both teams completed 50 overs (ODI) or 20 overs (T20)
-            if (!empty($score) && count($score) >= 2) {
+            // Check if both teams completed 50 overs (ODI) or 20 overs (T20) - NOT for test matches!
+            $isTestMatch = str_contains(strtolower($matchType), 'test') || $isTestOngoing;
+            if (!$isTestMatch && !empty($score) && count($score) >= 2) {
                 $inn2Overs = (float) ($score[1]['overs'] ?? 0);
                 if ($inn2Overs >= 50 || ($inn2Overs >= 20 && str_contains(strtolower($matchType), 't20'))) {
                     $matchEnded = true;

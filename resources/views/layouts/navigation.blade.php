@@ -24,8 +24,16 @@
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-6 lg:space-x-8 md:-my-px md:ms-8 md:flex">
-                    <x-nav-link :href="route('live-scores.index')" :active="request()->routeIs('live-scores.*') || request()->routeIs('home')">
-                        <span>🏏 {{ __('Live Scores') }}</span>
+                    <x-nav-link :href="route('live-scores.index', ['section' => 'international'])" :active="(request()->routeIs('live-scores.*') || request()->routeIs('home')) && request()->get('section', 'international') === 'international'">
+                        <span class="inline-flex items-center gap-1.5 font-bold">
+                            <span>🌍 {{ __('International Cricket') }}</span>
+                        </span>
+                    </x-nav-link>
+
+                    <x-nav-link :href="route('live-scores.index', ['section' => 'local'])" :active="request()->routeIs('live-scores.*') && request()->get('section') === 'local'">
+                        <span class="inline-flex items-center gap-1.5 font-bold">
+                            <span>🏏 {{ __('Local Cricket') }}</span>
+                        </span>
                     </x-nav-link>
 
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
@@ -183,8 +191,12 @@
     <!-- Responsive Navigation Menu -->
     <div :class="{'block': open, 'hidden': ! open}" class="hidden md:hidden bg-white dark:bg-[#0b1120] border-t border-slate-200 dark:border-white/10 shadow-lg">
         <div class="pt-2 pb-3 space-y-1">
-            <x-responsive-nav-link :href="route('live-scores.index')" :active="request()->routeIs('live-scores.*') || request()->routeIs('home')">
-                <span>🏏 {{ __('Live Scores') }}</span>
+            <x-responsive-nav-link :href="route('live-scores.index', ['section' => 'international'])" :active="(request()->routeIs('live-scores.*') || request()->routeIs('home')) && request()->get('section', 'international') === 'international'">
+                <span>🌍 {{ __('International Cricket') }}</span>
+            </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('live-scores.index', ['section' => 'local'])" :active="request()->routeIs('live-scores.*') && request()->get('section') === 'local'">
+                <span>🏏 {{ __('Local Cricket') }}</span>
             </x-responsive-nav-link>
 
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
