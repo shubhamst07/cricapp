@@ -1138,11 +1138,6 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                             </span>
                             <span className="truncate">{match.status_text}</span>
                         </div>
-                        {match.dateTimeGMT && (
-                            <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                                {match.dateTimeGMT}
-                            </span>
-                        )}
                     </div>
                 )}
             </div>

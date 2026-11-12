@@ -555,9 +555,11 @@ class CricketDataService
                 $displayScore = "{$runs}/{$wickets}";
             }
 
+            $cleanTeam = trim(preg_replace('/\s*innings\s*\d*/i', '', $inningName));
+
             $scores[] = [
-                'inning' => $inningName,
-                'batting_team' => $inningName,
+                'inning' => $cleanTeam ?: $inningName,
+                'batting_team' => $cleanTeam ?: $inningName,
                 'runs' => $runs,
                 'r' => $runs,
                 'wickets' => $wickets,
@@ -623,7 +625,21 @@ class CricketDataService
             if (!empty($score)) {
                 $matchStarted = true;
                 if (!$matchEnded && in_array($stLower, ['', 'scheduled', 'match scheduled', 'upcoming'])) {
-                    $statusText = 'In Progress';
+                    if ($isTestMatch && count($score) >= 2) {
+                        $r1 = (int) ($score[0]['runs'] ?? $score[0]['r'] ?? 0);
+                        $r2 = (int) ($score[1]['runs'] ?? $score[1]['r'] ?? 0);
+                        $rawT2 = $score[1]['batting_team'] ?: ($match['teams'][1] ?? 'Team 2');
+                        $t2 = trim(preg_replace('/\s*innings\s*\d*/i', '', $rawT2));
+                        if ($r1 > $r2) {
+                            $statusText = "{$t2} trail by " . ($r1 - $r2) . " runs";
+                        } elseif ($r2 > $r1) {
+                            $statusText = "{$t2} lead by " . ($r2 - $r1) . " runs";
+                        } else {
+                            $statusText = "Scores Level";
+                        }
+                    } else {
+                        $statusText = 'In Progress';
+                    }
                 }
             } elseif (empty($score) && in_array($stLower, ['', 'scheduled', 'match scheduled', 'upcoming'])) {
                 // Definitely an upcoming scheduled match
@@ -639,7 +655,8 @@ class CricketDataService
                         $r1 = (int) ($score[0]['runs'] ?? 0);
                         $r2 = (int) ($score[1]['runs'] ?? 0);
                         $t1 = $score[0]['batting_team'] ?: ($match['teams'][0] ?? 'Team 1');
-                        $t2 = $score[1]['batting_team'] ?: ($match['teams'][1] ?? 'Team 2');
+                        $rawT2 = $score[1]['batting_team'] ?: ($match['teams'][1] ?? 'Team 2');
+                        $t2 = trim(preg_replace('/\s*innings\s*\d*/i', '', $rawT2));
                         if ($r1 > $r2) {
                             $statusText = "{$t1} won by " . ($r1 - $r2) . " runs";
                         } elseif ($r2 > $r1) {
