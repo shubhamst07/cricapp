@@ -39,10 +39,10 @@ class LiveScoreController extends Controller
             }
         }
 
-        $live = $bundle['live'] ?? collect();
-        $scheduled = $bundle['scheduled'] ?? collect();
-        $completed = $bundle['completed'] ?? collect();
-        $matches = $bundle['matches'] ?? [];
+        $live = collect($bundle['live'] ?? []);
+        $scheduled = collect($bundle['scheduled'] ?? []);
+        $completed = collect($bundle['completed'] ?? []);
+        $matches = is_array($bundle['matches'] ?? null) ? $bundle['matches'] : (isset($bundle['all']) && is_array($bundle['all']) ? $bundle['all'] : []);
 
         $cacheTtl = $cricket->getCacheTtl();
 
@@ -155,21 +155,6 @@ class LiveScoreController extends Controller
         }
 
         return compact('live', 'scheduled', 'completed', 'matches');
-    }
-
-        $cacheTtl = $cricket->getCacheTtl();
-
-        $section = $request->get('section', 'international');
-        if (!in_array($section, ['international', 'local'])) {
-            $section = 'international';
-        }
-
-        $tab = $request->get('tab');
-        if (!in_array($tab, ['live', 'upcoming', 'recent', 'archives'])) {
-            $tab = $live->count() > 0 ? 'live' : ($completed->count() > 0 ? 'recent' : 'upcoming');
-        }
-
-        return view('live.index', compact('live', 'scheduled', 'completed', 'matches', 'cacheTtl', 'tab', 'section'));
     }
 
     public function show(string $matchId, CricketDataService $cricket, Request $request)
