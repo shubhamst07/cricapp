@@ -585,32 +585,20 @@ class CricketDataService
             $matchEnded = (bool) ($match['matchEnded'] ?? false);
             $matchType = (string) ($match['matchType'] ?? '');
 
-            // Detect completed status from text keywords
-            $isCompletedByText = str_contains(strtolower($statusText), 'won by') ||
-                str_contains(strtolower($statusText), 'won the') ||
-                str_contains(strtolower($statusText), ' won') ||
-                str_contains(strtolower($statusText), 'beat') ||
-                str_contains(strtolower($statusText), 'tied') ||
-                str_contains(strtolower($statusText), 'drawn') ||
-                str_contains(strtolower($statusText), 'conceded') ||
-                str_contains(strtolower($statusText), 'complete') ||
-                str_contains(strtolower($statusText), 'result') ||
-                str_contains(strtolower($statusText), 'match ended');
+            // Detect completed status from text keywords (must not match toss events)
+            $stLower = strtolower($statusText);
+            $isToss = str_contains($stLower, 'toss');
+            $isCompletedByText = !$isToss && (
+                str_contains($stLower, 'won by') ||
+                str_contains($stLower, 'won the match') ||
+                str_contains($stLower, 'beat') ||
+                str_contains($stLower, 'tied') ||
+                str_contains($stLower, 'drawn') ||
+                str_contains($stLower, 'conceded') ||
+                str_contains($stLower, 'match ended')
+            );
 
-            // Date check: if match was scheduled > 12 hours ago and is not a multi-day test in progress
-            $dateTimeGMT = (string) ($match['dateTimeGMT'] ?? '');
-            $isPastDate = false;
-            if (!empty($dateTimeGMT)) {
-                $matchTimestamp = strtotime($dateTimeGMT);
-                if ($matchTimestamp && (time() - $matchTimestamp > 12 * 3600)) {
-                    $isTest = str_contains(strtolower($matchType), 'test') || str_contains(strtolower($statusText), 'day ');
-                    if (!$isTest) {
-                        $isPastDate = true;
-                    }
-                }
-            }
-
-            if ($isCompletedByText || $isPastDate) {
+            if ($isCompletedByText) {
                 $matchEnded = true;
             }
 
@@ -627,9 +615,13 @@ class CricketDataService
             // ONLY if match is NOT ended, should score imply in progress
             if (!empty($score)) {
                 $matchStarted = true;
-                if (!$matchEnded && in_array(strtolower(trim($statusText)), ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                if (!$matchEnded && in_array($stLower, ['', 'scheduled', 'match scheduled', 'upcoming'])) {
                     $statusText = 'In Progress';
                 }
+            } elseif (empty($score) && in_array($stLower, ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                // Definitely an upcoming scheduled match
+                $matchStarted = false;
+                $matchEnded = false;
             }
 
             // If match is ended, status_text must never be 'In Progress' or empty
@@ -690,28 +682,18 @@ class CricketDataService
         $matchEnded = (bool) ($data['matchEnded'] ?? false);
         $matchType = (string) ($data['matchType'] ?? '');
 
-        // Detect completed status
-        $isCompletedByText = str_contains(strtolower($statusText), 'won by') ||
-            str_contains(strtolower($statusText), 'won the') ||
-            str_contains(strtolower($statusText), ' won') ||
-            str_contains(strtolower($statusText), 'beat') ||
-            str_contains(strtolower($statusText), 'tied') ||
-            str_contains(strtolower($statusText), 'drawn') ||
-            str_contains(strtolower($statusText), 'conceded') ||
-            str_contains(strtolower($statusText), 'complete') ||
-            str_contains(strtolower($statusText), 'result') ||
-            str_contains(strtolower($statusText), 'match ended');
-
-        $dateTimeGMT = (string) ($data['dateTimeGMT'] ?? '');
-        if (!empty($dateTimeGMT)) {
-            $matchTimestamp = strtotime($dateTimeGMT);
-            if ($matchTimestamp && (time() - $matchTimestamp > 12 * 3600)) {
-                $isTest = str_contains(strtolower($matchType), 'test') || str_contains(strtolower($statusText), 'day ');
-                if (!$isTest) {
-                    $matchEnded = true;
-                }
-            }
-        }
+        // Detect completed status (must not match toss events)
+        $stLower = strtolower($statusText);
+        $isToss = str_contains($stLower, 'toss');
+        $isCompletedByText = !$isToss && (
+            str_contains($stLower, 'won by') ||
+            str_contains($stLower, 'won the match') ||
+            str_contains($stLower, 'beat') ||
+            str_contains($stLower, 'tied') ||
+            str_contains($stLower, 'drawn') ||
+            str_contains($stLower, 'conceded') ||
+            str_contains($stLower, 'match ended')
+        );
 
         if ($isCompletedByText) {
             $matchEnded = true;

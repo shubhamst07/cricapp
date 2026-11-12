@@ -490,15 +490,20 @@ class ScoreService:
             else:
                 venue = meta_info
 
-            # Match completed detection
-            is_completed = any(w in status_text.lower() for w in ["won by", "won the", " won", "beat", "tied", "drawn", "conceded", "complete", "result", "abandoned"])
+            # Match completed detection (must not match toss events like "won the toss")
+            st_lower = status_text.lower()
+            is_toss = "toss" in st_lower
+            is_completed = not is_toss and any(w in st_lower for w in ["won by", "won the match", " beat ", "tied", "drawn", "conceded", "match ended", "abandoned"])
 
             # Match started detection
-            match_started = bool(scores) or is_completed
+            match_started = is_toss or bool(scores) or is_completed
 
             # Normalize status_text for matches with active score or upcoming matches
             if is_completed:
                 # Keep completed status
+                pass
+            elif is_toss:
+                # Keep toss text (live match)
                 pass
             elif scores:
                 if not status_text or status_text.lower() in ["scheduled", "match scheduled", "upcoming"]:
@@ -579,6 +584,9 @@ class ScoreService:
                                         existing["matchStarted"] = True
                                         if not existing.get("status_text") or existing["status_text"].lower() == "in progress":
                                             existing["status_text"] = m.get("status_text") or "Match Completed"
+                                    elif page_type == "upcoming" and not existing.get("score"):
+                                        existing["matchEnded"] = False
+                                        existing["matchStarted"] = False
                                     if m.get("score"):
                                         existing["score"] = m["score"]
                                     if m.get("series_name") and m["series_name"] != "Other Matches":
@@ -612,6 +620,9 @@ class ScoreService:
                                     if page_type == "recent":
                                         existing["matchEnded"] = True
                                         existing["matchStarted"] = True
+                                    elif page_type == "upcoming" and not existing.get("score"):
+                                        existing["matchEnded"] = False
+                                        existing["matchStarted"] = False
                                     if m.get("score") and not existing.get("score"):
                                         existing["score"] = m["score"]
                                     if m.get("series_name") and existing.get("series_name") in ["Other Matches", "Other Series"]:

@@ -39,15 +39,21 @@ export default function LiveScoresApp({
 
     const isMatchEnded = (m) => {
         if (!m) return false;
-        if (m.status === 'completed' || m.status === 'abandoned' || m.matchEnded) return true;
+        // Never override local platform matches — their status is set by match admin
+        if (m.is_local || String(m.id || '').startsWith('local_')) {
+            return m.status === 'completed' || m.status === 'abandoned';
+        }
+        // Scheduled matches with no scores are definitely UPCOMING, never ended!
+        if (m.status === 'scheduled' && (!m.score || !Array.isArray(m.score) || m.score.length === 0)) {
+            return false;
+        }
+        if (m.status === 'completed' || m.status === 'abandoned' || m.matchEnded) {
+            return true;
+        }
         const st = (m.status_text || '').toLowerCase();
-        if (['won by', 'won the', ' won', 'beat', 'tied', 'drawn', 'conceded', 'complete', 'result', 'defeated', 'match ended', 'abandoned'].some(w => st.includes(w))) return true;
-        if (m.dateTimeGMT) {
-            const matchTime = new Date(m.dateTimeGMT).getTime();
-            if (!isNaN(matchTime) && Date.now() - matchTime > 12 * 3600 * 1000) {
-                const isTest = (m.matchType || '').toLowerCase().includes('test') || st.includes('day ');
-                if (!isTest) return true;
-            }
+        if (st.includes('toss')) return false;
+        if (['won by', 'won the match', ' beat ', 'tied', 'drawn', 'conceded', 'match ended'].some(w => st.includes(w))) {
+            return true;
         }
         if (Array.isArray(m.score) && m.score.length >= 2) {
             const o2 = parseFloat(m.score[1].overs || m.score[1].o || 0);

@@ -33,18 +33,28 @@ class LiveScoreController extends Controller
 
         // Ensure any match with active score data is marked correctly as completed or live
         $matches = array_map(function ($m) {
+            // Local platform matches are already strictly categorized by the match admin/database
+            if (!empty($m['is_local']) || str_starts_with((string)($m['id'] ?? ''), 'local_')) {
+                return $m;
+            }
+
+            // Scheduled matches with no scores are definitely upcoming
+            if (($m['status'] ?? '') === 'scheduled' && empty($m['score'])) {
+                return $m;
+            }
+
             $isEnded = ($m['matchEnded'] ?? false) || in_array($m['status'] ?? '', ['completed', 'abandoned']);
             $statusLower = strtolower(trim($m['status_text'] ?? ''));
-            $isCompletedText = str_contains($statusLower, 'won by') ||
-                str_contains($statusLower, 'won the') ||
-                str_contains($statusLower, ' won') ||
+            $isToss = str_contains($statusLower, 'toss');
+            $isCompletedText = !$isToss && (
+                str_contains($statusLower, 'won by') ||
+                str_contains($statusLower, 'won the match') ||
                 str_contains($statusLower, 'beat') ||
                 str_contains($statusLower, 'tied') ||
                 str_contains($statusLower, 'drawn') ||
                 str_contains($statusLower, 'conceded') ||
-                str_contains($statusLower, 'complete') ||
-                str_contains($statusLower, 'result') ||
-                str_contains($statusLower, 'match ended');
+                str_contains($statusLower, 'match ended')
+            );
 
             if ($isEnded || $isCompletedText) {
                 $m['status'] = 'completed';
