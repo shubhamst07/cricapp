@@ -8,6 +8,8 @@ use App\Http\Controllers\UmpireController;
 use App\Http\Controllers\PageController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/ping', fn () => response('pong', 200)->header('Content-Type', 'text/plain'));
+
 Route::get('/', [LiveScoreController::class, 'index'])->name('home');
 Route::get('/app-status', function () {
     $engineResp = null;
