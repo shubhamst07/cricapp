@@ -106,7 +106,21 @@ class LiveScoreController extends Controller
                 return $m;
             }
 
-            // 2. Completed text detection
+            // 2. Chasing / In Progress / Toss / Ongoing Test: ALWAYS LIVE, NEVER COMPLETED!
+            $isChasing = str_contains($statusLower, 'need ') || str_contains($statusLower, 'require ') || str_contains($statusLower, 'target ');
+            $isToss = (str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to') || (str_contains($statusLower, 'toss') && !str_contains($statusLower, 'abandon')));
+            $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
+                && !str_contains($statusLower, 'won') && !str_contains($statusLower, 'beat') && !str_contains($statusLower, 'drawn');
+            $isInProgress = str_contains($statusLower, 'in progress') || str_contains($statusLower, 'rain') || str_contains($statusLower, 'delay') || $isChasing || $isToss || $isTestOngoing;
+
+            if ($isInProgress) {
+                $m['status'] = 'live';
+                $m['matchEnded'] = false;
+                $m['matchStarted'] = true;
+                return $m;
+            }
+
+            // 3. Completed text detection
             $isCompletedText = str_contains($statusLower, 'won by') ||
                 str_contains($statusLower, 'won the match') ||
                 str_contains($statusLower, 'beat') ||
@@ -120,18 +134,6 @@ class LiveScoreController extends Controller
             if ($isEnded) {
                 $m['status'] = 'completed';
                 $m['matchEnded'] = true;
-                $m['matchStarted'] = true;
-                return $m;
-            }
-
-            // 3. Ongoing toss or test match day in progress
-            $isToss = (str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to') || (str_contains($statusLower, 'toss') && !str_contains($statusLower, 'abandon')));
-            $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
-                && !str_contains($statusLower, 'won') && !str_contains($statusLower, 'beat') && !str_contains($statusLower, 'drawn');
-
-            if ($isTestOngoing || $isToss) {
-                $m['status'] = 'live';
-                $m['matchEnded'] = false;
                 $m['matchStarted'] = true;
                 return $m;
             }

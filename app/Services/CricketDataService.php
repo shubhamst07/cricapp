@@ -886,13 +886,15 @@ class CricketDataService
             $matchEnded = (bool) ($match['matchEnded'] ?? false);
             $matchType = (string) ($match['matchType'] ?? '');
 
-            // Detect completed status from text keywords (must not match toss events or ongoing test events)
+            // Detect status from text keywords
             $stLower = strtolower($statusText);
             $isToss = str_contains($stLower, 'toss') || str_contains($stLower, 'opt to') || str_contains($stLower, 'elected to') || str_contains($stLower, 'chose to');
             $isTestOngoing = (str_contains($stLower, 'stump') || str_contains($stLower, 'trail') || str_contains($stLower, 'lead') || preg_match('/day\s*[1-4]/i', $stLower))
                 && !str_contains($stLower, 'won') && !str_contains($stLower, 'beat') && !str_contains($stLower, 'drawn');
+            $isChasing = str_contains($stLower, 'need ') || str_contains($stLower, 'require ') || str_contains($stLower, 'target ');
+            $isInProgress = str_contains($stLower, 'in progress') || str_contains($stLower, 'rain') || str_contains($stLower, 'delay') || $isChasing || $isToss || $isTestOngoing;
 
-            $isCompletedByText = !$isToss && !$isTestOngoing && (
+            $isCompletedByText = !$isToss && !$isTestOngoing && !$isChasing && (
                 str_contains($stLower, 'won by') ||
                 str_contains($stLower, 'won the match') ||
                 str_contains($stLower, 'beat') ||
@@ -902,18 +904,18 @@ class CricketDataService
                 str_contains($stLower, 'match ended')
             );
 
-            if ($isCompletedByText) {
-                $matchEnded = true;
-            } elseif ($isTestOngoing || $isToss) {
+            if ($isInProgress) {
                 $matchEnded = false;
                 $matchStarted = true;
+            } elseif ($isCompletedByText) {
+                $matchEnded = true;
             }
 
             $score = $this->normalizeScore($match['score'] ?? null, $statusText, $matchEnded, $matchType);
 
-            // Check if both teams completed 50 overs (ODI) or 20 overs (T20) - NOT for test matches!
+            // Check if both teams completed 50 overs (ODI) or 20 overs (T20) - NOT for test matches and NOT if still chasing!
             $isTestMatch = str_contains(strtolower($matchType), 'test') || $isTestOngoing;
-            if (!$isTestMatch && !empty($score) && count($score) >= 2) {
+            if (!$isTestMatch && !$isInProgress && !empty($score) && count($score) >= 2) {
                 $inn2Overs = (float) ($score[1]['overs'] ?? 0);
                 if ($inn2Overs >= 50 || ($inn2Overs >= 20 && str_contains(strtolower($matchType), 't20'))) {
                     $matchEnded = true;
@@ -949,23 +951,7 @@ class CricketDataService
             // If match is ended, status_text must never be 'In Progress' or empty
             if ($matchEnded) {
                 if (in_array(strtolower(trim($statusText)), ['', 'scheduled', 'match scheduled', 'upcoming', 'in progress'])) {
-                    // Try to generate result from scores if possible
-                    if (!empty($score) && count($score) >= 2) {
-                        $r1 = (int) ($score[0]['runs'] ?? 0);
-                        $r2 = (int) ($score[1]['runs'] ?? 0);
-                        $t1 = $score[0]['batting_team'] ?: ($match['teams'][0] ?? 'Team 1');
-                        $rawT2 = $score[1]['batting_team'] ?: ($match['teams'][1] ?? 'Team 2');
-                        $t2 = trim(preg_replace('/\s*innings\s*\d*/i', '', $rawT2));
-                        if ($r1 > $r2) {
-                            $statusText = "{$t1} won by " . ($r1 - $r2) . " runs";
-                        } elseif ($r2 > $r1) {
-                            $statusText = "{$t2} won";
-                        } else {
-                            $statusText = "Match Tied";
-                        }
-                    } else {
-                        $statusText = 'Match Completed';
-                    }
+                    $statusText = 'Match Completed';
                 }
             }
 

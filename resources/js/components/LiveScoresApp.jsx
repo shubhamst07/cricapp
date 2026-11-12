@@ -98,6 +98,11 @@ export default function LiveScoresApp({
             return false;
         }
 
+        // 4. Chasing / In-Progress matches are ALWAYS LIVE, NEVER ended!
+        const isChasing = ['need ', 'require ', 'target '].some(w => st.includes(w));
+        const isInProgress = st.includes('in progress') || st.includes('rain') || st.includes('delay') || isChasing || isToss;
+        if (isInProgress) return false;
+
         if (m.status === 'completed' || m.matchEnded) {
             return true;
         }
