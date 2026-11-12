@@ -10,53 +10,66 @@ class LiveScoreController extends Controller
 {
     public function index(CricketDataService $cricket, Request $request)
     {
-        $forceRefresh = $request->get('refresh') === 'true';
-        if ($forceRefresh) {
-            $cricket->clearMatchCache();
-        }
-
-        $currentUserId = auth()->id();
-        $currentUserPhone = auth()->user()->phone ?? null;
-
-        $indexCacheKey = 'live_index_matches_' . ($currentUserId ?: 'guest');
-        $staleCacheKey = $indexCacheKey . '_stale';
-        if ($forceRefresh) {
-            \Illuminate\Support\Facades\Cache::forget($indexCacheKey);
-            \Illuminate\Support\Facades\Cache::forget($staleCacheKey);
-        }
-
-        $bundle = \Illuminate\Support\Facades\Cache::get($indexCacheKey);
-
-        if (!$bundle) {
-            $staleBundle = \Illuminate\Support\Facades\Cache::get($staleCacheKey);
-            if ($staleBundle && !$forceRefresh) {
-                // Immediate sub-second response using warm stale cache
-                $bundle = $staleBundle;
-            } else {
-                $bundle = $this->buildLiveIndexBundle($cricket, $currentUserId, $currentUserPhone, $forceRefresh);
-                \Illuminate\Support\Facades\Cache::put($indexCacheKey, $bundle, 45);
-                \Illuminate\Support\Facades\Cache::put($staleCacheKey, $bundle, 600);
-            }
-        }
-
-        $live = collect($bundle['live'] ?? []);
-        $scheduled = collect($bundle['scheduled'] ?? []);
-        $completed = collect($bundle['completed'] ?? []);
-        $matches = is_array($bundle['matches'] ?? null) ? $bundle['matches'] : (isset($bundle['all']) && is_array($bundle['all']) ? $bundle['all'] : []);
-
-        $cacheTtl = $cricket->getCacheTtl();
-
         $section = $request->get('section', 'international');
         if (!in_array($section, ['international', 'local'])) {
             $section = 'international';
         }
 
-        $tab = $request->get('tab');
-        if (!in_array($tab, ['live', 'upcoming', 'recent', 'archives'])) {
-            $tab = $live->count() > 0 ? 'live' : ($completed->count() > 0 ? 'recent' : 'upcoming');
-        }
+        try {
+            $forceRefresh = $request->get('refresh') === 'true';
+            if ($forceRefresh) {
+                $cricket->clearMatchCache();
+            }
 
-        return view('live.index', compact('live', 'scheduled', 'completed', 'matches', 'cacheTtl', 'tab', 'section'));
+            $currentUserId = auth()->id();
+            $currentUserPhone = auth()->user()->phone ?? null;
+
+            $indexCacheKey = 'live_index_matches_' . ($currentUserId ?: 'guest');
+            $staleCacheKey = $indexCacheKey . '_stale';
+            if ($forceRefresh) {
+                \Illuminate\Support\Facades\Cache::forget($indexCacheKey);
+                \Illuminate\Support\Facades\Cache::forget($staleCacheKey);
+            }
+
+            $bundle = \Illuminate\Support\Facades\Cache::get($indexCacheKey);
+
+            if (!$bundle) {
+                $staleBundle = \Illuminate\Support\Facades\Cache::get($staleCacheKey);
+                if ($staleBundle && !$forceRefresh) {
+                    // Immediate sub-second response using warm stale cache
+                    $bundle = $staleBundle;
+                } else {
+                    $bundle = $this->buildLiveIndexBundle($cricket, $currentUserId, $currentUserPhone, $forceRefresh);
+                    \Illuminate\Support\Facades\Cache::put($indexCacheKey, $bundle, 45);
+                    \Illuminate\Support\Facades\Cache::put($staleCacheKey, $bundle, 600);
+                }
+            }
+
+            $live = collect($bundle['live'] ?? []);
+            $scheduled = collect($bundle['scheduled'] ?? []);
+            $completed = collect($bundle['completed'] ?? []);
+            $matches = is_array($bundle['matches'] ?? null) ? $bundle['matches'] : (isset($bundle['all']) && is_array($bundle['all']) ? $bundle['all'] : []);
+
+            $cacheTtl = $cricket->getCacheTtl();
+
+            $tab = $request->get('tab');
+            if (!in_array($tab, ['live', 'upcoming', 'recent', 'archives'])) {
+                $tab = $live->count() > 0 ? 'live' : ($completed->count() > 0 ? 'recent' : 'upcoming');
+            }
+
+            return view('live.index', compact('live', 'scheduled', 'completed', 'matches', 'cacheTtl', 'tab', 'section'));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('LiveScoreController@index error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return view('live.index', [
+                'live' => collect([]),
+                'scheduled' => collect([]),
+                'completed' => collect([]),
+                'matches' => [],
+                'cacheTtl' => ['current_matches' => 30],
+                'tab' => 'live',
+                'section' => $section,
+            ]);
+        }
     }
 
     protected function buildLiveIndexBundle(CricketDataService $cricket, ?int $currentUserId, ?string $currentUserPhone, bool $forceRefresh): array
