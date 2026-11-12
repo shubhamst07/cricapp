@@ -743,6 +743,41 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         });
 
         const allGroups = groupOrder.map(k => groupsMap.get(k));
+
+        const getItemSortScore = (item) => {
+            if (item.type === 'over-separator') {
+                return 9999999999;
+            }
+            if (typeof item.ballMetric === 'number' && !isNaN(item.ballMetric)) {
+                return item.ballMetric;
+            }
+            if (typeof item.over === 'number' && !isNaN(item.over)) {
+                return item.over;
+            }
+            if (typeof item.over === 'string') {
+                const m = item.over.match(/(\d+\.\d+)/);
+                if (m) return parseFloat(m[1]);
+            }
+            if (typeof item.title === 'string') {
+                const m = item.title.match(/(\d+\.\d+)/);
+                if (m) return parseFloat(m[1]);
+            }
+            if (typeof item.timestamp === 'number') {
+                return item.timestamp / 10000000000;
+            }
+            return 0;
+        };
+
+        // Sort items inside each numeric over in reverse chronological order (latest ball on top: 6, 5, 4, 3, 2, 1)
+        allGroups.forEach(grp => {
+            if (grp.isNumeric && grp.items.length > 1) {
+                grp.items.sort((a, b) => {
+                    const scoreA = getItemSortScore(a);
+                    const scoreB = getItemSortScore(b);
+                    return scoreB - scoreA; // Latest ball on top!
+                });
+            }
+        });
         const numGroups = allGroups.filter(g => g.isNumeric);
         const isLiveInning = selectedCommInning === 'live' || (availableCommentaryInnings.find(i => String(i.id) === String(selectedCommInning))?.isLive);
         if (numGroups.length > 0 && effectiveStatus === 'live' && isLiveInning) {

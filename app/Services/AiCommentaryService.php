@@ -64,12 +64,13 @@ class AiCommentaryService
         $bowler = $bowler ?: 'The bowler';
         $batsman = $batsman ?: 'The batsman';
 
-        // Detect action category
-        $isWicket = ($badge === 'W' || $badgeType === 'wicket' || stripos($rawDesc, 'out') !== false || stripos($rawDesc, 'caught') !== false || stripos($rawDesc, 'bowled') !== false || stripos($rawDesc, 'lbw') !== false);
-        $isSix = ($badge === '6' || $badgeType === 'six' || stripos($rawDesc, 'six') !== false);
-        $isFour = ($badge === '4' || $badgeType === 'four' || stripos($rawDesc, 'four') !== false);
-        $isWide = (stripos($rawDesc, 'wide') !== false || $badge === 'wd');
-        $isNoBall = (stripos($rawDesc, 'no ball') !== false || $badge === 'nb');
+        // Detect action category with high precision
+        $badgeStr = strtoupper(trim($badge));
+        $isFour = ($badgeStr === '4' || $badgeType === 'four' || preg_match('/\b(four|boundary)\b/i', $title));
+        $isSix = ($badgeStr === '6' || $badgeType === 'six' || preg_match('/\b(six|maximum)\b/i', $title));
+        $isWicket = ($badgeStr === 'W' || $badgeType === 'wicket' || (preg_match('/\b(is out|clean bowled|caught out|run out|stumped|lbw)\b/i', $title) && !$isFour && !$isSix));
+        $isWide = (stripos($rawDesc, 'wide') !== false || $badgeStr === 'WD');
+        $isNoBall = (stripos($rawDesc, 'no ball') !== false || $badgeStr === 'NB');
 
         // Synthesize dynamic AI commentary (English & Hindi)
         $aiEng = '';

@@ -359,6 +359,31 @@ class CricketDataService
             }
             unset($it);
 
+            // Sort deliveries inside the over in reverse chronological order (latest ball on top: 6, 5, 4, 3, 2, 1)
+            usort($merged, function ($a, $b) {
+                $isSepA = (($a['type'] ?? '') === 'over-separator');
+                $isSepB = (($b['type'] ?? '') === 'over-separator');
+                if ($isSepA && !$isSepB) return -1;
+                if (!$isSepA && $isSepB) return 1;
+
+                $valA = (float) ($a['ballMetric'] ?? $a['over'] ?? 0);
+                if (!$valA && isset($a['title']) && preg_match('/(\d+\.\d+)/', $a['title'], $m)) {
+                    $valA = (float) $m[1];
+                }
+                $valB = (float) ($b['ballMetric'] ?? $b['over'] ?? 0);
+                if (!$valB && isset($b['title']) && preg_match('/(\d+\.\d+)/', $b['title'], $m)) {
+                    $valB = (float) $m[1];
+                }
+
+                if ($valA > 0 && $valB > 0 && $valA !== $valB) {
+                    return $valB <=> $valA; // Latest first (e.g. 36.5 before 36.4)
+                }
+
+                $timeA = (int) ($a['timestamp'] ?? 0);
+                $timeB = (int) ($b['timestamp'] ?? 0);
+                return $timeB <=> $timeA;
+            });
+
             $storedOvers[$overKey] = [
                 'match_id' => $matchId,
                 'over_key' => (string) $overKey,
