@@ -21,140 +21,147 @@ class MatchesController extends Controller
 
     public function summary(CricketDataService $cricket, Request $request): JsonResponse
     {
-        if ($request->get('refresh') === 'true') {
-            $cricket->clearMatchCache();
-        }
-
+        $force = $request->get('refresh') === 'true';
         $currentUserId = auth()->id();
         $currentUserPhone = auth()->user()->phone ?? null;
 
-        // 1. Fetch all local platform matches
-        $localMatches = CricketMatch::getAllFormattedForLiveCenter($currentUserId, $currentUserPhone);
+        $cacheKey = 'api_matches_summary_' . ($currentUserId ?: 'guest');
+        if ($force) {
+            $cricket->clearMatchCache();
+            \Illuminate\Support\Facades\Cache::forget($cacheKey);
+        }
 
-        // 2. Fetch external matches
-        $externalMatches = [];
-        try {
-            $externalMatches = $cricket->getCurrentMatches();
-        } catch (\Throwable $e) {
+        $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, 10, function () use ($cricket, $currentUserId, $currentUserPhone, $force) {
+            // 1. Fetch all local platform matches
+            $localMatches = CricketMatch::getAllFormattedForLiveCenter($currentUserId, $currentUserPhone);
+
+            // 2. Fetch external matches
             $externalMatches = [];
-        }
-
-        // 3. Merge matches
-        $matches = array_merge($localMatches, $externalMatches);
-
-        // Ensure any match with active score data is marked correctly as completed or live
-        $matches = array_map(function ($m) {
-            // Local platform matches are already strictly categorized by the match admin/database
-            if (!empty($m['is_local']) || str_starts_with((string)($m['id'] ?? ''), 'local_')) {
-                return $m;
-            }
-
-            $statusLower = strtolower(trim($m['status_text'] ?? ''));
-
-            // 1. Abandoned / Cancelled / No Result matches must NEVER be live or upcoming!
-            $isAbandoned = str_contains($statusLower, 'abandon') || str_contains($statusLower, 'cancel') || str_contains($statusLower, 'no result') || ($m['status'] ?? '') === 'abandoned';
-            if ($isAbandoned) {
-                $m['status'] = 'abandoned';
-                $m['matchEnded'] = true;
-                $m['matchStarted'] = true;
-                return $m;
-            }
-
-            // 2. Completed text detection
-            $isCompletedText = str_contains($statusLower, 'won by') ||
-                str_contains($statusLower, 'won the match') ||
-                str_contains($statusLower, 'beat') ||
-                str_contains($statusLower, 'tied') ||
-                str_contains($statusLower, 'drawn') ||
-                str_contains($statusLower, 'conceded') ||
-                str_contains($statusLower, 'match ended');
-
-            $isEnded = ($m['matchEnded'] ?? false) || ($m['status'] ?? '') === 'completed' || $isCompletedText;
-
-            if ($isEnded) {
-                $m['status'] = 'completed';
-                $m['matchEnded'] = true;
-                $m['matchStarted'] = true;
-                return $m;
-            }
-
-            // 3. Ongoing toss or test match day in progress
-            $isToss = (str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to') || (str_contains($statusLower, 'toss') && !str_contains($statusLower, 'abandon')));
-            $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
-                && !str_contains($statusLower, 'won') && !str_contains($statusLower, 'beat') && !str_contains($statusLower, 'drawn');
-
-            if ($isTestOngoing || $isToss) {
-                $m['status'] = 'live';
-                $m['matchEnded'] = false;
-                $m['matchStarted'] = true;
-                return $m;
-            }
-
-            // Scheduled matches with no scores are definitely upcoming
-            if (($m['status'] ?? '') === 'scheduled' && empty($m['score'])) {
-                return $m;
-            }
-
-            if (($m['status'] ?? '') === 'scheduled' && !empty($m['score'])) {
-                $m['status'] = 'live';
-                $m['matchStarted'] = true;
-                if (in_array($statusLower, ['', 'scheduled', 'match scheduled', 'upcoming'])) {
-                    $m['status_text'] = 'In Progress';
-                }
-            }
-            return $m;
-        }, $matches);
-
-        $sortFn = function ($m) {
-            $name = strtolower($m['name'] ?? '');
-            $series = strtolower($m['series'] ?? $m['series_name'] ?? '');
-            $teams = implode(' ', array_map('strtolower', $m['teams'] ?? []));
-            if (str_contains($teams, 'ind') || str_contains($teams, 'india') || str_contains($name, 'india')) {
-                return 0;
-            }
-            $topTeams = ['australia', 'england', 'new zealand', 'south africa', 'pakistan', 'sri lanka', 'west indies', 'afghanistan', 'bangladesh'];
-            foreach ($topTeams as $tt) {
-                if (str_contains($teams, $tt)) {
-                    return 1;
-                }
-            }
-            if (str_contains($series, 'tour of') || str_contains($series, 'icc') || str_contains($series, 'world cup')) {
-                return 2;
-            }
-            return 3;
-        };
-
-        $live = collect($matches)->where('status', 'live')->sortBy($sortFn)->values();
-        $liveIds = $live->pluck('id')->filter()->toArray();
-
-        $scheduled = collect($matches)->where('status', 'scheduled')
-            ->reject(fn($m) => in_array($m['id'] ?? '', $liveIds))
-            ->sortBy($sortFn)
-            ->values();
-
-        $completed = collect($matches)->filter(fn($m) => in_array($m['status'] ?? '', ['completed', 'abandoned']))
-            ->reject(fn($m) => in_array($m['id'] ?? '', $liveIds))
-            ->sortBy($sortFn)
-            ->values();
-
-        if ($scheduled->isEmpty()) {
             try {
-                $upcomingFromAll = $cricket->getUpcomingMatches();
-                if (!empty($upcomingFromAll)) {
-                    $scheduled = collect($upcomingFromAll)->values();
-                }
+                $externalMatches = $cricket->getCurrentMatches($force);
             } catch (\Throwable $e) {
-                // ignore
+                $externalMatches = [];
             }
-        }
 
-        return response()->json([
-            'live' => $live,
-            'scheduled' => $scheduled,
-            'completed' => $completed,
-            'all' => $matches,
-            'cacheTtl' => $cricket->getCacheTtl(),
-        ]);
+            // 3. Merge matches
+            $matches = array_merge($localMatches, $externalMatches);
+
+            // Ensure any match with active score data is marked correctly as completed or live
+            $matches = array_map(function ($m) {
+                // Local platform matches are already strictly categorized by the match admin/database
+                if (!empty($m['is_local']) || str_starts_with((string)($m['id'] ?? ''), 'local_')) {
+                    return $m;
+                }
+
+                $statusLower = strtolower(trim($m['status_text'] ?? ''));
+
+                // 1. Abandoned / Cancelled / No Result matches must NEVER be live or upcoming!
+                $isAbandoned = str_contains($statusLower, 'abandon') || str_contains($statusLower, 'cancel') || str_contains($statusLower, 'no result') || ($m['status'] ?? '') === 'abandoned';
+                if ($isAbandoned) {
+                    $m['status'] = 'abandoned';
+                    $m['matchEnded'] = true;
+                    $m['matchStarted'] = true;
+                    return $m;
+                }
+
+                // 2. Completed text detection
+                $isCompletedText = str_contains($statusLower, 'won by') ||
+                    str_contains($statusLower, 'won the match') ||
+                    str_contains($statusLower, 'beat') ||
+                    str_contains($statusLower, 'tied') ||
+                    str_contains($statusLower, 'drawn') ||
+                    str_contains($statusLower, 'conceded') ||
+                    str_contains($statusLower, 'match ended');
+
+                $isEnded = ($m['matchEnded'] ?? false) || ($m['status'] ?? '') === 'completed' || $isCompletedText;
+
+                if ($isEnded) {
+                    $m['status'] = 'completed';
+                    $m['matchEnded'] = true;
+                    $m['matchStarted'] = true;
+                    return $m;
+                }
+
+                // 3. Ongoing toss or test match day in progress
+                $isToss = (str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to') || (str_contains($statusLower, 'toss') && !str_contains($statusLower, 'abandon')));
+                $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
+                    && !str_contains($statusLower, 'won') && !str_contains($statusLower, 'beat') && !str_contains($statusLower, 'drawn');
+
+                if ($isTestOngoing || $isToss) {
+                    $m['status'] = 'live';
+                    $m['matchEnded'] = false;
+                    $m['matchStarted'] = true;
+                    return $m;
+                }
+
+                // Scheduled matches with no scores are definitely upcoming
+                if (($m['status'] ?? '') === 'scheduled' && empty($m['score'])) {
+                    return $m;
+                }
+
+                if (($m['status'] ?? '') === 'scheduled' && !empty($m['score'])) {
+                    $m['status'] = 'live';
+                    $m['matchStarted'] = true;
+                    if (in_array($statusLower, ['', 'scheduled', 'match scheduled', 'upcoming'])) {
+                        $m['status_text'] = 'In Progress';
+                    }
+                }
+                return $m;
+            }, $matches);
+
+            $sortFn = function ($m) {
+                $name = strtolower($m['name'] ?? '');
+                $series = strtolower($m['series'] ?? $m['series_name'] ?? '');
+                $teams = implode(' ', array_map('strtolower', $m['teams'] ?? []));
+                if (str_contains($teams, 'ind') || str_contains($teams, 'india') || str_contains($name, 'india')) {
+                    return 0;
+                }
+                $topTeams = ['australia', 'england', 'new zealand', 'south africa', 'pakistan', 'sri lanka', 'west indies', 'afghanistan', 'bangladesh'];
+                foreach ($topTeams as $tt) {
+                    if (str_contains($teams, $tt)) {
+                        return 1;
+                    }
+                }
+                if (str_contains($series, 'tour of') || str_contains($series, 'icc') || str_contains($series, 'world cup')) {
+                    return 2;
+                }
+                return 3;
+            };
+
+            $live = collect($matches)->where('status', 'live')->sortBy($sortFn)->values();
+            $liveIds = $live->pluck('id')->filter()->toArray();
+
+            $scheduled = collect($matches)->where('status', 'scheduled')
+                ->reject(fn($m) => in_array($m['id'] ?? '', $liveIds))
+                ->sortBy($sortFn)
+                ->values();
+
+            $completed = collect($matches)->filter(fn($m) => in_array($m['status'] ?? '', ['completed', 'abandoned']))
+                ->reject(fn($m) => in_array($m['id'] ?? '', $liveIds))
+                ->sortBy($sortFn)
+                ->values();
+
+            if ($scheduled->isEmpty()) {
+                try {
+                    $upcomingFromAll = $cricket->getUpcomingMatches();
+                    if (!empty($upcomingFromAll)) {
+                        $scheduled = collect($upcomingFromAll)->values();
+                    }
+                } catch (\Throwable $e) {
+                    // ignore
+                }
+            }
+
+            return [
+                'live' => $live,
+                'scheduled' => $scheduled,
+                'completed' => $completed,
+                'all' => $matches,
+                'cacheTtl' => $cricket->getCacheTtl(),
+            ];
+        });
+
+        return response()->json($data);
     }
 
     public function show(string $matchId, CricketDataService $cricket): JsonResponse

@@ -230,24 +230,28 @@ class CricketMatch extends Model
      */
     public static function getAllFormattedForLiveCenter(?int $currentUserId = null, ?string $currentUserPhone = null): array
     {
-        $matches = static::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])
-            ->latest('id')
-            ->get();
+        $cacheKey = 'local_platform_matches_' . ($currentUserId ?: 'guest');
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 10, function () use ($currentUserId, $currentUserPhone) {
+            $matches = static::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])
+                ->latest('id')
+                ->limit(50)
+                ->get();
 
-        $formatted = $matches->map(function ($m) use ($currentUserId, $currentUserPhone) {
-            return $m->formatForLiveCenter($currentUserId, $currentUserPhone);
-        })->toArray();
+            $formatted = $matches->map(function ($m) use ($currentUserId, $currentUserPhone) {
+                return $m->formatForLiveCenter($currentUserId, $currentUserPhone);
+            })->toArray();
 
-        // Sort so user associated / network matches appear on top
-        if ($currentUserId) {
-            usort($formatted, function ($a, $b) {
-                if ($a['is_network_match'] === $b['is_network_match']) {
-                    return 0;
-                }
-                return $a['is_network_match'] ? -1 : 1;
-            });
-        }
+            // Sort so user associated / network matches appear on top
+            if ($currentUserId) {
+                usort($formatted, function ($a, $b) {
+                    if ($a['is_network_match'] === $b['is_network_match']) {
+                        return 0;
+                    }
+                    return $a['is_network_match'] ? -1 : 1;
+                });
+            }
 
-        return $formatted;
+            return $formatted;
+        });
     }
 }

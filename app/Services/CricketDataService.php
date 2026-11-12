@@ -88,25 +88,32 @@ class CricketDataService
         return ['error' => 'Live Cricket Service unavailable'];
     }
 
-    public function getCurrentMatches(): array
+    public function getCurrentMatches(bool $forceRefresh = false): array
     {
-        if ($this->provider === 'local') {
-            try {
-                $response = Http::timeout(25)->get("{$this->localUrl}/matches");
-                if ($response->successful()) {
-                    $raw = $response->json();
-                    if ($raw && isset($raw['data']) && is_array($raw['data']) && !empty($raw['data'])) {
-                        return $this->normalizeMatches($raw);
-                    }
-                }
-            } catch (\Throwable $e) {
-                // ignore and try fallback
-            }
+        $cacheKey = $this->cacheKey('local_current_matches');
+        if ($forceRefresh) {
+            Cache::forget($cacheKey);
         }
 
-        // CricAPI provider or fallback
-        $raw = $this->get('currentMatches', ['offset' => 0], $this->currentMatchesTtl, $this->cacheKey('cricapi_current_matches'));
-        return $this->normalizeMatches($raw);
+        return Cache::remember($cacheKey, 12, function () {
+            if ($this->provider === 'local') {
+                try {
+                    $response = Http::timeout(10)->get("{$this->localUrl}/matches");
+                    if ($response->successful()) {
+                        $raw = $response->json();
+                        if ($raw && isset($raw['data']) && is_array($raw['data']) && !empty($raw['data'])) {
+                            return $this->normalizeMatches($raw);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // ignore and try fallback
+                }
+            }
+
+            // CricAPI provider or fallback
+            $raw = $this->get('currentMatches', ['offset' => 0], $this->currentMatchesTtl, $this->cacheKey('cricapi_current_matches'));
+            return $this->normalizeMatches($raw);
+        });
     }
 
     public function getUpcomingMatches(): array
@@ -1073,6 +1080,7 @@ class CricketDataService
             Cache::forget($this->cacheKey("match_{$matchId}"));
             Cache::forget($this->cacheKey("scorecard_{$matchId}"));
         } else {
+            Cache::forget($this->cacheKey('local_current_matches'));
             Cache::forget($this->cacheKey('current_matches'));
             Cache::forget($this->cacheKey('cricapi_current_matches'));
             Cache::forget($this->cacheKey('all_matches'));
