@@ -490,9 +490,9 @@ class ScoreService:
             else:
                 venue = meta_info
 
-            # Match completed detection (must not match toss events like "won the toss", or ongoing test events)
+            # Match completed detection (must not match toss events like "won the toss", "opt to bat", or ongoing test events)
             st_lower = status_text.lower()
-            is_toss = "toss" in st_lower
+            is_toss = any(w in st_lower for w in ["toss", "opt to", "elected to", "chose to", "choose to"])
             is_test_ongoing = any(w in st_lower for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in st_lower for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
             is_completed = not is_toss and not is_test_ongoing and any(w in st_lower for w in ["won by", "won the match", " beat ", "tied", "drawn", "conceded", "match ended", "abandoned"])
 
@@ -503,8 +503,8 @@ class ScoreService:
             if is_completed:
                 # Keep completed status
                 pass
-            elif is_toss:
-                # Keep toss text (live match)
+            elif is_toss or is_test_ongoing:
+                # Keep rich toss or test status text (LIVE match)
                 pass
             elif scores:
                 if not status_text or status_text.lower() in ["scheduled", "match scheduled", "upcoming"]:
@@ -588,6 +588,7 @@ class ScoreService:
                                 if existing.get("id") == m["id"]:
                                     comb_st = (existing.get("status_text", "") + " " + m.get("status_text", "")).lower()
                                     is_comb_test_ongoing = any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
+                                    is_comb_toss = any(w in comb_st for w in ["toss", "opt to", "elected to", "chose to", "choose to"])
                                     if page_type == "recent":
                                         if not is_comb_test_ongoing:
                                             existing["matchEnded"] = True
@@ -597,7 +598,7 @@ class ScoreService:
                                         else:
                                             existing["matchEnded"] = False
                                             existing["matchStarted"] = True
-                                    elif page_type == "upcoming" and not existing.get("score"):
+                                    elif page_type == "upcoming" and not existing.get("score") and not is_comb_toss and not is_comb_test_ongoing:
                                         existing["matchEnded"] = False
                                         existing["matchStarted"] = False
                                     if m.get("score"):
@@ -605,8 +606,13 @@ class ScoreService:
                                     if m.get("series_name") and m["series_name"] != "Other Matches":
                                         existing["series"] = m["series_name"]
                                         existing["series_name"] = m["series_name"]
-                                    if m.get("status_text") and (page_type != "live" or existing.get("status_text") != "Match Completed"):
-                                        existing["status_text"] = m["status_text"]
+                                    new_st = (m.get("status_text") or "").strip()
+                                    old_st = (existing.get("status_text") or "").strip()
+                                    is_old_rich = any(w in old_st.lower() for w in ["opt to", "elected to", "chose to", "toss", "stump", "trail", "lead", "day ", "won by", "beat", "innings break"])
+                                    is_new_generic = new_st.lower() in ["match scheduled", "scheduled", "upcoming", "in progress", ""]
+                                    if not (is_old_rich and is_new_generic):
+                                        if new_st:
+                                            existing["status_text"] = new_st
                                     if m.get("teams") and not existing.get("teams"):
                                         existing["teams"] = m["teams"]
                                     break
@@ -638,6 +644,7 @@ class ScoreService:
                                 if existing.get("id") == m["id"]:
                                     comb_st = (existing.get("status_text", "") + " " + m.get("status_text", "")).lower()
                                     is_comb_test_ongoing = any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
+                                    is_comb_toss = any(w in comb_st for w in ["toss", "opt to", "elected to", "chose to", "choose to"])
                                     if page_type == "recent":
                                         if not is_comb_test_ongoing:
                                             existing["matchEnded"] = True
@@ -645,7 +652,7 @@ class ScoreService:
                                         else:
                                             existing["matchEnded"] = False
                                             existing["matchStarted"] = True
-                                    elif page_type == "upcoming" and not existing.get("score"):
+                                    elif page_type == "upcoming" and not existing.get("score") and not is_comb_toss and not is_comb_test_ongoing:
                                         existing["matchEnded"] = False
                                         existing["matchStarted"] = False
                                     if m.get("score") and not existing.get("score"):
@@ -653,8 +660,13 @@ class ScoreService:
                                     if m.get("series_name") and existing.get("series_name") in ["Other Matches", "Other Series"]:
                                         existing["series"] = m["series_name"]
                                         existing["series_name"] = m["series_name"]
-                                    if m.get("status_text") and m["status_text"].lower() != "in progress":
-                                        existing["status_text"] = m["status_text"]
+                                    new_st = (m.get("status_text") or "").strip()
+                                    old_st = (existing.get("status_text") or "").strip()
+                                    is_old_rich = any(w in old_st.lower() for w in ["opt to", "elected to", "chose to", "toss", "stump", "trail", "lead", "day ", "won by", "beat", "innings break"])
+                                    is_new_generic = new_st.lower() in ["match scheduled", "scheduled", "upcoming", "in progress", ""]
+                                    if not (is_old_rich and is_new_generic):
+                                        if new_st:
+                                            existing["status_text"] = new_st
                                     if m.get("teams") and not existing.get("teams"):
                                         existing["teams"] = m["teams"]
                                     break

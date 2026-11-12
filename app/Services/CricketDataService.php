@@ -589,7 +589,7 @@ class CricketDataService
 
             // Detect completed status from text keywords (must not match toss events or ongoing test events)
             $stLower = strtolower($statusText);
-            $isToss = str_contains($stLower, 'toss');
+            $isToss = str_contains($stLower, 'toss') || str_contains($stLower, 'opt to') || str_contains($stLower, 'elected to') || str_contains($stLower, 'chose to');
             $isTestOngoing = (str_contains($stLower, 'stump') || str_contains($stLower, 'trail') || str_contains($stLower, 'lead') || preg_match('/day\s*[1-4]/i', $stLower))
                 && !str_contains($stLower, 'won') && !str_contains($stLower, 'beat') && !str_contains($stLower, 'drawn');
 
@@ -605,7 +605,7 @@ class CricketDataService
 
             if ($isCompletedByText) {
                 $matchEnded = true;
-            } elseif ($isTestOngoing) {
+            } elseif ($isTestOngoing || $isToss) {
                 $matchEnded = false;
                 $matchStarted = true;
             }

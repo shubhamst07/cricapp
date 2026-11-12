@@ -85,7 +85,8 @@ export default function LiveScoresApp({
             return false;
         }
         const st = (m.status_text || '').toLowerCase();
-        if (st.includes('toss')) return false;
+        const isToss = ['toss', 'opt to', 'elected to', 'chose to'].some(w => st.includes(w));
+        if (isToss) return false;
 
         // Ongoing Test match (Stumps, trail by, lead by, Day 1-4) is NOT ended!
         if ((st.includes('stump') || st.includes('trail') || st.includes('lead') || /day\s*[1-4]/.test(st)) &&
@@ -1103,6 +1104,14 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                             );
                         })}
                     </div>
+                ) : (match.status_text && ['opt to', 'elected to', 'toss', 'chose to'].some(w => match.status_text.toLowerCase().includes(w))) ? (
+                    <div className="p-3 bg-amber-500/15 rounded-2xl border border-amber-500/30 flex items-center gap-2.5 text-xs text-amber-300 font-bold">
+                        <Flame className="w-4 h-4 text-amber-400 shrink-0" />
+                        <div className="min-w-0">
+                            <span className="text-[10px] uppercase font-black tracking-wider text-amber-400 block">Toss Decision</span>
+                            <span className="truncate block text-white font-black">{match.status_text}</span>
+                        </div>
+                    </div>
                 ) : isUpcoming && match.dateTimeGMT ? (
                     <div className="p-3 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 flex items-center gap-2 text-xs text-indigo-300 font-semibold">
                         <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
@@ -1110,8 +1119,9 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                     </div>
                 ) : (
                     /* Default Teams View */
-                    <div className="p-3 bg-slate-950/60 rounded-2xl border border-white/5 text-xs text-slate-400 font-medium">
-                        {match.teams && match.teams.length > 0 ? match.teams.join(' vs ') : 'Match scheduled to begin soon'}
+                    <div className="p-3 bg-slate-950/60 rounded-2xl border border-white/5 flex items-center justify-between text-xs text-slate-300 font-bold">
+                        <span>{match.teams && match.teams.length >= 2 ? `${match.teams[0]} vs ${match.teams[1]}` : 'Match Scheduled'}</span>
+                        <span className="text-[10px] text-slate-500 font-normal">Starts soon</span>
                     </div>
                 )}
 

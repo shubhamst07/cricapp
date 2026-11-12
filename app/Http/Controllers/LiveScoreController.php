@@ -45,11 +45,11 @@ class LiveScoreController extends Controller
 
             $isEnded = ($m['matchEnded'] ?? false) || in_array($m['status'] ?? '', ['completed', 'abandoned']);
             $statusLower = strtolower(trim($m['status_text'] ?? ''));
-            $isToss = str_contains($statusLower, 'toss');
+            $isToss = str_contains($statusLower, 'toss') || str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to');
             $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
                 && !str_contains($statusLower, 'won') && !str_contains($statusLower, 'beat') && !str_contains($statusLower, 'drawn');
 
-            if ($isTestOngoing) {
+            if ($isTestOngoing || $isToss) {
                 $m['status'] = 'live';
                 $m['matchEnded'] = false;
                 $m['matchStarted'] = true;
