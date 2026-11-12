@@ -86,6 +86,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
     // Ball-by-Ball Live Commentary State
     const [commentaryFilter, setCommentaryFilter] = useState('all'); // 'all', 'boundaries', 'wickets', 'notes'
+    const [selectedCommInning, setSelectedCommInning] = useState('live'); // 'live' or specific inning number/id
     const [selectedOverTab, setSelectedOverTab] = useState('all'); // 'all' or specific over key e.g. '102'
     const [expandedOvers, setExpandedOvers] = useState({}); // { [overKey]: boolean }
     const [newCommentaryText, setNewCommentaryText] = useState('');
@@ -518,9 +519,59 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         return list;
     }, [realCommentary, fanCommentaryList, match]);
 
+    // 2.5 Inning Detection: Identify separate innings for multi-day/test matches
+    const availableCommentaryInnings = useMemo(() => {
+        const scInns = scorecard?.data?.innings || [];
+        if (scInns.length > 0) {
+            return scInns.map((inn, idx) => ({
+                id: inn.id ? String(inn.id) : String(idx + 1),
+                num: idx + 1,
+                label: `${inn.short_name || inn.team || `Innings ${idx + 1}`} (${inn.score || ''})`,
+                team: inn.short_name || inn.team,
+                score: inn.score,
+                isLive: miniscore?.inningsId ? String(inn.id) === String(miniscore.inningsId) : idx === scInns.length - 1
+            }));
+        }
+
+        const innSet = new Set();
+        allCommentaryList.forEach(item => {
+            const inn = item.inning || item.inningsId;
+            if (inn) innSet.add(String(inn));
+        });
+
+        if (innSet.size > 1) {
+            return Array.from(innSet).sort((a, b) => parseInt(b, 10) - parseInt(a, 10)).map(id => ({
+                id,
+                num: parseInt(id, 10) || 1,
+                label: `Innings ${id}`,
+                isLive: String(miniscore?.inningsId) === id
+            }));
+        }
+
+        return [];
+    }, [scorecard, allCommentaryList, miniscore]);
+
+    // Active commentary inning target
+    const activeCommentaryInningId = useMemo(() => {
+        if (!availableCommentaryInnings || availableCommentaryInnings.length <= 1) return null;
+        if (selectedCommInning !== 'live') return String(selectedCommInning);
+        const liveInn = availableCommentaryInnings.find(i => i.isLive) || availableCommentaryInnings[availableCommentaryInnings.length - 1];
+        return liveInn ? String(liveInn.id) : null;
+    }, [availableCommentaryInnings, selectedCommInning]);
+
+    // Inning-filtered commentary list
+    const inningCommentaryList = useMemo(() => {
+        if (!activeCommentaryInningId) return allCommentaryList;
+        return allCommentaryList.filter(item => {
+            const itemInn = String(item.inning || item.inningsId || '');
+            if (!itemInn) return true; // keep general match announcements & notes
+            return itemInn === activeCommentaryInningId;
+        });
+    }, [allCommentaryList, activeCommentaryInningId]);
+
     // 3. Filtered Commentary based on user selection: all / balls / boundaries / wickets / notes
     const filteredCommentaryList = useMemo(() => {
-        return allCommentaryList.filter(item => {
+        return inningCommentaryList.filter(item => {
             if (commentaryFilter === 'balls') {
                 return item.type === 'ball';
             }
@@ -535,7 +586,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             }
             return true;
         });
-    }, [allCommentaryList, commentaryFilter]);
+    }, [inningCommentaryList, commentaryFilter]);
 
     // Helper to extract integer over from any commentary item
     const extractItemOverNumber = (item) => {
@@ -643,7 +694,8 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
         const allGroups = groupOrder.map(k => groupsMap.get(k));
         const numGroups = allGroups.filter(g => g.isNumeric);
-        if (numGroups.length > 0) {
+        const isLiveInning = selectedCommInning === 'live' || (availableCommentaryInnings.find(i => String(i.id) === String(selectedCommInning))?.isLive);
+        if (numGroups.length > 0 && effectiveStatus === 'live' && isLiveInning) {
             numGroups[0].isCurrent = true;
         }
 
@@ -652,7 +704,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             numericOverGroups: numGroups,
             hasNumericOvers: numGroups.length > 0
         };
-    }, [filteredCommentaryList]);
+    }, [filteredCommentaryList, selectedCommInning, availableCommentaryInnings, effectiveStatus]);
 
     const isOverExpanded = (grp) => {
         if (selectedOverTab !== 'all' && selectedOverTab === grp.key) {
@@ -820,6 +872,36 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             </React.Fragment>
         );
     };
+
+    const liveCreaseBatTeam = miniscore?.batTeamScoreObj?.teamName || miniscore?.batTeamDetails?.teamName || match?.teams?.[0] || 'Batting';
+    const liveCreaseScore = (() => {
+        if (!miniscore) return '';
+        if (miniscore.batTeamScoreObj?.teamScore) return miniscore.batTeamScoreObj.teamScore;
+        if (miniscore.batTeamScoreObj?.score) return miniscore.batTeamScoreObj.score;
+        if (miniscore.batTeamDetails?.teamScore) return miniscore.batTeamDetails.teamScore;
+        if (miniscore.batTeamDetails?.score) return miniscore.batTeamDetails.score;
+
+        if (innings && innings.length > 0) {
+            const matched = innings.find(i =>
+                (miniscore.inningsId && String(i.id) === String(miniscore.inningsId)) ||
+                (i.short_name && liveCreaseBatTeam && i.short_name.toLowerCase() === liveCreaseBatTeam.toLowerCase()) ||
+                (i.team && liveCreaseBatTeam && i.team.toLowerCase().includes(liveCreaseBatTeam.toLowerCase()))
+            ) || innings[innings.length - 1];
+            if (matched?.score) return matched.score;
+            if (matched?.runs !== undefined && matched?.wickets !== undefined) return `${matched.runs}/${matched.wickets}`;
+        }
+
+        if (match?.score && Array.isArray(match.score)) {
+            const matched = match.score.find(s =>
+                (s.batting_team && liveCreaseBatTeam && s.batting_team.toLowerCase().includes(liveCreaseBatTeam.toLowerCase())) ||
+                (s.inning && liveCreaseBatTeam && s.inning.toLowerCase().includes(liveCreaseBatTeam.toLowerCase()))
+            ) || match.score[match.score.length - 1];
+            if (matched?.display_score) return matched.display_score;
+            if (matched?.r !== undefined && matched?.w !== undefined) return `${matched.r}/${matched.w}`;
+        }
+
+        return '';
+    })();
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -1486,7 +1568,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
                                     <span className="text-[11px] font-black tracking-wider uppercase text-rose-400">Live Crease</span>
                                     <span className="text-white font-black text-sm sm:text-base">
-                                        {miniscore.batTeamScoreObj?.teamName || match?.teams?.[0] || 'Batting'}: {miniscore.batTeamScoreObj?.teamScore || ''} ({miniscore.overs} Ov)
+                                        {liveCreaseBatTeam}{liveCreaseScore ? `: ${liveCreaseScore}` : ''} ({miniscore.overs} Ov)
                                     </span>
                                 </div>
                                 {miniscore.status && (
@@ -1601,6 +1683,44 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 </button>
                             </div>
                         </div>
+
+                        {/* Inning Selector Tabs for Multi-Day / Test Matches */}
+                        {availableCommentaryInnings && availableCommentaryInnings.length > 1 && (
+                            <div className="flex flex-wrap items-center gap-2 p-2.5 bg-black/30 rounded-2xl border border-white/5">
+                                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 flex items-center gap-1.5 mr-1">
+                                    <Trophy className="w-3.5 h-3.5 text-indigo-400" /> Innings:
+                                </span>
+                                {availableCommentaryInnings.map(inn => {
+                                    const isSelected = selectedCommInning === 'live' ? inn.isLive : String(selectedCommInning) === String(inn.id);
+                                    return (
+                                        <button
+                                            key={inn.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedCommInning(inn.id);
+                                                setSelectedOverTab('all');
+                                                setExpandedOvers({});
+                                            }}
+                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 border ${
+                                                isSelected
+                                                    ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-indigo-400/50 shadow-md shadow-indigo-600/30'
+                                                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+                                            }`}
+                                        >
+                                            {inn.isLive && (
+                                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                            )}
+                                            <span>{inn.label}</span>
+                                            {inn.isLive && (
+                                                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-extrabold">
+                                                    Live
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
 
                         {/* Over Selector Bar & Group Controls */}
                         {hasNumericOvers && (

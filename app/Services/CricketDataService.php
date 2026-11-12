@@ -265,36 +265,45 @@ class CricketDataService
         }
 
         $incoming = $fresh['data'] ?? [];
+        $minisInning = (int) ($fresh['miniscore']['inningsId'] ?? 1);
+        if ($minisInning < 1) $minisInning = 1;
 
-        // Group incoming items by Over Key
+        // Group incoming items by Over Key (strictly qualified by Inning to prevent cross-innings collision)
         $incomingGroups = [];
         $lastOverKey = null;
 
         // Pass 1: detect over keys for each incoming item
-        foreach ($incoming as $item) {
-            $overKey = null;
+        foreach ($incoming as &$item) {
+            $itemInning = (int) ($item['inning'] ?? $item['inningsId'] ?? $minisInning);
+            if ($itemInning < 1) $itemInning = 1;
+            $item['inning'] = $itemInning;
+            $item['inningsId'] = $itemInning;
+
+            $overNum = null;
             if (isset($item['overNumber']) && is_numeric($item['overNumber'])) {
-                $overKey = (string) (int) $item['overNumber'];
+                $overNum = (int) $item['overNumber'];
             } elseif (isset($item['over']) && is_numeric($item['over'])) {
-                $overKey = (string) (int) floor((float) $item['over']);
+                $overNum = (int) floor((float) $item['over']);
             } elseif (isset($item['over']) && is_string($item['over']) && preg_match('/(\d+)(?:\.\d+)?/', $item['over'], $m)) {
-                $overKey = (string) (int) $m[1];
+                $overNum = (int) $m[1];
             } elseif (isset($item['time']) && is_string($item['time']) && preg_match('/(\d+)(?:\.\d+)?/', $item['time'], $m)) {
-                $overKey = (string) (int) $m[1];
+                $overNum = (int) $m[1];
             } elseif (isset($item['title']) && is_string($item['title']) && preg_match('/(\d+)\.\d+/', $item['title'], $m)) {
-                $overKey = (string) (int) $m[1];
+                $overNum = (int) $m[1];
             }
 
-            if ($overKey !== null) {
+            if ($overNum !== null) {
+                $overKey = "i{$itemInning}_ov{$overNum}";
                 $lastOverKey = $overKey;
             } elseif ($lastOverKey !== null) {
                 $overKey = $lastOverKey;
             } else {
-                $overKey = 'notes';
+                $overKey = "i{$itemInning}_notes";
             }
 
             $incomingGroups[$overKey][] = $item;
         }
+        unset($item);
 
         // Save / Upsert each incoming over to TiDB / MySQL and local file storage
         $storedOvers = $this->loadStoredOvers($matchId);
@@ -303,9 +312,17 @@ class CricketDataService
             $existingItems = $storedOvers[$overKey]['deliveries'] ?? [];
             $merged = $this->mergeDeliveries($existingItems, $items);
 
+            $firstItem = $items[0] ?? [];
+            $itemInning = (int) ($firstItem['inning'] ?? $firstItem['inningsId'] ?? $minisInning);
+            $overNum = null;
+            if (preg_match('/_ov(\d+)/', $overKey, $om)) {
+                $overNum = (int) $om[1];
+            }
+
             $runs = 0;
             $wickets = 0;
             $bowler = null;
+            $batTeam = $firstItem['batTeam'] ?? null;
             $summary = null;
 
             foreach ($merged as $it) {
@@ -332,10 +349,12 @@ class CricketDataService
             $storedOvers[$overKey] = [
                 'match_id' => $matchId,
                 'over_key' => (string) $overKey,
-                'over_number' => is_numeric($overKey) ? (int) $overKey : null,
+                'over_number' => $overNum,
+                'inning' => $itemInning,
                 'runs' => $runs,
                 'wickets' => $wickets,
                 'bowler' => $bowler,
+                'batting_team' => $batTeam,
                 'summary' => $summary,
                 'deliveries' => $merged,
                 'updated_at' => now()->toIso8601String(),
@@ -346,10 +365,12 @@ class CricketDataService
                 \App\Models\MatchOver::updateOrCreate(
                     ['match_id' => $matchId, 'over_key' => (string) $overKey],
                     [
-                        'over_number' => is_numeric($overKey) ? (int) $overKey : null,
+                        'over_number' => $overNum,
+                        'inning' => $itemInning,
                         'runs' => $runs,
                         'wickets' => $wickets,
                         'bowler' => $bowler,
+                        'batting_team' => $batTeam,
                         'summary' => $summary,
                         'deliveries' => $merged,
                     ]
@@ -362,14 +383,27 @@ class CricketDataService
         // 2. Persist to storage/app/overs/{matchId}.json as permanent file backup
         $this->saveStoredOversToFile($matchId, $storedOvers);
 
-        // 3. Assemble all deliveries from all saved overs in descending order (highest over first)
-        $allDeliveries = [];
-        uksort($storedOvers, function ($a, $b) {
-            if ($a === 'notes') return -1;
-            if ($b === 'notes') return 1;
-            return ((int) $b) <=> ((int) $a);
+        // 3. Assemble all deliveries from all saved overs:
+        // Sort primarily by inning DESCENDING (Inning 2 before Inning 1),
+        // and within the same inning by over_number DESCENDING.
+        uksort($storedOvers, function ($a, $b) use ($storedOvers) {
+            $isNotesA = str_contains($a, 'notes');
+            $isNotesB = str_contains($b, 'notes');
+            if ($isNotesA && !$isNotesB) return -1;
+            if (!$isNotesA && $isNotesB) return 1;
+
+            $innA = (int) ($storedOvers[$a]['inning'] ?? 1);
+            $innB = (int) ($storedOvers[$b]['inning'] ?? 1);
+            if ($innA !== $innB) {
+                return $innB <=> $innA; // Highest inning first
+            }
+
+            $ovA = (int) ($storedOvers[$a]['over_number'] ?? 0);
+            $ovB = (int) ($storedOvers[$b]['over_number'] ?? 0);
+            return $ovB <=> $ovA; // Highest over within that inning first
         });
 
+        $allDeliveries = [];
         foreach ($storedOvers as $group) {
             foreach ($group['deliveries'] as $delivery) {
                 $allDeliveries[] = $delivery;
@@ -390,10 +424,17 @@ class CricketDataService
             $dbOvers = \App\Models\MatchOver::where('match_id', $matchId)->get();
             if ($dbOvers->isNotEmpty()) {
                 foreach ($dbOvers as $row) {
-                    $overs[(string) $row->over_key] = [
+                    $k = (string) $row->over_key;
+                    // Ignore old legacy keys without inning prefix to prevent multi-innings pollution
+                    if (!str_starts_with($k, 'i')) {
+                        continue;
+                    }
+                    $overs[$k] = [
                         'match_id' => $row->match_id,
-                        'over_key' => (string) $row->over_key,
+                        'over_key' => $k,
                         'over_number' => $row->over_number,
+                        'inning' => (int) ($row->inning ?? 1),
+                        'batting_team' => $row->batting_team,
                         'runs' => (int) $row->runs,
                         'wickets' => (int) $row->wickets,
                         'bowler' => $row->bowler,
@@ -412,10 +453,15 @@ class CricketDataService
             $fileData = json_decode(@file_get_contents($filePath), true);
             if (is_array($fileData)) {
                 foreach ($fileData as $k => $v) {
-                    if (!isset($overs[$k])) {
-                        $overs[$k] = $v;
+                    $kStr = (string) $k;
+                    // Ignore old legacy keys without inning prefix
+                    if (!str_starts_with($kStr, 'i')) {
+                        continue;
+                    }
+                    if (!isset($overs[$kStr])) {
+                        $overs[$kStr] = $v;
                     } else {
-                        $overs[$k]['deliveries'] = $this->mergeDeliveries($overs[$k]['deliveries'] ?? [], $v['deliveries'] ?? []);
+                        $overs[$kStr]['deliveries'] = $this->mergeDeliveries($overs[$kStr]['deliveries'] ?? [], $v['deliveries'] ?? []);
                     }
                 }
             }
@@ -510,11 +556,15 @@ class CricketDataService
 
             $matchComm = $parsed['matchCommentary'];
             $miniscore = $parsed['miniscore'] ?? null;
+            $minisInning = (int) ($miniscore['inningsId'] ?? 1);
+            if ($minisInning < 1) $minisInning = 1;
             $formatted = [];
 
             foreach ($matchComm as $commId => $item) {
                 $ctype = $item['commType'] ?? 'commentary';
                 $timestamp = $item['timestamp'] ?? 0;
+                $inningsId = (int) ($item['inningsId'] ?? $minisInning);
+                if ($inningsId < 1) $inningsId = 1;
                 $events = $item['event'] ?? [];
                 if (is_string($events)) {
                     $events = [$events];
@@ -557,6 +607,9 @@ class CricketDataService
                     $formatted[] = [
                         'id' => "over-{$overNum}-{$commId}",
                         'type' => 'over-separator',
+                        'inningsId' => $inningsId,
+                        'inning' => $inningsId,
+                        'batTeam' => $batTeam,
                         'over' => "Over {$overNum}",
                         'overNumber' => $overNum,
                         'badge' => 'OV',
@@ -637,6 +690,8 @@ class CricketDataService
                         $formatted[] = [
                             'id' => "ball-{$commId}",
                             'type' => 'ball',
+                            'inningsId' => $inningsId,
+                            'inning' => $inningsId,
                             'over' => $overStr,
                             'ballMetric' => $ballFloat,
                             'badge' => $badge,
@@ -658,6 +713,8 @@ class CricketDataService
                             $formatted[] = [
                                 'id' => "speech-{$commId}",
                                 'type' => 'interview',
+                                'inningsId' => $inningsId,
+                                'inning' => $inningsId,
                                 'over' => 'QUOTE',
                                 'badge' => '🎙️',
                                 'badgeType' => 'expert',
@@ -671,6 +728,8 @@ class CricketDataService
                             $formatted[] = [
                                 'id' => "wrap-{$commId}",
                                 'type' => 'match_wrap',
+                                'inningsId' => $inningsId,
+                                'inning' => $inningsId,
                                 'over' => 'FINAL',
                                 'badge' => '🏆',
                                 'badgeType' => 'expert',
@@ -680,6 +739,25 @@ class CricketDataService
                                 'timestamp' => $timestamp,
                                 'time' => 'Wrap-up',
                             ];
+                        } else {
+                            $formatted[] = [
+                                'id' => "note-{$commId}",
+                                'type' => 'note',
+                                'inningsId' => $inningsId,
+                                'inning' => $inningsId,
+                                'over' => 'NOTE',
+                                'badge' => '📋',
+                                'badgeType' => 'expert',
+                                'title' => 'Match Note',
+                                'desc' => $cleanText,
+                                'tag' => 'Tactical Note',
+                                'timestamp' => $timestamp,
+                                'time' => 'Update',
+                            ];
+                        }
+                    }
+                }
+            }
                         } else {
                             $formatted[] = [
                                 'id' => "note-{$commId}",

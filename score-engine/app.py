@@ -1149,11 +1149,14 @@ class ScoreService:
 
             match_comm = data.get("matchCommentary", {})
             miniscore = data.get("miniscore", {})
+            minis_inn = int(miniscore.get("inningsId") or 1) if str(miniscore.get("inningsId", "")).isdigit() else 1
 
             formatted = []
             for comm_id, item in match_comm.items():
                 ctype = item.get("commType", "commentary")
                 timestamp = item.get("timestamp") or 0
+                item_inn = item.get("inningsId")
+                innings_id = int(item_inn) if item_inn and str(item_inn).isdigit() else minis_inn
                 events = item.get("event") or []
                 if isinstance(events, str):
                     events = [events]
@@ -1192,6 +1195,9 @@ class ScoreService:
                     formatted.append({
                         "id": f"over-{over_num}-{comm_id}",
                         "type": "over-separator",
+                        "inningsId": innings_id,
+                        "inning": innings_id,
+                        "batTeam": bat_team,
                         "over": f"Over {over_num}",
                         "overNumber": over_num,
                         "badge": "OV",
@@ -1272,6 +1278,8 @@ class ScoreService:
                         formatted.append({
                             "id": f"ball-{comm_id}",
                             "type": "ball",
+                            "inningsId": innings_id,
+                            "inning": innings_id,
                             "over": over_str,
                             "ballMetric": ball_float,
                             "badge": badge,
@@ -1294,6 +1302,8 @@ class ScoreService:
                             formatted.append({
                                 "id": f"speech-{comm_id}",
                                 "type": "interview",
+                                "inningsId": innings_id,
+                                "inning": innings_id,
                                 "over": "QUOTE",
                                 "badge": "🎙️",
                                 "badgeType": "expert",
@@ -1307,6 +1317,8 @@ class ScoreService:
                             formatted.append({
                                 "id": f"wrap-{comm_id}",
                                 "type": "match_wrap",
+                                "inningsId": innings_id,
+                                "inning": innings_id,
                                 "over": "FINAL",
                                 "badge": "🏆",
                                 "badgeType": "expert",
@@ -1320,6 +1332,8 @@ class ScoreService:
                             formatted.append({
                                 "id": f"note-{comm_id}",
                                 "type": "note",
+                                "inningsId": innings_id,
+                                "inning": innings_id,
                                 "over": "NOTE",
                                 "badge": "📋",
                                 "badgeType": "expert",
