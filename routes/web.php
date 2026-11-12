@@ -32,13 +32,19 @@ Route::get('/app-status', function () {
         $scoreEngineLog = substr(file_get_contents(storage_path('logs/score-engine.log')), -1000);
     }
 
+    $laravelLog = null;
+    if (file_exists(storage_path('logs/laravel.log'))) {
+        $laravelLog = substr(file_get_contents(storage_path('logs/laravel.log')), -3000);
+    }
+
     return response()->json([
         'time' => date('Y-m-d H:i:s'),
+        'git_rev' => trim((string) @shell_exec('git rev-parse --short HEAD 2>&1')),
         'provider' => config('services.cricket.provider'),
         'local_url' => config('services.cricket.local_url'),
         'score_engine' => $engineResp,
         'score_engine_error' => $engineError,
-        'score_engine_log' => $scoreEngineLog,
+        'laravel_log' => $laravelLog,
     ]);
 });
 Route::get('/live-scores', [LiveScoreController::class, 'index'])->name('live-scores.index');
