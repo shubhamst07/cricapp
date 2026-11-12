@@ -91,18 +91,26 @@ class CricketDataService
     public function getCurrentMatches(bool $forceRefresh = false): array
     {
         $cacheKey = $this->cacheKey('local_current_matches');
+        $staleKey = $cacheKey . '_stale';
         if ($forceRefresh) {
             Cache::forget($cacheKey);
+            Cache::forget($staleKey);
         }
 
-        return Cache::remember($cacheKey, 12, function () {
+        $cached = Cache::get($cacheKey);
+        if ($cached && !empty($cached)) {
+            return $cached;
+        }
+
+        try {
+            $fresh = null;
             if ($this->provider === 'local') {
                 try {
-                    $response = Http::timeout(10)->get("{$this->localUrl}/matches");
+                    $response = Http::timeout(6)->get("{$this->localUrl}/matches");
                     if ($response->successful()) {
                         $raw = $response->json();
                         if ($raw && isset($raw['data']) && is_array($raw['data']) && !empty($raw['data'])) {
-                            return $this->normalizeMatches($raw);
+                            $fresh = $this->normalizeMatches($raw);
                         }
                     }
                 } catch (\Throwable $e) {
@@ -110,10 +118,28 @@ class CricketDataService
                 }
             }
 
-            // CricAPI provider or fallback
-            $raw = $this->get('currentMatches', ['offset' => 0], $this->currentMatchesTtl, $this->cacheKey('cricapi_current_matches'));
-            return $this->normalizeMatches($raw);
-        });
+            if (!$fresh) {
+                // CricAPI provider or fallback
+                $raw = $this->get('currentMatches', ['offset' => 0], $this->currentMatchesTtl, $this->cacheKey('cricapi_current_matches'));
+                $fresh = $this->normalizeMatches($raw);
+            }
+
+            if (!empty($fresh)) {
+                Cache::put($cacheKey, $fresh, 30);
+                Cache::put($staleKey, $fresh, 600); // 10-minute fallback
+                return $fresh;
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        // Return stale cache if available
+        $stale = Cache::get($staleKey);
+        if ($stale && !empty($stale)) {
+            return $stale;
+        }
+
+        return [];
     }
 
     public function getUpcomingMatches(): array

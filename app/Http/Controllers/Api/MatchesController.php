@@ -26,12 +26,24 @@ class MatchesController extends Controller
         $currentUserPhone = auth()->user()->phone ?? null;
 
         $cacheKey = 'api_matches_summary_' . ($currentUserId ?: 'guest');
+        $staleKey = $cacheKey . '_stale';
         if ($force) {
             $cricket->clearMatchCache();
             \Illuminate\Support\Facades\Cache::forget($cacheKey);
+            \Illuminate\Support\Facades\Cache::forget($staleKey);
         }
 
-        $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, 10, function () use ($cricket, $currentUserId, $currentUserPhone, $force) {
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if ($cached) {
+            return response()->json($cached);
+        }
+
+        $stale = \Illuminate\Support\Facades\Cache::get($staleKey);
+        if ($stale && !$force) {
+            return response()->json($stale);
+        }
+
+        $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, 45, function () use ($cricket, $currentUserId, $currentUserPhone, $force, $staleKey) {
             // 1. Fetch all local platform matches
             $localMatches = CricketMatch::getAllFormattedForLiveCenter($currentUserId, $currentUserPhone);
 
@@ -160,6 +172,10 @@ class MatchesController extends Controller
                 'cacheTtl' => $cricket->getCacheTtl(),
             ];
         });
+
+        if (!empty($data)) {
+            \Illuminate\Support\Facades\Cache::put($staleKey, $data, 600);
+        }
 
         return response()->json($data);
     }

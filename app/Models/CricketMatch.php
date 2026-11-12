@@ -231,7 +231,7 @@ class CricketMatch extends Model
     public static function getAllFormattedForLiveCenter(?int $currentUserId = null, ?string $currentUserPhone = null): array
     {
         $cacheKey = 'local_platform_matches_' . ($currentUserId ?: 'guest');
-        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 10, function () use ($currentUserId, $currentUserPhone) {
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 60, function () use ($currentUserId, $currentUserPhone) {
             $matches = static::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])
                 ->latest('id')
                 ->limit(50)

@@ -22,7 +22,7 @@ RUN apk add --no-cache python3 py3-pip py3-lxml py3-beautifulsoup4 py3-requests 
     pip install --no-cache-dir --break-system-packages fastapi uvicorn httpx
 
 # Image configuration variables
-ENV SKIP_COMPOSER 0
+ENV SKIP_COMPOSER 1
 ENV WEBROOT /var/www/html/public
 ENV PHP_ERRORS_STDERR 1
 ENV RUN_SCRIPTS 1

@@ -1,9 +1,8 @@
 // LiveCricket Progressive Web App Service Worker
-const CACHE_NAME = 'livecricket-cache-v1';
+const CACHE_NAME = 'livecricket-cache-v2';
 const OFFLINE_URL = '/offline';
 
 const PRECACHE_ASSETS = [
-  '/',
   '/offline',
   '/manifest.json',
   '/icons/icon-192x192.png',
