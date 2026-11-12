@@ -179,8 +179,12 @@ class LiveScoreController extends Controller
             $localId = str_replace('local_', '', $matchId);
             return redirect()->route('matches.show', $localId);
         }
-        if (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists()) {
-            return redirect()->route('matches.show', $matchId);
+        try {
+            if (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists()) {
+                return redirect()->route('matches.show', $matchId);
+            }
+        } catch (\Throwable $e) {
+            // Ignore DB check if offline or unreachable
         }
 
         $forceRefresh = $request->get('refresh') === 'true';

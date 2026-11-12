@@ -86,6 +86,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
     // Ball-by-Ball Live Commentary State
     const [commentaryFilter, setCommentaryFilter] = useState('all'); // 'all', 'boundaries', 'wickets', 'notes'
+    const [commLanguage, setCommLanguage] = useState('en'); // 'en' (English AI) or 'hi' (Hindi AI)
     const [selectedCommInning, setSelectedCommInning] = useState('live'); // 'live' or specific inning number/id
     const [selectedOverTab, setSelectedOverTab] = useState('all'); // 'all' or specific over key e.g. '102'
     const [expandedOvers, setExpandedOvers] = useState({}); // { [overKey]: boolean }
@@ -238,14 +239,14 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         return () => clearInterval(pollTimer);
     }, [matchId, match?.status, match?.status_text, activeTab]);
 
-    // On mount or tab switch to scorecard: fetch scorecard asynchronously if not yet loaded
+    // On mount or tab switch: fetch scorecard asynchronously so full innings data is always ready
     useEffect(() => {
-        if (activeTab === 'scorecard' && matchId) {
+        if (matchId) {
             const hasData = (scorecard?.data?.innings && scorecard.data.innings.length > 0) ||
                             (scorecard?.data?.batting && scorecard.data.batting.length > 0) ||
                             (scorecard?.innings && scorecard.innings.length > 0);
             if (!hasData) {
-                fetchScorecard();
+                fetchScorecard(true);
             }
         }
     }, [activeTab, matchId]);
@@ -519,20 +520,22 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         return list;
     }, [realCommentary, fanCommentaryList, match]);
 
-    // 2.5 Inning Detection: Identify separate innings for multi-day/test matches
+    // 2.5 Inning Detection: Identify separate innings for multi-day, test & limited-overs matches
     const availableCommentaryInnings = useMemo(() => {
-        const scInns = scorecard?.data?.innings || [];
+        // Source 1: Scorecard innings
+        const scInns = scorecard?.data?.innings || scorecard?.innings || [];
         if (scInns.length > 0) {
             return scInns.map((inn, idx) => ({
                 id: inn.id ? String(inn.id) : String(idx + 1),
                 num: idx + 1,
                 label: `${inn.short_name || inn.team || `Innings ${idx + 1}`} (${inn.score || ''})`,
-                team: inn.short_name || inn.team,
+                team: inn.short_name || inn.team || `Team ${idx + 1}`,
                 score: inn.score,
                 isLive: miniscore?.inningsId ? String(inn.id) === String(miniscore.inningsId) : idx === scInns.length - 1
             }));
         }
 
+        // Source 2: Distinct innings from commentary deliveries
         const innSet = new Set();
         allCommentaryList.forEach(item => {
             const inn = item.inning || item.inningsId;
@@ -540,16 +543,63 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         });
 
         if (innSet.size > 1) {
-            return Array.from(innSet).sort((a, b) => parseInt(b, 10) - parseInt(a, 10)).map(id => ({
-                id,
-                num: parseInt(id, 10) || 1,
-                label: `Innings ${id}`,
-                isLive: String(miniscore?.inningsId) === id
-            }));
+            return Array.from(innSet).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(id => {
+                const isSecond = id === '2';
+                const teamName = isSecond ? (match?.team2_name || match?.teams?.[1] || '2nd Innings') : (match?.team1_name || match?.teams?.[0] || '1st Innings');
+                const scoreStr = isSecond ? (match?.team2_score || '') : (match?.team1_score || '');
+                return {
+                    id: String(id),
+                    num: parseInt(id, 10) || 1,
+                    label: scoreStr ? `${teamName} (${scoreStr})` : `${teamName}`,
+                    team: teamName,
+                    score: scoreStr,
+                    isLive: miniscore?.inningsId ? String(miniscore.inningsId) === String(id) : isSecond
+                };
+            });
+        }
+
+        // Source 3: Fallback from match scores / teams
+        const t1Score = match?.team1_score || match?.scores?.find(s => s.inning === 1)?.score;
+        const t2Score = match?.team2_score || match?.scores?.find(s => s.inning === 2)?.score;
+        const t1Name = match?.team1_name || match?.teams?.[0] || '1st Innings';
+        const t2Name = match?.team2_name || match?.teams?.[1] || '2nd Innings';
+
+        if (t2Score || (miniscore?.inningsId && String(miniscore.inningsId) === '2')) {
+            return [
+                {
+                    id: '1',
+                    num: 1,
+                    label: t1Score ? `${t1Name} (${t1Score})` : `${t1Name} (1st Innings)`,
+                    team: t1Name,
+                    score: t1Score,
+                    isLive: false
+                },
+                {
+                    id: '2',
+                    num: 2,
+                    label: t2Score ? `${t2Name} (${t2Score})` : `${t2Name} (2nd Innings)`,
+                    team: t2Name,
+                    score: t2Score,
+                    isLive: true
+                }
+            ];
+        }
+
+        if (t1Name && (t1Score || match?.status === 'live')) {
+            return [
+                {
+                    id: '1',
+                    num: 1,
+                    label: t1Score ? `${t1Name} (${t1Score})` : `${t1Name}`,
+                    team: t1Name,
+                    score: t1Score,
+                    isLive: true
+                }
+            ];
         }
 
         return [];
-    }, [scorecard, allCommentaryList, miniscore]);
+    }, [scorecard, allCommentaryList, miniscore, match]);
 
     // Active commentary inning target
     const activeCommentaryInningId = useMemo(() => {
@@ -855,14 +905,21 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
                             <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
-                            {item.tag && (
-                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                    {item.tag}
-                                </span>
-                            )}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {item.is_ai && (
+                                    <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-300 text-[10px] font-black border border-indigo-500/30 flex items-center gap-1">
+                                        <Sparkles className="w-2.5 h-2.5 text-indigo-400" /> AI Commentary
+                                    </span>
+                                )}
+                                {item.tag && (
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                        {item.tag}
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
-                            {item.desc}
+                        <p className="text-xs sm:text-sm text-slate-200 mt-1 leading-relaxed font-sans">
+                            {commLanguage === 'hi' ? (item.ai_hindi || item.desc) : (item.desc || item.rawText)}
                         </p>
                     </div>
                 </div>
@@ -1684,48 +1741,79 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                             </div>
                         </div>
 
-                        {/* Inning Selector Tabs for Multi-Day / Test Matches */}
-                        {availableCommentaryInnings && availableCommentaryInnings.length > 1 && (
-                            <div className="flex flex-wrap items-center gap-2 p-2.5 bg-black/30 rounded-2xl border border-white/5">
+                        {/* Innings Selector & AI Commentary Language Controls */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-gradient-to-r from-slate-900 via-black to-slate-900 rounded-2xl border border-white/10 shadow-lg">
+                            {/* Innings Tabs */}
+                            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                                 <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 flex items-center gap-1.5 mr-1">
                                     <Trophy className="w-3.5 h-3.5 text-indigo-400" /> Innings:
                                 </span>
-                                {availableCommentaryInnings.map(inn => {
-                                    const isSelected = selectedCommInning === 'live' ? inn.isLive : String(selectedCommInning) === String(inn.id);
-                                    return (
-                                        <button
-                                            key={inn.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedCommInning(inn.id);
-                                                setSelectedOverTab('all');
-                                                setExpandedOvers({});
-                                            }}
-                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 border ${
-                                                isSelected
-                                                    ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-indigo-400/50 shadow-md shadow-indigo-600/30'
-                                                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
-                                            }`}
-                                        >
-                                            {inn.isLive && (
-                                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                                            )}
-                                            <span>{inn.label}</span>
-                                            {inn.isLive && (
-                                                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-extrabold">
-                                                    Live
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
+                                {availableCommentaryInnings && availableCommentaryInnings.length > 0 ? (
+                                    availableCommentaryInnings.map(inn => {
+                                        const isSelected = selectedCommInning === 'live' ? inn.isLive : String(selectedCommInning) === String(inn.id);
+                                        return (
+                                            <button
+                                                key={inn.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedCommInning(inn.id);
+                                                    setSelectedOverTab('all');
+                                                    setExpandedOvers({});
+                                                }}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 border shrink-0 ${
+                                                    isSelected
+                                                        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-indigo-400/50 shadow-md shadow-indigo-600/30'
+                                                        : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+                                                }`}
+                                            >
+                                                {inn.isLive && (
+                                                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                                )}
+                                                <span>{inn.label}</span>
+                                                {inn.isLive && (
+                                                    <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-extrabold">
+                                                        Live
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })
+                                ) : (
+                                    <span className="text-xs text-slate-400 font-bold px-2">Match Innings</span>
+                                )}
                             </div>
-                        )}
+
+                            {/* AI Commentary Language Switcher */}
+                            <div className="flex items-center gap-1.5 p-1 bg-black/60 rounded-xl border border-white/10 shrink-0 self-end sm:self-auto">
+                                <button
+                                    type="button"
+                                    onClick={() => setCommLanguage('en')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1.5 ${
+                                        commLanguage === 'en'
+                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                                            : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    <Sparkles className="w-3 h-3 text-indigo-300" /> English AI
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCommLanguage('hi')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1.5 ${
+                                        commLanguage === 'hi'
+                                            ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 font-black'
+                                            : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    <span>🇮🇳</span> हिंदी AI
+                                </button>
+                            </div>
+                        </div>
 
                         {/* Over Selector Bar & Group Controls */}
                         {hasNumericOvers && (
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-black/40 rounded-2xl border border-white/10">
-                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
+                                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
                                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
                                         <Layers className="w-3.5 h-3.5 text-amber-400" /> Overs:
                                     </span>
@@ -1740,7 +1828,30 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     >
                                         All Overs ({numericOverGroups.length})
                                     </button>
-                                    {numericOverGroups.map(grp => {
+
+                                    {/* Dropdown Jump for Overs */}
+                                    <select
+                                        value={selectedOverTab}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setSelectedOverTab(val);
+                                            if (val !== 'all') {
+                                                setExpandedOvers(prev => ({ ...prev, [val]: true }));
+                                            }
+                                        }}
+                                        aria-label="Jump to specific over"
+                                        className="bg-slate-900 border border-white/15 text-white text-xs font-bold rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                        <option value="all">Jump to Over...</option>
+                                        {numericOverGroups.map(grp => (
+                                            <option key={grp.key} value={grp.key}>
+                                                Over {grp.overNumber} {grp.isCurrent ? '• (Live)' : ''} ({grp.runs} runs{grp.wickets ? `, ${grp.wickets}W` : ''})
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    {/* Quick chips for latest 3 overs */}
+                                    {numericOverGroups.slice(0, 3).map(grp => {
                                         const isSelected = selectedOverTab === grp.key;
                                         return (
                                             <button
@@ -1750,7 +1861,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                     setSelectedOverTab(grp.key);
                                                     setExpandedOvers(prev => ({ ...prev, [grp.key]: true }));
                                                 }}
-                                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 ${
+                                                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 ${
                                                     isSelected
                                                         ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
                                                         : grp.isCurrent

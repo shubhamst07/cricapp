@@ -308,9 +308,13 @@ class CricketDataService
         // Save / Upsert each incoming over to TiDB / MySQL and local file storage
         $storedOvers = $this->loadStoredOvers($matchId);
 
+        $aiService = new \App\Services\AiCommentaryService();
+
         foreach ($incomingGroups as $overKey => $items) {
             $existingItems = $storedOvers[$overKey]['deliveries'] ?? [];
             $merged = $this->mergeDeliveries($existingItems, $items);
+            // Transform through AI Commentary Service: Replace verbatim text with unique AI narrative
+            $merged = $aiService->transformDeliveries($merged);
 
             $firstItem = $items[0] ?? [];
             $itemInning = (int) ($firstItem['inning'] ?? $firstItem['inningsId'] ?? $minisInning);
@@ -325,7 +329,15 @@ class CricketDataService
             $batTeam = $firstItem['batTeam'] ?? null;
             $summary = null;
 
-            foreach ($merged as $it) {
+            foreach ($merged as &$it) {
+                if (empty($it['inning'])) {
+                    $it['inning'] = $itemInning;
+                    $it['inningsId'] = $itemInning;
+                }
+                if (empty($it['batTeam']) && $batTeam) {
+                    $it['batTeam'] = $batTeam;
+                }
+
                 if (($it['type'] ?? '') === 'over-separator') {
                     if (isset($it['overRuns'])) $runs = (int) $it['overRuns'];
                     if (!empty($it['overSummary'])) $summary = $it['overSummary'];
@@ -345,6 +357,7 @@ class CricketDataService
                     }
                 }
             }
+            unset($it);
 
             $storedOvers[$overKey] = [
                 'match_id' => $matchId,
