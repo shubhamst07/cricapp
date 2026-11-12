@@ -38,14 +38,37 @@ class LiveScoreController extends Controller
                 return $m;
             }
 
-            // Scheduled matches with no scores are definitely upcoming
-            if (($m['status'] ?? '') === 'scheduled' && empty($m['score'])) {
+            $statusLower = strtolower(trim($m['status_text'] ?? ''));
+
+            // 1. Abandoned / Cancelled / No Result matches must NEVER be live or upcoming!
+            $isAbandoned = str_contains($statusLower, 'abandon') || str_contains($statusLower, 'cancel') || str_contains($statusLower, 'no result') || ($m['status'] ?? '') === 'abandoned';
+            if ($isAbandoned) {
+                $m['status'] = 'abandoned';
+                $m['matchEnded'] = true;
+                $m['matchStarted'] = true;
                 return $m;
             }
 
-            $isEnded = ($m['matchEnded'] ?? false) || in_array($m['status'] ?? '', ['completed', 'abandoned']);
-            $statusLower = strtolower(trim($m['status_text'] ?? ''));
-            $isToss = str_contains($statusLower, 'toss') || str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to');
+            // 2. Completed text detection
+            $isCompletedText = str_contains($statusLower, 'won by') ||
+                str_contains($statusLower, 'won the match') ||
+                str_contains($statusLower, 'beat') ||
+                str_contains($statusLower, 'tied') ||
+                str_contains($statusLower, 'drawn') ||
+                str_contains($statusLower, 'conceded') ||
+                str_contains($statusLower, 'match ended');
+
+            $isEnded = ($m['matchEnded'] ?? false) || ($m['status'] ?? '') === 'completed' || $isCompletedText;
+
+            if ($isEnded) {
+                $m['status'] = 'completed';
+                $m['matchEnded'] = true;
+                $m['matchStarted'] = true;
+                return $m;
+            }
+
+            // 3. Ongoing toss or test match day in progress
+            $isToss = (str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to') || (str_contains($statusLower, 'toss') && !str_contains($statusLower, 'abandon')));
             $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
                 && !str_contains($statusLower, 'won') && !str_contains($statusLower, 'beat') && !str_contains($statusLower, 'drawn');
 
@@ -56,20 +79,8 @@ class LiveScoreController extends Controller
                 return $m;
             }
 
-            $isCompletedText = !$isToss && (
-                str_contains($statusLower, 'won by') ||
-                str_contains($statusLower, 'won the match') ||
-                str_contains($statusLower, 'beat') ||
-                str_contains($statusLower, 'tied') ||
-                str_contains($statusLower, 'drawn') ||
-                str_contains($statusLower, 'conceded') ||
-                str_contains($statusLower, 'match ended')
-            );
-
-            if ($isEnded || $isCompletedText) {
-                $m['status'] = 'completed';
-                $m['matchEnded'] = true;
-                $m['matchStarted'] = true;
+            // Scheduled matches with no scores are definitely upcoming
+            if (($m['status'] ?? '') === 'scheduled' && empty($m['score'])) {
                 return $m;
             }
 

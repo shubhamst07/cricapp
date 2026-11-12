@@ -492,9 +492,10 @@ class ScoreService:
 
             # Match completed detection (must not match toss events like "won the toss", "opt to bat", or ongoing test events)
             st_lower = status_text.lower()
-            is_toss = any(w in st_lower for w in ["toss", "opt to", "elected to", "chose to", "choose to"])
-            is_test_ongoing = any(w in st_lower for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in st_lower for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
-            is_completed = not is_toss and not is_test_ongoing and any(w in st_lower for w in ["won by", "won the match", " beat ", "tied", "drawn", "conceded", "match ended", "abandoned"])
+            is_abandoned = any(w in st_lower for w in ["abandon", "cancel", "no result"])
+            is_toss = not is_abandoned and (any(w in st_lower for w in ["opt to", "elected to", "chose to", "choose to"]) or ("toss" in st_lower and "abandon" not in st_lower))
+            is_test_ongoing = not is_abandoned and any(w in st_lower for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in st_lower for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandon"])
+            is_completed = is_abandoned or (not is_toss and not is_test_ongoing and any(w in st_lower for w in ["won by", "won the match", " beat ", "tied", "drawn", "conceded", "match ended"]))
 
             # Match started detection
             match_started = is_toss or is_test_ongoing or bool(scores) or is_completed
@@ -587,8 +588,9 @@ class ScoreService:
                             for idx, existing in enumerate(parsed):
                                 if existing.get("id") == m["id"]:
                                     comb_st = (existing.get("status_text", "") + " " + m.get("status_text", "")).lower()
-                                    is_comb_test_ongoing = any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
-                                    is_comb_toss = any(w in comb_st for w in ["toss", "opt to", "elected to", "chose to", "choose to"])
+                                    is_comb_abandoned = any(w in comb_st for w in ["abandon", "cancel", "no result"])
+                                    is_comb_test_ongoing = not is_comb_abandoned and any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandon"])
+                                    is_comb_toss = not is_comb_abandoned and (any(w in comb_st for w in ["opt to", "elected to", "chose to", "choose to"]) or ("toss" in comb_st and "abandon" not in comb_st))
                                     if page_type == "recent":
                                         if not is_comb_test_ongoing:
                                             existing["matchEnded"] = True
@@ -643,8 +645,9 @@ class ScoreService:
                             for idx, existing in enumerate(parsed):
                                 if existing.get("id") == m["id"]:
                                     comb_st = (existing.get("status_text", "") + " " + m.get("status_text", "")).lower()
-                                    is_comb_test_ongoing = any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
-                                    is_comb_toss = any(w in comb_st for w in ["toss", "opt to", "elected to", "chose to", "choose to"])
+                                    is_comb_abandoned = any(w in comb_st for w in ["abandon", "cancel", "no result"])
+                                    is_comb_test_ongoing = not is_comb_abandoned and any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandon"])
+                                    is_comb_toss = not is_comb_abandoned and (any(w in comb_st for w in ["opt to", "elected to", "chose to", "choose to"]) or ("toss" in comb_st and "abandon" not in comb_st))
                                     if page_type == "recent":
                                         if not is_comb_test_ongoing:
                                             existing["matchEnded"] = True

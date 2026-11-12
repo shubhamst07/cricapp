@@ -25,7 +25,11 @@ import {
     Play,
     Volume2,
     Radio,
-    Mic
+    Mic,
+    ChevronDown,
+    ChevronUp,
+    ChevronRight,
+    Layers
 } from 'lucide-react';
 
 // Ball-by-ball commentary is loaded live directly from Cricbuzz API
@@ -81,6 +85,8 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
     // Ball-by-Ball Live Commentary State
     const [commentaryFilter, setCommentaryFilter] = useState('all'); // 'all', 'boundaries', 'wickets', 'notes'
+    const [selectedOverTab, setSelectedOverTab] = useState('all'); // 'all' or specific over key e.g. '102'
+    const [expandedOvers, setExpandedOvers] = useState({}); // { [overKey]: boolean }
     const [newCommentaryText, setNewCommentaryText] = useState('');
     const [newCommentaryTag, setNewCommentaryTag] = useState('4 Runs 🏏');
     const [isPostingCommentary, setIsPostingCommentary] = useState(false);
@@ -497,6 +503,290 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             return true;
         });
     }, [allCommentaryList, commentaryFilter]);
+
+    // Helper to extract integer over from any commentary item
+    const extractItemOverNumber = (item) => {
+        if (!item) return null;
+        if (typeof item.overNumber === 'number' && !isNaN(item.overNumber)) {
+            return item.overNumber;
+        }
+        if (typeof item.overNumber === 'string' && !isNaN(parseInt(item.overNumber, 10))) {
+            return parseInt(item.overNumber, 10);
+        }
+        if (typeof item.over === 'number' && !isNaN(item.over)) {
+            return Math.floor(item.over);
+        }
+        if (typeof item.over === 'string') {
+            const m = item.over.match(/(\d+)(?:\.\d+)?/);
+            if (m) return parseInt(m[1], 10);
+        }
+        if (typeof item.time === 'string') {
+            const m = item.time.match(/(\d+)(?:\.\d+)?/);
+            if (m) return parseInt(m[1], 10);
+        }
+        if (typeof item.title === 'string') {
+            const m = item.title.match(/(\d+)\.\d+/);
+            if (m) return parseInt(m[1], 10);
+        }
+        return null;
+    };
+
+    // 4. Over Grouping: Group commentary entries by Over number
+    const { overGroups, numericOverGroups, hasNumericOvers } = useMemo(() => {
+        if (!filteredCommentaryList || filteredCommentaryList.length === 0) {
+            return { overGroups: [], numericOverGroups: [], hasNumericOvers: false };
+        }
+
+        // Pass 1: directly extract over for each item
+        const mapped = filteredCommentaryList.map(item => ({
+            item,
+            over: extractItemOverNumber(item)
+        }));
+
+        // Pass 2: fill null overs (such as notes/quotes) from the nearest delivery in the stream
+        for (let i = 0; i < mapped.length; i++) {
+            if (mapped[i].over === null) {
+                // Look ahead in descending list
+                for (let j = i + 1; j < mapped.length; j++) {
+                    if (mapped[j].over !== null) {
+                        mapped[i].over = mapped[j].over;
+                        break;
+                    }
+                }
+                // If still null, look behind
+                if (mapped[i].over === null) {
+                    for (let j = i - 1; j >= 0; j--) {
+                        if (mapped[j].over !== null) {
+                            mapped[i].over = mapped[j].over;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Pass 3: assemble groups
+        const groupsMap = new Map();
+        const groupOrder = [];
+
+        mapped.forEach(({ item, over }) => {
+            const groupKey = over !== null ? String(over) : 'general';
+            if (!groupsMap.has(groupKey)) {
+                const isNumeric = over !== null;
+                const newGroup = {
+                    key: groupKey,
+                    overNumber: over,
+                    isNumeric,
+                    title: isNumeric ? `Over ${over}` : 'Match Notes & Updates',
+                    items: [],
+                    runs: 0,
+                    wickets: 0,
+                    bowler: null,
+                    isCurrent: false,
+                };
+                groupsMap.set(groupKey, newGroup);
+                groupOrder.push(groupKey);
+            }
+            const grp = groupsMap.get(groupKey);
+            grp.items.push(item);
+
+            if (item.type === 'over-separator') {
+                if (item.overRuns !== undefined) grp.runs = item.overRuns;
+                if (item.desc && item.desc.includes('Bowler:')) {
+                    const bm = item.desc.match(/Bowler:\s*([^(|]+)/);
+                    if (bm) grp.bowler = bm[1].trim();
+                }
+            } else if (item.type === 'ball') {
+                if (item.badge === 'W' || item.badgeType === 'wicket') {
+                    grp.wickets += 1;
+                }
+                const r = parseInt(item.badge, 10);
+                if (!isNaN(r)) grp.runs += r;
+                if (!grp.bowler && item.title && item.title.includes(' to ')) {
+                    grp.bowler = item.title.split(' to ')[0].trim();
+                }
+            }
+        });
+
+        const allGroups = groupOrder.map(k => groupsMap.get(k));
+        const numGroups = allGroups.filter(g => g.isNumeric);
+        if (numGroups.length > 0) {
+            numGroups[0].isCurrent = true;
+        }
+
+        return {
+            overGroups: allGroups,
+            numericOverGroups: numGroups,
+            hasNumericOvers: numGroups.length > 0
+        };
+    }, [filteredCommentaryList]);
+
+    const isOverExpanded = (grp) => {
+        if (selectedOverTab !== 'all' && selectedOverTab === grp.key) {
+            return true;
+        }
+        if (expandedOvers[grp.key] !== undefined) {
+            return expandedOvers[grp.key];
+        }
+        return grp.isCurrent;
+    };
+
+    const toggleOver = (key) => {
+        setExpandedOvers(prev => {
+            const currentVal = prev[key] !== undefined
+                ? prev[key]
+                : (overGroups.find(g => g.key === key)?.isCurrent ?? false);
+            return { ...prev, [key]: !currentVal };
+        });
+    };
+
+    const expandAllOvers = () => {
+        const next = {};
+        overGroups.forEach(g => { next[g.key] = true; });
+        setExpandedOvers(next);
+    };
+
+    const collapseAllOvers = () => {
+        const next = {};
+        overGroups.forEach(g => { next[g.key] = false; });
+        setExpandedOvers(next);
+    };
+
+    const renderCommentaryCard = (item, idx, showInfeedAd) => {
+        // Custom Presentation / Quote Card
+        if (item.type === 'interview') {
+            return (
+                <React.Fragment key={item.id || idx}>
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/40 border border-amber-500/30 shadow-md flex items-start gap-3 sm:gap-4">
+                        <div className="shrink-0 text-center w-12 sm:w-14">
+                            <span className="px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-mono font-black text-xs text-amber-300 block">
+                                QUOTE
+                            </span>
+                            <span className="text-[9px] text-amber-400/80 mt-1 block truncate font-semibold">
+                                Speech
+                            </span>
+                        </div>
+                        <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300 text-base shadow-sm">
+                            🎙️
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                <h5 className="text-xs sm:text-sm font-black text-amber-200 flex items-center gap-1.5">
+                                    <span>🎙️</span>
+                                    <span>{item.title}</span>
+                                </h5>
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                    {item.tag || 'Post-Match Quote'}
+                                </span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-slate-200 mt-1.5 leading-relaxed font-sans italic border-l-2 border-amber-500/40 pl-3">
+                                “{item.desc}”
+                            </p>
+                        </div>
+                    </div>
+                    {showInfeedAd && (
+                        <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
+                    )}
+                </React.Fragment>
+            );
+        }
+
+        // Custom Match Wrap-up Card
+        if (item.type === 'match_wrap') {
+            return (
+                <React.Fragment key={item.id || idx}>
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-md flex items-start gap-3 sm:gap-4">
+                        <div className="shrink-0 text-center w-12 sm:w-14">
+                            <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-mono font-black text-xs text-emerald-300 block">
+                                FINAL
+                            </span>
+                            <span className="text-[9px] text-emerald-400/80 mt-1 block truncate font-semibold">
+                                Result
+                            </span>
+                        </div>
+                        <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-base shadow-sm">
+                            🏆
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                <h5 className="text-xs sm:text-sm font-black text-emerald-200 flex items-center gap-1.5">
+                                    <span>🏆</span>
+                                    <span>{item.title}</span>
+                                </h5>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shrink-0">
+                                    {item.tag || 'Match Conclusion'}
+                                </span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
+                                {item.desc}
+                            </p>
+                        </div>
+                    </div>
+                    {showInfeedAd && (
+                        <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
+                    )}
+                </React.Fragment>
+            );
+        }
+
+        // Regular Deliveries, Over Separators, and Notes
+        return (
+            <React.Fragment key={item.id || idx}>
+                <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4">
+                    {/* Over Badge */}
+                    <div className="shrink-0 text-center w-12 sm:w-14">
+                        <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
+                            {item.over}
+                        </span>
+                        <span className="text-[9px] text-slate-500 mt-1 block truncate">
+                            {item.time}
+                        </span>
+                    </div>
+
+                    {/* Badge */}
+                    <div
+                        className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
+                            item.badgeType === 'wicket' || item.badge === 'W'
+                                ? 'bg-rose-600 text-white shadow-rose-600/40 animate-pulse'
+                                : item.badgeType === 'six' || item.badge === '6'
+                                ? 'bg-purple-600 text-white shadow-purple-600/40'
+                                : item.badgeType === 'four' || item.badge === '4'
+                                ? 'bg-blue-600 text-white shadow-blue-600/40'
+                                : item.badgeType === 'extra' || item.badge === 'Wd' || item.badge === 'Nb'
+                                ? 'bg-amber-600 text-white shadow-amber-600/40'
+                                : item.badgeType === 'milestone'
+                                ? 'bg-amber-500 text-slate-950 shadow-amber-500/40 font-black'
+                                : item.badgeType === 'expert'
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold'
+                                : item.badgeType === 'dot' || item.badge === '0'
+                                ? 'bg-slate-800 text-slate-300 border border-white/10'
+                                : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
+                        }`}
+                    >
+                        <span>{item.badge}</span>
+                    </div>
+
+                    {/* Prose */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                            <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
+                            {item.tag && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                    {item.tag}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
+                            {item.desc}
+                        </p>
+                    </div>
+                </div>
+                {showInfeedAd && (
+                    <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
+                )}
+            </React.Fragment>
+        );
+    };
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -1264,162 +1554,187 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                             </div>
                         </div>
 
-                        {/* List */}
-                        <div className="space-y-3">
+                        {/* Over Selector Bar & Group Controls */}
+                        {hasNumericOvers && (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-black/40 rounded-2xl border border-white/10">
+                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
+                                        <Layers className="w-3.5 h-3.5 text-amber-400" /> Overs:
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedOverTab('all')}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition shrink-0 ${
+                                            selectedOverTab === 'all'
+                                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                                                : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
+                                        }`}
+                                    >
+                                        All Overs ({numericOverGroups.length})
+                                    </button>
+                                    {numericOverGroups.map(grp => {
+                                        const isSelected = selectedOverTab === grp.key;
+                                        return (
+                                            <button
+                                                key={grp.key}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedOverTab(grp.key);
+                                                    setExpandedOvers(prev => ({ ...prev, [grp.key]: true }));
+                                                }}
+                                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 ${
+                                                    isSelected
+                                                        ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                                                        : grp.isCurrent
+                                                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
+                                                            : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
+                                                }`}
+                                            >
+                                                {grp.isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>}
+                                                <span>{grp.isCurrent ? `Live Over ${grp.overNumber}` : `Over ${grp.overNumber}`}</span>
+                                                {grp.wickets > 0 && (
+                                                    <span className={`text-[10px] px-1 rounded ${isSelected ? 'bg-black/30 text-slate-950' : 'text-rose-400 font-bold'}`}>
+                                                        {grp.wickets}W
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="flex items-center gap-2 text-xs shrink-0 self-end sm:self-auto">
+                                    <button
+                                        type="button"
+                                        onClick={expandAllOvers}
+                                        className="text-[11px] text-slate-400 hover:text-white underline font-semibold transition"
+                                    >
+                                        Expand All
+                                    </button>
+                                    <span className="text-slate-600">•</span>
+                                    <button
+                                        type="button"
+                                        onClick={collapseAllOvers}
+                                        className="text-[11px] text-slate-400 hover:text-white underline font-semibold transition"
+                                    >
+                                        Collapse All
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* List: Either Over-Grouped Accordions or Flat List */}
+                        <div className="space-y-4">
                             {filteredCommentaryList.length === 0 ? (
                                 <div className="py-12 text-center text-slate-500 space-y-2">
                                     <Radio className="w-8 h-8 mx-auto text-slate-600 animate-pulse" />
                                     <p className="text-sm font-bold text-slate-400">No commentary entries found for this filter.</p>
                                     <p className="text-xs text-slate-500">Live events, deliveries, and post-match notes will appear here.</p>
                                 </div>
-                            ) : (
-                                filteredCommentaryList.map((item, idx) => {
-                                    const showInfeedAd = idx === 3 || (idx > 3 && idx % 10 === 0);
+                            ) : hasNumericOvers ? (
+                                (selectedOverTab === 'all' ? overGroups : overGroups.filter(g => g.key === selectedOverTab)).map((grp) => {
+                                    const isOpen = isOverExpanded(grp);
 
-                                    // Custom Presentation / Quote Card
-                                    if (item.type === 'interview') {
+                                    // Standalone general notes group (e.g. pre-match preview, toss or post-match summary)
+                                    if (!grp.isNumeric) {
                                         return (
-                                            <React.Fragment key={item.id || idx}>
-                                                <div
-                                                    className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/40 border border-amber-500/30 shadow-md flex items-start gap-3 sm:gap-4"
-                                                >
-                                                    <div className="shrink-0 text-center w-12 sm:w-14">
-                                                        <span className="px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-mono font-black text-xs text-amber-300 block">
-                                                            QUOTE
-                                                        </span>
-                                                        <span className="text-[9px] text-amber-400/80 mt-1 block truncate font-semibold">
-                                                            Speech
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300 text-base shadow-sm">
-                                                        🎙️
-                                                    </div>
-
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                                            <h5 className="text-xs sm:text-sm font-black text-amber-200 flex items-center gap-1.5">
-                                                                <span>🎙️</span>
-                                                                <span>{item.title}</span>
-                                                            </h5>
-                                                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                                                {item.tag || 'Post-Match Quote'}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs sm:text-sm text-slate-200 mt-1.5 leading-relaxed font-sans italic border-l-2 border-amber-500/40 pl-3">
-                                                            “{item.desc}”
-                                                        </p>
-                                                    </div>
+                                            <div key={grp.key} className="space-y-3">
+                                                <div className="flex items-center gap-2 pt-2 pb-1 border-b border-white/5">
+                                                    <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                                                        {grp.title}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500">({grp.items.length})</span>
                                                 </div>
-                                                {showInfeedAd && (
-                                                    <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
-                                                )}
-                                            </React.Fragment>
+                                                <div className="space-y-3">
+                                                    {grp.items.map((item, itemIdx) =>
+                                                        renderCommentaryCard(item, `${grp.key}-${itemIdx}`, false)
+                                                    )}
+                                                </div>
+                                            </div>
                                         );
                                     }
 
-                                    // Custom Match Wrap-up Card
-                                    if (item.type === 'match_wrap') {
-                                        return (
-                                            <React.Fragment key={item.id || idx}>
-                                                <div
-                                                    className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-md flex items-start gap-3 sm:gap-4"
-                                                >
-                                                    <div className="shrink-0 text-center w-12 sm:w-14">
-                                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-mono font-black text-xs text-emerald-300 block">
-                                                            FINAL
-                                                        </span>
-                                                        <span className="text-[9px] text-emerald-400/80 mt-1 block truncate font-semibold">
-                                                            Result
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-base shadow-sm">
-                                                        🏆
-                                                    </div>
-
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                                            <h5 className="text-xs sm:text-sm font-black text-emerald-200 flex items-center gap-1.5">
-                                                                <span>🏆</span>
-                                                                <span>{item.title}</span>
-                                                            </h5>
-                                                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shrink-0">
-                                                                {item.tag || 'Match Conclusion'}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
-                                                            {item.desc}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                {showInfeedAd && (
-                                                    <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    }
-
-                                    // Regular Deliveries, Over Separators, and Notes
+                                    // Over Accordion Card
                                     return (
-                                        <React.Fragment key={item.id || idx}>
-                                            <div
-                                                className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4"
+                                        <div
+                                            key={grp.key}
+                                            className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+                                                grp.isCurrent
+                                                    ? 'bg-gradient-to-b from-[#18233d] to-[#12192c] border-amber-500/40 shadow-xl shadow-amber-500/5'
+                                                    : 'bg-[#151f33]/90 border-white/10 hover:border-white/20'
+                                            }`}
+                                        >
+                                            {/* Over Accordion Header */}
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleOver(grp.key)}
+                                                className={`w-full p-4 sm:p-4.5 flex items-center justify-between text-left transition ${
+                                                    grp.isCurrent ? 'bg-amber-500/10 hover:bg-amber-500/15' : 'hover:bg-white/5'
+                                                }`}
                                             >
-                                                {/* Over Badge */}
-                                                <div className="shrink-0 text-center w-12 sm:w-14">
-                                                    <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
-                                                        {item.over}
-                                                    </span>
-                                                    <span className="text-[9px] text-slate-500 mt-1 block truncate">
-                                                        {item.time}
-                                                    </span>
-                                                </div>
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className={`px-3 py-1.5 rounded-xl font-mono font-black text-xs sm:text-sm flex items-center gap-1.5 shrink-0 ${
+                                                        grp.isCurrent
+                                                            ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
+                                                            : 'bg-white/10 text-white border border-white/10'
+                                                    }`}>
+                                                        {grp.isCurrent && <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>}
+                                                        <span>Over {grp.overNumber}</span>
+                                                    </div>
 
-                                                {/* Badge */}
-                                                <div
-                                                    className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
-                                                        item.badgeType === 'wicket' || item.badge === 'W'
-                                                            ? 'bg-rose-600 text-white shadow-rose-600/40 animate-pulse'
-                                                            : item.badgeType === 'six' || item.badge === '6'
-                                                            ? 'bg-purple-600 text-white shadow-purple-600/40'
-                                                            : item.badgeType === 'four' || item.badge === '4'
-                                                            ? 'bg-blue-600 text-white shadow-blue-600/40'
-                                                            : item.badgeType === 'extra' || item.badge === 'Wd' || item.badge === 'Nb'
-                                                            ? 'bg-amber-600 text-white shadow-amber-600/40'
-                                                            : item.badgeType === 'milestone'
-                                                            ? 'bg-amber-500 text-slate-950 shadow-amber-500/40 font-black'
-                                                            : item.badgeType === 'expert'
-                                                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold'
-                                                            : item.badgeType === 'dot' || item.badge === '0'
-                                                            ? 'bg-slate-800 text-slate-300 border border-white/10'
-                                                            : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
-                                                    }`}
-                                                >
-                                                    <span>{item.badge}</span>
-                                                </div>
+                                                    {grp.isCurrent && (
+                                                        <span className="hidden xs:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                                                            Current Over
+                                                        </span>
+                                                    )}
 
-                                                {/* Prose */}
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                                        <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
-                                                        {item.tag && (
-                                                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                                                {item.tag}
+                                                    {/* Over Summary Chips */}
+                                                    <div className="flex items-center gap-2 text-xs text-slate-400 truncate">
+                                                        {grp.runs !== undefined && (
+                                                            <span className="font-bold text-slate-200">
+                                                                {grp.runs} {grp.runs === 1 ? 'run' : 'runs'}
+                                                            </span>
+                                                        )}
+                                                        {grp.wickets > 0 && (
+                                                            <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 text-[11px] font-black border border-rose-500/30">
+                                                                {grp.wickets} {grp.wickets === 1 ? 'wicket' : 'wickets'} ☝️
+                                                            </span>
+                                                        )}
+                                                        {grp.bowler && (
+                                                            <span className="text-slate-400 hidden sm:inline truncate">
+                                                                • Bowler: {grp.bowler}
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
-                                                        {item.desc}
-                                                    </p>
                                                 </div>
-                                            </div>
-                                            {showInfeedAd && (
-                                                <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
+
+                                                <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-2">
+                                                    <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+                                                        {grp.items.length} {grp.items.length === 1 ? 'ball/note' : 'balls/notes'}
+                                                    </span>
+                                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center bg-white/5 border border-white/10 text-slate-300 transition-transform duration-200 ${
+                                                        isOpen ? 'rotate-180 bg-amber-500/20 text-amber-300 border-amber-500/30' : ''
+                                                    }`}>
+                                                        <ChevronDown className="w-4 h-4" />
+                                                    </div>
+                                                </div>
+                                            </button>
+
+                                            {/* Over Deliveries & Commentary List (Visible when Open) */}
+                                            {isOpen && (
+                                                <div className="p-3.5 sm:p-5 pt-2 sm:pt-3 border-t border-white/10 space-y-3 bg-black/20">
+                                                    {grp.items.map((item, itemIdx) =>
+                                                        renderCommentaryCard(item, `${grp.key}-${itemIdx}`, itemIdx === 3)
+                                                    )}
+                                                </div>
                                             )}
-                                        </React.Fragment>
+                                        </div>
                                     );
                                 })
+                            ) : (
+                                filteredCommentaryList.map((item, idx) =>
+                                    renderCommentaryCard(item, idx, idx === 3 || (idx > 3 && idx % 10 === 0))
+                                )
                             )}
                         </div>
                     </div>

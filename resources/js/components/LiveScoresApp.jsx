@@ -80,21 +80,30 @@ export default function LiveScoresApp({
         if (isLocalMatch(m)) {
             return m.status === 'completed' || m.status === 'abandoned' || Boolean(m.is_dismissed);
         }
+
+        const st = (m.status_text || '').toLowerCase();
+
+        // 1. Abandoned / Cancelled / No Result matches are ALWAYS ended, NEVER live or toss!
+        if (m.status === 'abandoned' || ['abandon', 'cancel', 'no result'].some(w => st.includes(w))) {
+            return true;
+        }
+
         // Scheduled matches with no scores are definitely UPCOMING, never ended!
         if (m.status === 'scheduled' && (!m.score || !Array.isArray(m.score) || m.score.length === 0)) {
             return false;
         }
-        const st = (m.status_text || '').toLowerCase();
-        const isToss = ['toss', 'opt to', 'elected to', 'chose to'].some(w => st.includes(w));
+
+        // 2. Real toss is LIVE/upcoming, not ended (excluding abandoned)
+        const isToss = ['opt to', 'elected to', 'chose to'].some(w => st.includes(w)) || (st.includes('toss') && !st.includes('abandon'));
         if (isToss) return false;
 
-        // Ongoing Test match (Stumps, trail by, lead by, Day 1-4) is NOT ended!
+        // 3. Ongoing Test match (Stumps, trail by, lead by, Day 1-4) is NOT ended!
         if ((st.includes('stump') || st.includes('trail') || st.includes('lead') || /day\s*[1-4]/.test(st)) &&
-            !['won by', 'won the match', ' beat ', 'drawn', 'tied'].some(w => st.includes(w))) {
+            !['won by', 'won the match', ' beat ', 'drawn', 'tied', 'abandon'].some(w => st.includes(w))) {
             return false;
         }
 
-        if (m.status === 'completed' || m.status === 'abandoned' || m.matchEnded) {
+        if (m.status === 'completed' || m.matchEnded) {
             return true;
         }
         if (['won by', 'won the match', ' beat ', 'tied', 'drawn', 'conceded', 'match ended'].some(w => st.includes(w))) {
@@ -1104,7 +1113,15 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                             );
                         })}
                     </div>
-                ) : (match.status_text && ['opt to', 'elected to', 'toss', 'chose to'].some(w => match.status_text.toLowerCase().includes(w))) ? (
+                ) : (match.status_text && (match.status === 'abandoned' || ['abandon', 'cancel', 'no result'].some(w => match.status_text.toLowerCase().includes(w)))) ? (
+                    <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/30 flex items-center gap-2.5 text-xs text-amber-300 font-bold">
+                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                        <div className="min-w-0">
+                            <span className="text-[10px] uppercase font-black tracking-wider text-amber-400 block">Match Status</span>
+                            <span className="truncate block text-white font-black">{match.status_text}</span>
+                        </div>
+                    </div>
+                ) : (match.status_text && !isRecent && !isArchives && (['opt to', 'elected to', 'chose to'].some(w => match.status_text.toLowerCase().includes(w)) || (match.status_text.toLowerCase().includes('toss') && !match.status_text.toLowerCase().includes('abandon')))) ? (
                     <div className="p-3 bg-amber-500/15 rounded-2xl border border-amber-500/30 flex items-center gap-2.5 text-xs text-amber-300 font-bold">
                         <Flame className="w-4 h-4 text-amber-400 shrink-0" />
                         <div className="min-w-0">
