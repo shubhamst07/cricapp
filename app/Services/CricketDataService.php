@@ -194,6 +194,8 @@ class CricketDataService
     {
         $cacheKey = $this->cacheKey("commentary_{$matchId}");
         return Cache::remember($cacheKey, 6, function () use ($matchId) {
+            $fresh = null;
+
             // 1. Try local service first
             if ($this->provider === 'local') {
                 try {
@@ -201,7 +203,7 @@ class CricketDataService
                     if ($response->successful()) {
                         $data = $response->json();
                         if (!empty($data) && ($data['status'] ?? '') === 'success' && !empty($data['data'])) {
-                            return $data;
+                            $fresh = $data;
                         }
                     }
                 } catch (\Throwable $e) {
@@ -210,8 +212,211 @@ class CricketDataService
             }
 
             // 2. Direct Cricbuzz scraper fallback in PHP
-            return $this->scrapeCricbuzzCommentaryDirectly($matchId);
+            if (!$fresh || empty($fresh['data'])) {
+                $fresh = $this->scrapeCricbuzzCommentaryDirectly($matchId);
+            }
+
+            // 3. Accumulate over-wise data into TiDB / MySQL and persistent storage
+            return $this->accumulateAndReturnAllOvers($matchId, $fresh);
         });
+    }
+
+    /**
+     * Accumulate incoming commentary deliveries and save them over-wise in TiDB / MySQL & File Storage.
+     * Then returns all accumulated overs so past overs are never lost.
+     */
+    public function accumulateAndReturnAllOvers(string $matchId, array $fresh): array
+    {
+        if (empty($fresh) || !is_array($fresh)) {
+            $fresh = ['status' => 'success', 'matchId' => $matchId, 'data' => []];
+        }
+
+        $incoming = $fresh['data'] ?? [];
+
+        // Group incoming items by Over Key
+        $incomingGroups = [];
+        $lastOverKey = null;
+
+        // Pass 1: detect over keys for each incoming item
+        foreach ($incoming as $item) {
+            $overKey = null;
+            if (isset($item['overNumber']) && is_numeric($item['overNumber'])) {
+                $overKey = (string) (int) $item['overNumber'];
+            } elseif (isset($item['over']) && is_numeric($item['over'])) {
+                $overKey = (string) (int) floor((float) $item['over']);
+            } elseif (isset($item['over']) && is_string($item['over']) && preg_match('/(\d+)(?:\.\d+)?/', $item['over'], $m)) {
+                $overKey = (string) (int) $m[1];
+            } elseif (isset($item['time']) && is_string($item['time']) && preg_match('/(\d+)(?:\.\d+)?/', $item['time'], $m)) {
+                $overKey = (string) (int) $m[1];
+            } elseif (isset($item['title']) && is_string($item['title']) && preg_match('/(\d+)\.\d+/', $item['title'], $m)) {
+                $overKey = (string) (int) $m[1];
+            }
+
+            if ($overKey !== null) {
+                $lastOverKey = $overKey;
+            } elseif ($lastOverKey !== null) {
+                $overKey = $lastOverKey;
+            } else {
+                $overKey = 'notes';
+            }
+
+            $incomingGroups[$overKey][] = $item;
+        }
+
+        // Save / Upsert each incoming over to TiDB / MySQL and local file storage
+        $storedOvers = $this->loadStoredOvers($matchId);
+
+        foreach ($incomingGroups as $overKey => $items) {
+            $existingItems = $storedOvers[$overKey]['deliveries'] ?? [];
+            $merged = $this->mergeDeliveries($existingItems, $items);
+
+            $runs = 0;
+            $wickets = 0;
+            $bowler = null;
+            $summary = null;
+
+            foreach ($merged as $it) {
+                if (($it['type'] ?? '') === 'over-separator') {
+                    if (isset($it['overRuns'])) $runs = (int) $it['overRuns'];
+                    if (!empty($it['overSummary'])) $summary = $it['overSummary'];
+                    if (!empty($it['desc']) && preg_match('/Bowler:\s*([^(|]+)/i', $it['desc'], $bm)) {
+                        $bowler = trim($bm[1]);
+                    }
+                } elseif (($it['type'] ?? '') === 'ball') {
+                    $b = $it['badge'] ?? '';
+                    if ($b === 'W' || ($it['badgeType'] ?? '') === 'wicket') {
+                        $wickets++;
+                    }
+                    if (is_numeric($b)) {
+                        $runs += (int) $b;
+                    }
+                    if (!$bowler && !empty($it['title']) && str_contains($it['title'], ' to ')) {
+                        $bowler = trim(explode(' to ', $it['title'])[0]);
+                    }
+                }
+            }
+
+            $storedOvers[$overKey] = [
+                'match_id' => $matchId,
+                'over_key' => (string) $overKey,
+                'over_number' => is_numeric($overKey) ? (int) $overKey : null,
+                'runs' => $runs,
+                'wickets' => $wickets,
+                'bowler' => $bowler,
+                'summary' => $summary,
+                'deliveries' => $merged,
+                'updated_at' => now()->toIso8601String(),
+            ];
+
+            // 1. Try Upserting into TiDB / MySQL Database
+            try {
+                \App\Models\MatchOver::updateOrCreate(
+                    ['match_id' => $matchId, 'over_key' => (string) $overKey],
+                    [
+                        'over_number' => is_numeric($overKey) ? (int) $overKey : null,
+                        'runs' => $runs,
+                        'wickets' => $wickets,
+                        'bowler' => $bowler,
+                        'summary' => $summary,
+                        'deliveries' => $merged,
+                    ]
+                );
+            } catch (\Throwable $e) {
+                // Silently continue if database is currently offline
+            }
+        }
+
+        // 2. Persist to storage/app/overs/{matchId}.json as permanent file backup
+        $this->saveStoredOversToFile($matchId, $storedOvers);
+
+        // 3. Assemble all deliveries from all saved overs in descending order (highest over first)
+        $allDeliveries = [];
+        uksort($storedOvers, function ($a, $b) {
+            if ($a === 'notes') return -1;
+            if ($b === 'notes') return 1;
+            return ((int) $b) <=> ((int) $a);
+        });
+
+        foreach ($storedOvers as $group) {
+            foreach ($group['deliveries'] as $delivery) {
+                $allDeliveries[] = $delivery;
+            }
+        }
+
+        // Return combined data with full accumulated history
+        $fresh['data'] = $allDeliveries;
+        return $fresh;
+    }
+
+    private function loadStoredOvers(string $matchId): array
+    {
+        $overs = [];
+
+        // 1. Try reading from Database (TiDB / MySQL)
+        try {
+            $dbOvers = \App\Models\MatchOver::where('match_id', $matchId)->get();
+            if ($dbOvers->isNotEmpty()) {
+                foreach ($dbOvers as $row) {
+                    $overs[(string) $row->over_key] = [
+                        'match_id' => $row->match_id,
+                        'over_key' => (string) $row->over_key,
+                        'over_number' => $row->over_number,
+                        'runs' => (int) $row->runs,
+                        'wickets' => (int) $row->wickets,
+                        'bowler' => $row->bowler,
+                        'summary' => $row->summary,
+                        'deliveries' => is_array($row->deliveries) ? $row->deliveries : (json_decode($row->deliveries, true) ?: []),
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            // DB fallback
+        }
+
+        // 2. Also merge with file backup if exists
+        $filePath = storage_path("app/overs/{$matchId}.json");
+        if (file_exists($filePath)) {
+            $fileData = json_decode(@file_get_contents($filePath), true);
+            if (is_array($fileData)) {
+                foreach ($fileData as $k => $v) {
+                    if (!isset($overs[$k])) {
+                        $overs[$k] = $v;
+                    } else {
+                        $overs[$k]['deliveries'] = $this->mergeDeliveries($overs[$k]['deliveries'] ?? [], $v['deliveries'] ?? []);
+                    }
+                }
+            }
+        }
+
+        return $overs;
+    }
+
+    private function saveStoredOversToFile(string $matchId, array $storedOvers): void
+    {
+        try {
+            $dir = storage_path('app/overs');
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            @file_put_contents("{$dir}/{$matchId}.json", json_encode($storedOvers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        } catch (\Throwable $e) {
+            // ignore
+        }
+    }
+
+    private function mergeDeliveries(array $existing, array $incoming): array
+    {
+        $map = [];
+        foreach ($existing as $it) {
+            $key = $it['id'] ?? (($it['time'] ?? '') . '-' . ($it['over'] ?? '') . '-' . ($it['title'] ?? ''));
+            $map[$key] = $it;
+        }
+        foreach ($incoming as $it) {
+            $key = $it['id'] ?? (($it['time'] ?? '') . '-' . ($it['over'] ?? '') . '-' . ($it['title'] ?? ''));
+            $map[$key] = $it;
+        }
+
+        return array_values($map);
     }
 
     public function scrapeCricbuzzCommentaryDirectly(string $matchId): array
