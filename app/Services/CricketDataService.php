@@ -758,23 +758,6 @@ class CricketDataService
                     }
                 }
             }
-                        } else {
-                            $formatted[] = [
-                                'id' => "note-{$commId}",
-                                'type' => 'note',
-                                'over' => 'NOTE',
-                                'badge' => '📋',
-                                'badgeType' => 'expert',
-                                'title' => 'Match Note',
-                                'desc' => $cleanText,
-                                'tag' => 'Tactical Note',
-                                'timestamp' => $timestamp,
-                                'time' => 'Update',
-                            ];
-                        }
-                    }
-                }
-            }
 
             usort($formatted, fn($a, $b) => ($b['timestamp'] ?? 0) <=> ($a['timestamp'] ?? 0));
 
