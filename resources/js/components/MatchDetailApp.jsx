@@ -905,18 +905,11 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
                             <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                                {item.is_ai && (
-                                    <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-300 text-[10px] font-black border border-indigo-500/30 flex items-center gap-1">
-                                        <Sparkles className="w-2.5 h-2.5 text-indigo-400" /> AI Commentary
-                                    </span>
-                                )}
-                                {item.tag && (
-                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                        {item.tag}
-                                    </span>
-                                )}
-                            </div>
+                            {item.tag && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
+                                    {item.tag}
+                                </span>
+                            )}
                         </div>
                         <p className="text-xs sm:text-sm text-slate-200 mt-1 leading-relaxed font-sans">
                             {commLanguage === 'hi' ? (item.ai_hindi || item.desc) : (item.desc || item.rawText)}
@@ -1783,29 +1776,29 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 )}
                             </div>
 
-                            {/* AI Commentary Language Switcher */}
+                            {/* Commentary Language Switcher */}
                             <div className="flex items-center gap-1.5 p-1 bg-black/60 rounded-xl border border-white/10 shrink-0 self-end sm:self-auto">
                                 <button
                                     type="button"
                                     onClick={() => setCommLanguage('en')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1.5 ${
+                                    className={`px-3 py-1 rounded-lg text-xs font-black transition flex items-center gap-1.5 ${
                                         commLanguage === 'en'
                                             ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                                             : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
-                                    <Sparkles className="w-3 h-3 text-indigo-300" /> English AI
+                                    English
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setCommLanguage('hi')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1.5 ${
+                                    className={`px-3 py-1 rounded-lg text-xs font-black transition flex items-center gap-1.5 ${
                                         commLanguage === 'hi'
                                             ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 font-black'
                                             : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
-                                    <span>🇮🇳</span> हिंदी AI
+                                    <span>🇮🇳</span> हिंदी
                                 </button>
                             </div>
                         </div>
