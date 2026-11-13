@@ -107,11 +107,22 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
     const [newCommentaryTag, setNewCommentaryTag] = useState('4 Runs 🏏');
     const [isPostingCommentary, setIsPostingCommentary] = useState(false);
     const [commentarySuccessMsg, setCommentarySuccessMsg] = useState(null);
+    const [commentaryErrorMsg, setCommentaryErrorMsg] = useState(null);
+    const [postCooldownSeconds, setPostCooldownSeconds] = useState(0);
+
+    useEffect(() => {
+        if (postCooldownSeconds <= 0) return;
+        const timer = setInterval(() => {
+            setPostCooldownSeconds(prev => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [postCooldownSeconds]);
 
     const handlePostCommentary = async (e) => {
         e.preventDefault();
-        if (!newCommentaryText.trim() || isPostingCommentary) return;
+        if (!newCommentaryText.trim() || isPostingCommentary || postCooldownSeconds > 0) return;
         setIsPostingCommentary(true);
+        setCommentaryErrorMsg(null);
         try {
             const author = newPostName.trim() || 'Live Blogger';
             localStorage.setItem('cricket_fan_name', author);
@@ -136,10 +147,16 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                 setPosts(prev => [data.data, ...prev]);
                 setNewCommentaryText('');
                 setCommentarySuccessMsg('Commentary posted live! ⚡');
+                setPostCooldownSeconds(12);
                 setTimeout(() => setCommentarySuccessMsg(null), 3000);
+            } else {
+                setCommentaryErrorMsg(data.message || 'Unable to post commentary.');
+                setTimeout(() => setCommentaryErrorMsg(null), 5000);
             }
         } catch (err) {
             console.error('Error posting commentary:', err);
+            setCommentaryErrorMsg('Network error. Please try again.');
+            setTimeout(() => setCommentaryErrorMsg(null), 5000);
         } finally {
             setIsPostingCommentary(false);
         }
@@ -1664,30 +1681,43 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="text"
-                                        value={newPostName}
-                                        onChange={(e) => setNewPostName(e.target.value)}
-                                        placeholder="Your Name (Optional)"
-                                        className="bg-slate-950/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 w-40 sm:w-48"
-                                    />
-                                    {commentarySuccessMsg && (
-                                        <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                                            <CheckCircle2 className="w-3.5 h-3.5" /> {commentarySuccessMsg}
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={newPostName}
+                                            onChange={(e) => setNewPostName(e.target.value)}
+                                            placeholder="Your Name (Optional)"
+                                            className="bg-slate-950/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 w-40 sm:w-48"
+                                        />
+                                        {commentarySuccessMsg && (
+                                            <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 animate-pulse">
+                                                <CheckCircle2 className="w-3.5 h-3.5" /> {commentarySuccessMsg}
+                                            </span>
+                                        )}
+                                        {commentaryErrorMsg && (
+                                            <span className="text-xs text-rose-400 font-bold flex items-center gap-1">
+                                                ⚠️ {commentaryErrorMsg}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={isPostingCommentary || !newCommentaryText.trim() || postCooldownSeconds > 0}
+                                        className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-slate-950 font-black text-xs transition shadow-lg shadow-amber-500/30 flex items-center gap-1.5"
+                                    >
+                                        {isPostingCommentary ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                            <Send className="w-3.5 h-3.5" />
+                                        )}
+                                        <span>
+                                            {postCooldownSeconds > 0
+                                                ? `Wait ${postCooldownSeconds}s ⏳`
+                                                : 'Post Commentary ⚡'}
                                         </span>
-                                    )}
+                                    </button>
                                 </div>
-                                <button
-                                    type="submit"
-                                    disabled={isPostingCommentary || !newCommentaryText.trim()}
-                                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-slate-950 font-black text-xs transition shadow-lg shadow-amber-500/30 flex items-center gap-1.5"
-                                >
-                                    {isPostingCommentary ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                                    <span>Post Commentary ⚡</span>
-                                </button>
-                            </div>
                         </form>
                     </div>
 

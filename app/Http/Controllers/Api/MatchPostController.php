@@ -52,9 +52,65 @@ class MatchPostController extends Controller
         $authorName = $user ? $user->name : (trim($validated['user_name'] ?? '') ?: 'Cricket Fan');
         
         $instaUrl = $validated['insta_url'] ?? null;
-        $content = $validated['content'];
+        $content = trim($validated['content']);
         $postType = $validated['post_type'] ?? 'text';
         $mediaUrl = $validated['media_url'] ?? null;
+
+        // ================= ANTI-SPAM PROTECTION =================
+        $ip = $request->ip() ?: '127.0.0.1';
+        $rateKey = 'post_cooldown_' . md5($ip . '_' . ($user ? $user->id : 'guest'));
+
+        // 1. Cooldown Rate-Limit: Minimum 12 seconds between posts
+        if (\Illuminate\Support\Facades\Cache::has($rateKey)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Please wait 12 seconds before posting another commentary or note.'
+            ], 429);
+        }
+
+        $pureText = trim(preg_replace('/^\[Commentary\]\s*/i', '', $content));
+
+        // 2. Minimum length check
+        if (mb_strlen($pureText) < 3) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Commentary is too short. Please write at least 3 characters.'
+            ], 422);
+        }
+
+        // 3. Repetitive character spam (e.g. "aaaaaaa", "........")
+        if (preg_match('/(.)\1{6,}/u', $pureText)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Spam repetitive characters detected. Please write meaningful cricket commentary.'
+            ], 422);
+        }
+
+        // 4. Bad words & Spam promo link filter
+        $spamPattern = '/(satta|betting|telegram|t\.me\/|wa\.me\/|whatsapp\s*group|bonus\s*\d+|casino|rummy|1xbet|stake|porn|xxx|nude|madarchod|bhenchod|chutiya|gandu|bhosdi|harami|lund|gaand)/i';
+        if (preg_match($spamPattern, $pureText) || preg_match($spamPattern, $authorName)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Your post contains inappropriate keywords or spam links and cannot be posted.'
+            ], 422);
+        }
+
+        // 5. Duplicate post check (same text within last 10 minutes)
+        try {
+            $duplicate = MatchPost::where('match_id', $matchId)
+                ->where('content', 'LIKE', '%' . addcslashes($pureText, '%_') . '%')
+                ->where('created_at', '>=', now()->subMinutes(10))
+                ->exists();
+            if ($duplicate) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Duplicate commentary detected. This update was already posted recently.'
+                ], 422);
+            }
+        } catch (\Throwable $e) {}
+
+        // Set cooldown cache for 12 seconds
+        \Illuminate\Support\Facades\Cache::put($rateKey, true, 12);
 
         // Handle uploaded photo / meme file
         if ($request->hasFile('image')) {
