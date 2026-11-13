@@ -204,52 +204,61 @@ class AiCommentaryService
             $aiHinglish = $dotHn[$choiceIdx];
         }
 
-        // Action titles and tags for 3 distinct languages
+        $actionEn = 'no run';
         if ($isWicket) {
+            $actionEn = 'OUT';
             $titleHi = "{$bowler} vs {$batsman}, आउट (WICKET)";
             $titleHn = "{$bowler} to {$batsman}, OUT (Wicket)";
             $tagHi = 'विकेट ☝️';
             $tagHn = 'Wicket ☝️';
         } elseif ($isSix) {
+            $actionEn = 'SIX';
             $titleHi = "{$bowler} vs {$batsman}, छक्का (SIX)";
             $titleHn = "{$bowler} to {$batsman}, 6 Runs (Six)";
             $tagHi = 'छक्का 6';
             $tagHn = 'Six 6';
         } elseif ($isFour) {
+            $actionEn = 'FOUR';
             $titleHi = "{$bowler} vs {$batsman}, चौका (FOUR)";
             $titleHn = "{$bowler} to {$batsman}, 4 Runs (Four)";
             $tagHi = 'चौका 4';
             $tagHn = 'Four 4';
         } elseif ($isWide) {
+            $actionEn = 'wide';
             $titleHi = "{$bowler} vs {$batsman}, वाइड (Wide)";
             $titleHn = "{$bowler} to {$batsman}, Wide Ball";
             $tagHi = 'अतिरिक्त रन';
             $tagHn = 'Wide Ball';
         } elseif ($isNoBall) {
+            $actionEn = 'no ball';
             $titleHi = "{$bowler} vs {$batsman}, नो बॉल (No Ball)";
             $titleHn = "{$bowler} to {$batsman}, No Ball";
             $tagHi = 'नो बॉल';
             $tagHn = 'No Ball';
         } elseif ($badge === '1') {
+            $actionEn = '1 run';
             $titleHi = "{$bowler} vs {$batsman}, 1 रन";
             $titleHn = "{$bowler} to {$batsman}, 1 Run";
             $tagHi = '1 रन';
             $tagHn = '1 Run';
         } elseif ($badge === '2' || $badge === '3') {
+            $actionEn = "{$badge} runs";
             $titleHi = "{$bowler} vs {$batsman}, {$badge} रन";
             $titleHn = "{$bowler} to {$batsman}, {$badge} Runs";
             $tagHi = "{$badge} रन";
             $tagHn = "{$badge} Runs";
         } else {
+            $actionEn = 'no run';
             $titleHi = "{$bowler} vs {$batsman}, कोई रन नहीं";
             $titleHn = "{$bowler} to {$batsman}, No Run";
             $tagHi = 'डॉट गेंद';
             $tagHn = 'Dot Ball';
         }
 
-        // Replace raw description and rawText with AI output
+        // Replace raw description, title, and rawText with clean AI output
+        $ball['title'] = "{$bowler} to {$batsman}, {$actionEn}";
         $ball['desc'] = $aiEng;
-        $ball['rawText'] = "{$bowler} to {$batsman}, " . ($badge === 'W' ? 'OUT' : ($badge . ' runs')) . " - {$aiEng}";
+        $ball['rawText'] = $aiEng;
         $ball['ai_hindi'] = $aiHin;
         $ball['ai_hinglish'] = $aiHinglish;
         $ball['title_hi'] = $titleHi;
@@ -320,6 +329,7 @@ class AiCommentaryService
         $aiHn = "{$speaker} ne match ke baad reaction dete hue kaha: \"{$paraSpeech}\"";
 
         $item['desc'] = $aiEng;
+        $item['rawText'] = $aiEng;
         $item['ai_hindi'] = $aiHin;
         $item['ai_hinglish'] = $aiHn;
         $item['title'] = "{$speaker} (Post-Match Take)";
@@ -344,6 +354,7 @@ class AiCommentaryService
         $hiText = $this->translateToHindi($paraText ?: $text);
 
         $item['desc'] = "Match Wrap: " . $paraText;
+        $item['rawText'] = "Match Wrap: " . $paraText;
         $item['ai_hindi'] = "मैच परिणाम सारांश: " . $hiText;
         $item['ai_hinglish'] = "Match Result Summary: " . $paraText;
         $item['title'] = 'Match Summary & Wrap-up';
@@ -419,6 +430,7 @@ class AiCommentaryService
         }
 
         $item['desc'] = $aiEng;
+        $item['rawText'] = $aiEng;
         $item['ai_hindi'] = $aiHin;
         $item['ai_hinglish'] = $aiHn;
         $item['title'] = 'Match Note';

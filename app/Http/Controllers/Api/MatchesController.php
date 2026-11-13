@@ -192,17 +192,21 @@ class MatchesController extends Controller
 
     public function show(string $matchId, CricketDataService $cricket): JsonResponse
     {
-        if (str_starts_with($matchId, 'local_')) {
-            $localId = (int) str_replace('local_', '', $matchId);
-            $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])->find($localId);
-            if ($localMatch) {
-                return response()->json($localMatch->formatForLiveCenter(auth()->id(), auth()->user()->phone ?? null));
+        try {
+            if (str_starts_with($matchId, 'local_')) {
+                $localId = (int) str_replace('local_', '', $matchId);
+                $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])->find($localId);
+                if ($localMatch) {
+                    return response()->json($localMatch->formatForLiveCenter(auth()->id(), auth()->user()->phone ?? null));
+                }
+            } elseif (is_numeric($matchId)) {
+                $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])->find((int) $matchId);
+                if ($localMatch) {
+                    return response()->json($localMatch->formatForLiveCenter(auth()->id(), auth()->user()->phone ?? null));
+                }
             }
-        } elseif (is_numeric($matchId)) {
-            $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])->find((int) $matchId);
-            if ($localMatch) {
-                return response()->json($localMatch->formatForLiveCenter(auth()->id(), auth()->user()->phone ?? null));
-            }
+        } catch (\Throwable $e) {
+            // DB offline fallback
         }
 
         $matches = $cricket->getCurrentMatches();
@@ -236,43 +240,47 @@ class MatchesController extends Controller
 
     public function scorecard(string $matchId, CricketDataService $cricket): JsonResponse
     {
-        if (str_starts_with($matchId, 'local_') || (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists())) {
-            $localId = (int) str_replace('local_', '', $matchId);
-            $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players'])->find($localId);
-            if ($localMatch) {
-                $batting = [];
-                $bowling = [];
-                foreach ($localMatch->players as $p) {
-                    if ($p->runs_scored > 0 || $p->balls_faced > 0 || in_array($p->dismissal, ['bowled', 'caught', 'lbw', 'run out', 'stumped', 'not out'])) {
-                        $batting[] = [
-                            'name' => $p->player_name,
-                            'runs' => (int) $p->runs_scored,
-                            'balls' => (int) $p->balls_faced,
-                            'fours' => (int) $p->fours,
-                            'sixes' => (int) $p->sixes,
-                            'dismissal' => $p->dismissal ?: 'not out',
-                            'team' => $p->team_number == 1 ? $localMatch->team1_name : $localMatch->team2_name,
-                        ];
+        try {
+            if (str_starts_with($matchId, 'local_') || (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists())) {
+                $localId = (int) str_replace('local_', '', $matchId);
+                $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players'])->find($localId);
+                if ($localMatch) {
+                    $batting = [];
+                    $bowling = [];
+                    foreach ($localMatch->players as $p) {
+                        if ($p->runs_scored > 0 || $p->balls_faced > 0 || in_array($p->dismissal, ['bowled', 'caught', 'lbw', 'run out', 'stumped', 'not out'])) {
+                            $batting[] = [
+                                'name' => $p->player_name,
+                                'runs' => (int) $p->runs_scored,
+                                'balls' => (int) $p->balls_faced,
+                                'fours' => (int) $p->fours,
+                                'sixes' => (int) $p->sixes,
+                                'dismissal' => $p->dismissal ?: 'not out',
+                                'team' => $p->team_number == 1 ? $localMatch->team1_name : $localMatch->team2_name,
+                            ];
+                        }
+                        if ($p->overs_bowled && $p->overs_bowled !== '0.0' && $p->overs_bowled !== '0') {
+                            $bowling[] = [
+                                'name' => $p->player_name,
+                                'overs' => (string) $p->overs_bowled,
+                                'maidens' => (int) $p->maidens,
+                                'runs' => (int) $p->runs_conceded,
+                                'wickets' => (int) $p->wickets_taken,
+                                'team' => $p->team_number == 1 ? $localMatch->team1_name : $localMatch->team2_name,
+                            ];
+                        }
                     }
-                    if ($p->overs_bowled && $p->overs_bowled !== '0.0' && $p->overs_bowled !== '0') {
-                        $bowling[] = [
-                            'name' => $p->player_name,
-                            'overs' => (string) $p->overs_bowled,
-                            'maidens' => (int) $p->maidens,
-                            'runs' => (int) $p->runs_conceded,
-                            'wickets' => (int) $p->wickets_taken,
-                            'team' => $p->team_number == 1 ? $localMatch->team1_name : $localMatch->team2_name,
-                        ];
-                    }
+                    return response()->json([
+                        'status' => 'success',
+                        'data' => [
+                            'batting' => $batting,
+                            'bowling' => $bowling,
+                        ]
+                    ]);
                 }
-                return response()->json([
-                    'status' => 'success',
-                    'data' => [
-                        'batting' => $batting,
-                        'bowling' => $bowling,
-                    ]
-                ]);
             }
+        } catch (\Throwable $e) {
+            // DB offline fallback
         }
 
         $scorecard = $cricket->getMatchScorecard($matchId);
@@ -281,18 +289,22 @@ class MatchesController extends Controller
 
     public function commentary(string $matchId, CricketDataService $cricket): JsonResponse
     {
-        if (str_starts_with($matchId, 'local_') || (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists())) {
-            $localId = (int) str_replace('local_', '', $matchId);
-            $localMatch = CricketMatch::with(['scores', 'players'])->find($localId);
-            if ($localMatch) {
-                return response()->json([
-                    'status' => 'success',
-                    'matchId' => $matchId,
-                    'isLocal' => true,
-                    'miniscore' => null,
-                    'data' => []
-                ]);
+        try {
+            if (str_starts_with($matchId, 'local_') || (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists())) {
+                $localId = (int) str_replace('local_', '', $matchId);
+                $localMatch = CricketMatch::with(['scores', 'players'])->find($localId);
+                if ($localMatch) {
+                    return response()->json([
+                        'status' => 'success',
+                        'matchId' => $matchId,
+                        'isLocal' => true,
+                        'miniscore' => null,
+                        'data' => []
+                    ]);
+                }
             }
+        } catch (\Throwable $e) {
+            // DB offline fallback
         }
 
         $commentary = $cricket->getMatchCommentary($matchId);

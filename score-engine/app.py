@@ -842,20 +842,39 @@ class ScoreService:
                 if sc_arr_start != -1:
                     bracket_depth = 0
                     sc_arr_end = -1
-                    for i in range(sc_arr_start, len(text)):
-                        if text[i] == "[":
-                            bracket_depth += 1
-                        elif text[i] == "]":
-                            bracket_depth -= 1
-                            if bracket_depth == 0:
-                                sc_arr_end = i
-                                break
+                    text_len = len(text)
+                    in_string = False
+                    for i in range(sc_arr_start, text_len):
+                        c = text[i]
+                        if c == '"':
+                            bs = 0
+                            k = i - 1
+                            while k >= sc_arr_start and text[k] == "\\":
+                                bs += 1
+                                k -= 1
+                            if bs <= 1:
+                                in_string = not in_string
+                        elif not in_string:
+                            if c == "[":
+                                bracket_depth += 1
+                            elif c == "]":
+                                bracket_depth -= 1
+                                if bracket_depth == 0:
+                                    sc_arr_end = i
+                                    break
 
                     if sc_arr_end != -1:
                         raw_arr = text[sc_arr_start:sc_arr_end + 1]
-                        cleaned_json = raw_arr.replace('\\\\\\"', '"').replace('\\"', '"').replace('\\\\\\\\', '\\')
                         try:
-                            sc_list = json.loads(cleaned_json)
+                            sc_list = json.loads(raw_arr)
+                        except Exception:
+                            try:
+                                s = raw_arr.replace('\\\\\\"', '__ESC_QUOTE__').replace('\\"', '"').replace('__ESC_QUOTE__', '\\"').replace('\\\\\\\\', '\\\\')
+                                sc_list = json.loads(s)
+                            except Exception:
+                                s = raw_arr.replace('\\\\\\"', '"').replace('\\"', '"').replace('\\\\\\\\', '\\')
+                                sc_list = json.loads(s)
+                        try:
                             for inn in sc_list:
                                 bat_team = inn.get("batTeamDetails", {})
                                 bowl_team = inn.get("bowlTeamDetails", {})

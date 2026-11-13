@@ -200,7 +200,36 @@ class CricketDataService
         }
 
         $raw = $this->get('match_info', ['id' => $matchId], $this->matchDetailTtl, $this->cacheKey("match_{$matchId}"));
-        return $this->normalizeMatchDetail($raw);
+        $res = $this->normalizeMatchDetail($raw);
+        if (!empty($res)) {
+            return $res;
+        }
+
+        // Resilient fallback: Direct Cricbuzz scraper for match info
+        $scraped = $this->scrapeCricbuzzMatchDirectly($matchId);
+        if (!empty($scraped)) {
+            return $scraped;
+        }
+
+        // Fallback: If match has saved overs, synthesize match info from saved data
+        $stored = $this->loadStoredOvers($matchId);
+        if (!empty($stored)) {
+            $firstOver = reset($stored);
+            $batTeam = $firstOver['batting_team'] ?? 'Team';
+            return [
+                'id' => (string) $matchId,
+                'name' => "Match {$matchId}",
+                'matchType' => 'Match',
+                'status' => 'live',
+                'status_text' => 'In Progress',
+                'matchStarted' => true,
+                'matchEnded' => false,
+                'teams' => [$batTeam, 'Opposition'],
+                'score' => [],
+            ];
+        }
+
+        return [];
     }
 
     public function getMatchScorecard(string $matchId): array
@@ -210,12 +239,21 @@ class CricketDataService
                 try {
                     $response = Http::timeout(15)->get("{$this->localUrl}/scorecard/{$matchId}");
                     if ($response->successful()) {
-                        return $response->json();
+                        $json = $response->json();
+                        if (!empty($json) && ($json['status'] ?? '') === 'success' && (!empty($json['data']['innings']) || !empty($json['data']['batting']))) {
+                            return $json;
+                        }
                     }
                 } catch (\Throwable $e) {
                     // ignore
                 }
-                return ['status' => 'error', 'data' => ['batting' => [], 'bowling' => []]];
+
+                $direct = $this->scrapeCricbuzzScorecardDirectly($matchId);
+                if (!empty($direct)) {
+                    return ['status' => 'success', 'data' => $direct];
+                }
+
+                return ['status' => 'error', 'data' => ['batting' => [], 'bowling' => [], 'innings' => []]];
             });
         }
 
@@ -832,6 +870,261 @@ class CricketDataService
                 'message' => $e->getMessage(),
                 'data' => []
             ];
+        }
+    }
+
+    public function scrapeCricbuzzMatchDirectly(string $matchId): ?array
+    {
+        try {
+            $url = "https://www.cricbuzz.com/live-cricket-scores/{$matchId}";
+            $response = Http::timeout(8)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                ])
+                ->get($url);
+
+            if (!$response->successful()) {
+                return null;
+            }
+
+            $html = $response->body();
+            preg_match("/<title>(.*?)<\/title>/i", $html, $tm);
+            $rawTitle = $tm[1] ?? "";
+            $cleanTitle = trim(preg_replace("/^Cricket (commentary|scorecard)\s*\|\s*/i", "", $rawTitle));
+
+            $marker = 'commentaryPageData';
+            $idx = strpos($html, $marker);
+            if ($idx === false) {
+                return null;
+            }
+
+            $braceStart = strpos($html, '{', $idx);
+            if ($braceStart === false) {
+                return null;
+            }
+
+            $depth = 0;
+            $braceEnd = -1;
+            $len = strlen($html);
+            $inString = false;
+            for ($i = $braceStart; $i < $len; $i++) {
+                $c = $html[$i];
+                if ($c === '"') {
+                    $bs = 0;
+                    $k = $i - 1;
+                    while ($k >= $braceStart && $html[$k] === '\\') { $bs++; $k--; }
+                    if ($bs <= 1) $inString = !$inString;
+                } elseif (!$inString) {
+                    if ($c === '{') $depth++;
+                    elseif ($c === '}') { $depth--; if ($depth === 0) { $braceEnd = $i; break; } }
+                }
+            }
+
+            if ($braceEnd === -1) return null;
+
+            $raw = substr($html, $braceStart, $braceEnd - $braceStart + 1);
+            $cleaned = str_replace(["\\\\\\\"", "\\\"", "\\\\\\\\"], ["__ESC_QUOTE__", "\"", "\\\\"], $raw);
+            $cleaned = str_replace("__ESC_QUOTE__", "\\\"", $cleaned);
+            $parsed = json_decode($cleaned, true);
+
+            if (!$parsed || !isset($parsed['miniscore'])) {
+                return null;
+            }
+
+            $miniscore = $parsed['miniscore'] ?? [];
+            $scoreDetails = $miniscore['matchScoreDetails'] ?? [];
+            $status = $scoreDetails['customStatus'] ?? $scoreDetails['state'] ?? 'In Progress';
+            $scores = [];
+            foreach ($scoreDetails['inningsScoreList'] ?? [] as $inn) {
+                $scores[] = [
+                    'inning' => ($inn['batTeamName'] ?? 'Team') . ' Inning ' . ($inn['inningsId'] ?? 1),
+                    'batting_team' => $inn['batTeamName'] ?? '',
+                    'runs' => (int) ($inn['score'] ?? 0),
+                    'r' => (int) ($inn['score'] ?? 0),
+                    'wickets' => (int) ($inn['wickets'] ?? 0),
+                    'w' => (int) ($inn['wickets'] ?? 0),
+                    'overs' => (string) ($inn['overs'] ?? '0'),
+                    'o' => (string) ($inn['overs'] ?? '0'),
+                    'display_score' => ($inn['score'] ?? 0) . '/' . ($inn['wickets'] ?? 0)
+                ];
+            }
+
+            $teams = [];
+            if (preg_match('/^([^,]+),\s*(.+)$/', $cleanTitle, $mt)) {
+                $firstPart = $mt[1];
+                if (str_contains($firstPart, ' vs ')) {
+                    $teams = array_map('trim', explode(' vs ', $firstPart, 2));
+                }
+            }
+
+            return [
+                'id' => (string) $matchId,
+                'name' => $cleanTitle ?: 'Live Cricket Match',
+                'matchType' => $scoreDetails['matchFormat'] ?? 'ODI',
+                'status' => in_array($scoreDetails['state'] ?? '', ['Complete', 'Result']) ? 'completed' : 'live',
+                'status_text' => $status,
+                'matchStarted' => true,
+                'matchEnded' => in_array($scoreDetails['state'] ?? '', ['Complete', 'Result']),
+                'teams' => !empty($teams) ? $teams : ['Team 1', 'Team 2'],
+                'score' => $scores,
+                'miniscore' => $miniscore,
+            ];
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    public function scrapeCricbuzzScorecardDirectly(string $matchId): ?array
+    {
+        try {
+            $url = "https://www.cricbuzz.com/live-cricket-scorecard/{$matchId}";
+            $response = Http::timeout(8)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                ])
+                ->get($url);
+
+            if (!$response->successful()) {
+                return null;
+            }
+
+            $html = $response->body();
+            $marker = 'scorecardApiData';
+            $idx = strpos($html, $marker);
+            if ($idx === false) {
+                return null;
+            }
+
+            $arrStart = strpos($html, '[', $idx);
+            if ($arrStart === false) {
+                return null;
+            }
+
+            $depth = 0;
+            $arrEnd = -1;
+            $len = strlen($html);
+            $inString = false;
+            for ($i = $arrStart; $i < $len; $i++) {
+                $c = $html[$i];
+                if ($c === '"') {
+                    $bs = 0;
+                    $k = $i - 1;
+                    while ($k >= $arrStart && $html[$k] === '\\') { $bs++; $k--; }
+                    if ($bs <= 1) $inString = !$inString;
+                } elseif (!$inString) {
+                    if ($c === '[') $depth++;
+                    elseif ($c === ']') { $depth--; if ($depth === 0) { $arrEnd = $i; break; } }
+                }
+            }
+
+            if ($arrEnd === -1) return null;
+
+            $raw = substr($html, $arrStart, $arrEnd - $arrStart + 1);
+            $cleaned = str_replace(["\\\\\\\"", "\\\"", "\\\\\\\\"], ["__ESC_QUOTE__", "\"", "\\\\"], $raw);
+            $cleaned = str_replace("__ESC_QUOTE__", "\\\"", $cleaned);
+            $scList = json_decode($cleaned, true);
+
+            if (!is_array($scList)) {
+                return null;
+            }
+
+            $formattedInnings = [];
+            foreach ($scList as $inn) {
+                $batTeam = $inn['batTeamDetails'] ?? [];
+                $bowlTeam = $inn['bowlTeamDetails'] ?? [];
+                $scoreDetails = $inn['scoreDetails'] ?? [];
+                $extras = $inn['extrasData'] ?? [];
+
+                $batting = [];
+                $didNotBat = [];
+                foreach ($batTeam['batsmenData'] ?? [] as $b) {
+                    $name = $b['batName'] ?? '';
+                    $outDesc = trim($b['outDesc'] ?? '');
+                    $runs = (int) ($b['runs'] ?? 0);
+                    $balls = (int) ($b['balls'] ?? 0);
+                    $dots = (int) ($b['dots'] ?? 0);
+                    $bId = $b['batId'] ?? null;
+
+                    if ($balls === 0 && empty($outDesc) && $runs === 0 && $dots === 0) {
+                        $didNotBat[] = [
+                            'id' => $bId ? (string) $bId : null,
+                            'name' => $name,
+                        ];
+                    } else {
+                        $batting[] = [
+                            'id' => $bId ? (string) $bId : null,
+                            'name' => $name,
+                            'runs' => $runs,
+                            'balls' => $balls,
+                            'fours' => (int) ($b['fours'] ?? 0),
+                            'sixes' => (int) ($b['sixes'] ?? 0),
+                            'strikeRate' => (float) ($b['strikeRate'] ?? 0.0),
+                            'out' => $outDesc ?: 'not out',
+                        ];
+                    }
+                }
+
+                $bowling = [];
+                foreach ($bowlTeam['bowlersData'] ?? [] as $bw) {
+                    $bwId = $bw['bowlerId'] ?? null;
+                    $bowling[] = [
+                        'id' => $bwId ? (string) $bwId : null,
+                        'bowler' => $bw['bowlName'] ?? '',
+                        'name' => $bw['bowlName'] ?? '',
+                        'overs' => (string) ($bw['overs'] ?? '0'),
+                        'maidens' => (int) ($bw['maidens'] ?? 0),
+                        'runs' => (int) ($bw['runs'] ?? 0),
+                        'wickets' => (int) ($bw['wickets'] ?? 0),
+                        'economy' => (float) ($bw['economy'] ?? 0.0),
+                    ];
+                }
+
+                $fow = [];
+                foreach ($inn['wicketsData'] ?? [] as $w) {
+                    $fow[] = [
+                        'wkt_nbr' => (int) ($w['wktNbr'] ?? 0),
+                        'score' => (int) ($w['wktRuns'] ?? 0),
+                        'over' => (string) ($w['wktOver'] ?? '0'),
+                        'batsman' => $w['batName'] ?? '',
+                    ];
+                }
+                usort($fow, fn($a, $b) => ($a['wkt_nbr'] ?? 0) <=> ($b['wkt_nbr'] ?? 0));
+
+                $formattedInnings[] = [
+                    'id' => $inn['inningsId'] ?? 1,
+                    'team' => $batTeam['batTeamName'] ?? '',
+                    'short_name' => $batTeam['batTeamShortName'] ?? '',
+                    'runs' => (int) ($scoreDetails['runs'] ?? 0),
+                    'wickets' => (int) ($scoreDetails['wickets'] ?? 0),
+                    'overs' => (string) ($scoreDetails['overs'] ?? '0'),
+                    'run_rate' => (float) ($scoreDetails['runRate'] ?? 0.0),
+                    'score' => ($scoreDetails['runs'] ?? 0) . '/' . ($scoreDetails['wickets'] ?? 0),
+                    'batting' => $batting,
+                    'did_not_bat' => $didNotBat,
+                    'extras' => $extras,
+                    'fall_of_wickets' => $fow,
+                    'bowling' => $bowling,
+                ];
+            }
+
+            $currentBatting = [];
+            $currentBowling = [];
+            if (!empty($formattedInnings)) {
+                $latestInn = end($formattedInnings);
+                $currentBatting = array_values(array_filter($latestInn['batting'], fn($b) => in_array($b['out'], ['not out', 'batting'])));
+                $currentBowling = $latestInn['bowling'];
+            }
+
+            return [
+                'innings' => $formattedInnings,
+                'batting' => $currentBatting,
+                'bowling' => $currentBowling,
+                'player_of_the_match' => null,
+            ];
+        } catch (\Throwable $e) {
+            return null;
         }
     }
 
