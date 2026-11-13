@@ -86,13 +86,16 @@ class PasswordResetLinkController extends Controller
             Log::warning('OTP email dispatch failed: ' . $mailEx->getMessage());
         }
 
+        if (!$emailSent) {
+            return back()->withInput()->withErrors([
+                'email' => "Could not send OTP email to {$inputEmail}. Please verify your email address or try again in a moment."
+            ]);
+        }
+
         return redirect()->route('password.request')->with([
             'step' => 2,
             'otp_email' => $inputEmail,
-            'status' => $emailSent
-                ? "6-digit OTP has been sent directly to your email ({$inputEmail})! Please check your Inbox and Spam folder."
-                : "OTP generated successfully!",
-            'screen_otp' => $emailSent ? null : $otp, // Show screen fallback only if email failed
+            'status' => "A 6-digit OTP code has been sent directly to your email ({$inputEmail})! Please check your Inbox and Spam folder.",
         ]);
     }
 
@@ -140,7 +143,6 @@ class PasswordResetLinkController extends Controller
                 ->with([
                     'step' => 2,
                     'otp_email' => $inputEmail,
-                    'screen_otp' => $expectedOtp,
                 ])
                 ->withErrors(['otp' => 'Invalid 6-digit OTP. Please enter the correct code.']);
         }

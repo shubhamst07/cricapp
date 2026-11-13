@@ -1,7 +1,6 @@
 @php
     $isStep2 = session('step') == 2 || old('otp');
     $otpEmail = session('otp_email') ?? old('email');
-    $screenOtp = session('screen_otp');
 @endphp
 
 <x-guest-layout>
@@ -42,23 +41,7 @@
                 </div>
             @endif
 
-            <!-- Screen Fallback OTP Badge -->
-            @if ($isStep2 && $screenOtp)
-                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-amber-500/15 border border-amber-500/30 text-amber-200 text-xs space-y-1">
-                    <div class="flex items-center justify-between">
-                        <span class="font-bold flex items-center gap-1.5">
-                            <span>🔑</span>
-                            <span>Your Verification OTP:</span>
-                        </span>
-                        <span class="font-mono text-base font-black px-2.5 py-0.5 rounded-lg bg-amber-400 text-slate-950 tracking-wider">
-                            {{ $screenOtp }}
-                        </span>
-                    </div>
-                    <p class="text-[11px] text-amber-300/80">
-                        Email delay hone par aap direct is code ko neeche enter karke turant password reset kar sakte hain.
-                    </p>
-                </div>
-            @endif
+
 
             <!-- Validation Errors -->
             @if ($errors->any())
@@ -96,7 +79,7 @@
                         </label>
                         <div class="relative">
                             <input id="otp" type="text" name="otp" maxlength="6" pattern="[0-9]{6}" required autofocus
-                                   value="{{ old('otp', $screenOtp ?? '') }}"
+                                   value="{{ old('otp', '') }}"
                                    placeholder="••••••"
                                    style="letter-spacing: 0.35em;"
                                    class="w-full bg-slate-950/80 border border-white/10 rounded-xl px-4 py-3 text-center text-lg font-black font-mono text-amber-300 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none transition">
