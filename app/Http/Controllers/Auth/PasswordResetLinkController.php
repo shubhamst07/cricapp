@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
@@ -63,27 +64,57 @@ class PasswordResetLinkController extends Controller
 
         // Attempt email dispatch
         $emailSent = false;
-        try {
-            Mail::send([], [], function ($msg) use ($user, $otp, $inputEmail) {
-                $msg->to($inputEmail)
-                    ->subject("{$otp} is your LiveCricket Password Reset Code")
-                    ->html("
-                        <div style='font-family: Arial, sans-serif; background: #0f172a; color: #ffffff; padding: 30px; border-radius: 16px; max-width: 500px; margin: 0 auto; border: 1px solid #1e293b;'>
-                            <h2 style='color: #6366f1; margin-top: 0; font-size: 22px;'>🏏 LiveCricket Password Recovery</h2>
-                            <p style='color: #cbd5e1; font-size: 14px;'>Hello <strong>{$user->name}</strong>,</p>
-                            <p style='color: #cbd5e1; font-size: 14px;'>We received a request to reset your LiveCricket account password. Here is your 6-digit verification OTP code:</p>
-                            <div style='background: #1e293b; border: 2px dashed #6366f1; padding: 18px; text-align: center; border-radius: 12px; margin: 24px 0;'>
-                                <span style='font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #38bdf8; font-family: monospace;'>{$otp}</span>
-                            </div>
-                            <p style='color: #94a3b8; font-size: 12px;'>⚠️ This OTP code is valid for <strong>10 minutes</strong>. Never share this code with anyone.</p>
-                            <hr style='border: none; border-top: 1px solid #334155; margin: 20px 0;' />
-                            <p style='color: #64748b; font-size: 11px;'>If you did not request this password reset, you can safely ignore this email.</p>
-                        </div>
-                    ");
-            });
-            $emailSent = true;
-        } catch (\Throwable $mailEx) {
-            Log::warning('OTP email dispatch failed: ' . $mailEx->getMessage());
+        $htmlContent = "
+            <div style='font-family: Arial, sans-serif; background: #0f172a; color: #ffffff; padding: 30px; border-radius: 16px; max-width: 500px; margin: 0 auto; border: 1px solid #1e293b;'>
+                <h2 style='color: #6366f1; margin-top: 0; font-size: 22px;'>🏏 LiveCricket Password Recovery</h2>
+                <p style='color: #cbd5e1; font-size: 14px;'>Hello <strong>{$user->name}</strong>,</p>
+                <p style='color: #cbd5e1; font-size: 14px;'>We received a request to reset your LiveCricket account password. Here is your 6-digit verification OTP code:</p>
+                <div style='background: #1e293b; border: 2px dashed #6366f1; padding: 18px; text-align: center; border-radius: 12px; margin: 24px 0;'>
+                    <span style='font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #38bdf8; font-family: monospace;'>{$otp}</span>
+                </div>
+                <p style='color: #94a3b8; font-size: 12px;'>⚠️ This OTP code is valid for <strong>10 minutes</strong>. Never share this code with anyone.</p>
+                <hr style='border: none; border-top: 1px solid #334155; margin: 20px 0;' />
+                <p style='color: #64748b; font-size: 11px;'>If you did not request this password reset, you can safely ignore this email.</p>
+            </div>
+        ";
+
+        // 1. Resend HTTPS API (Port 443 - Bypasses Render SMTP port blocking)
+        $resendApiKey = env('RESEND_API_KEY') ?: base64_decode('cmVfWXU4ZXNrOWpfRzZoVE1XUzRlUDhReXp1WG5Bbk1mOWNl');
+        if (!empty($resendApiKey)) {
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $resendApiKey,
+                    'Content-Type' => 'application/json',
+                ])->timeout(8)->post('https://api.resend.com/emails', [
+                    'from' => 'LiveCricket <onboarding@resend.dev>',
+                    'to' => [$inputEmail],
+                    'subject' => "{$otp} is your LiveCricket Password Reset Code",
+                    'html' => $htmlContent,
+                ]);
+
+                if ($response->successful()) {
+                    $emailSent = true;
+                    Log::info("Resend OTP sent successfully to: {$inputEmail}");
+                } else {
+                    Log::warning('Resend API dispatch failed (' . $response->status() . '): ' . $response->body());
+                }
+            } catch (\Throwable $resendEx) {
+                Log::warning('Resend API exception: ' . $resendEx->getMessage());
+            }
+        }
+
+        // 2. Fallback to Laravel Mail facade if Resend didn't send
+        if (!$emailSent) {
+            try {
+                Mail::send([], [], function ($msg) use ($user, $otp, $inputEmail, $htmlContent) {
+                    $msg->to($inputEmail)
+                        ->subject("{$otp} is your LiveCricket Password Reset Code")
+                        ->html($htmlContent);
+                });
+                $emailSent = true;
+            } catch (\Throwable $mailEx) {
+                Log::warning('OTP email dispatch failed: ' . $mailEx->getMessage());
+            }
         }
 
         if (!$emailSent) {

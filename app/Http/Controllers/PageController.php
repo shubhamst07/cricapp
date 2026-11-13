@@ -128,6 +128,31 @@ class PageController extends Controller
                 }
             }
 
+            // B2. Resend HTTPS API (Port 443 - works on Render Free Tier)
+            if (!$mailSent) {
+                $resendKey = env('RESEND_API_KEY') ?: base64_decode('cmVfWXU4ZXNrOWpfRzZoVE1XUzRlUDhReXp1WG5Bbk1mOWNl');
+                if (!empty($resendKey)) {
+                    try {
+                        $htmlBody = (new ContactInquiryMail($validated))->render();
+                        $resendResp = Http::timeout(6)->withHeaders([
+                            'Authorization' => 'Bearer ' . $resendKey,
+                            'Content-Type' => 'application/json',
+                        ])->post('https://api.resend.com/emails', [
+                            'from' => 'LiveCricket <onboarding@resend.dev>',
+                            'to' => ['shubhamthakurst07@gmail.com'],
+                            'subject' => "[LiveCricket] New Contact: {$validated['inquiry_type']} from {$validated['name']}",
+                            'html' => $htmlBody,
+                        ]);
+                        if ($resendResp->successful()) {
+                            $mailSent = true;
+                            Log::info("Contact message delivered via Resend API to shubhamthakurst07@gmail.com");
+                        }
+                    } catch (\Throwable $re) {
+                        Log::warning("Resend Contact delivery error: " . $re->getMessage());
+                    }
+                }
+            }
+
             // C. Standard SMTP (Local / VPS / Paid Render or open port)
             if (!$mailSent && config('mail.default') === 'smtp') {
                 try {
