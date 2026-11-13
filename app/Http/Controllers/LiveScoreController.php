@@ -225,7 +225,14 @@ class LiveScoreController extends Controller
 
         // Fast RAM/disk cache lookup for scorecard and commentary - progressive asynchronous loading
         $scorecard = $cricket->getCachedScorecard($matchId) ?? ['status' => 'success', 'data' => []];
-        $commentary = $cricket->getCachedCommentary($matchId) ?? ['status' => 'success', 'data' => []];
+        $commentary = $cricket->getCachedCommentary($matchId);
+        if (empty($commentary) || empty($commentary['data'])) {
+            try {
+                $commentary = $cricket->getMatchCommentary($matchId);
+            } catch (\Throwable $e) {
+                $commentary = ['status' => 'success', 'data' => []];
+            }
+        }
 
         if (empty($match['player_of_the_match']) && !empty($scorecard['data']['player_of_the_match'])) {
             $match['player_of_the_match'] = $scorecard['data']['player_of_the_match'];

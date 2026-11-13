@@ -568,14 +568,28 @@ class CricketDataService
             $depth = 0;
             $braceEnd = -1;
             $len = strlen($html);
+            $inString = false;
             for ($i = $braceStart; $i < $len; $i++) {
-                if ($html[$i] === '{') {
-                    $depth++;
-                } elseif ($html[$i] === '}') {
-                    $depth--;
-                    if ($depth === 0) {
-                        $braceEnd = $i;
-                        break;
+                $c = $html[$i];
+                if ($c === '"') {
+                    $bs = 0;
+                    $k = $i - 1;
+                    while ($k >= $braceStart && $html[$k] === '\\') {
+                        $bs++;
+                        $k--;
+                    }
+                    if ($bs <= 1) {
+                        $inString = !$inString;
+                    }
+                } elseif (!$inString) {
+                    if ($c === '{') {
+                        $depth++;
+                    } elseif ($c === '}') {
+                        $depth--;
+                        if ($depth === 0) {
+                            $braceEnd = $i;
+                            break;
+                        }
                     }
                 }
             }
@@ -585,8 +599,15 @@ class CricketDataService
             }
 
             $rawJson = substr($html, $braceStart, $braceEnd - $braceStart + 1);
-            $cleaned = str_replace(["\\\\\\\"", "\\\"", "\\\\\\\\"], ["\"", "\"", "\\"], $rawJson);
-            $parsed = json_decode($cleaned, true);
+            $parsed = json_decode($rawJson, true);
+            if (!$parsed) {
+                $cleaned = str_replace(["\\\\\\\"", "\\\"", "\\\\\\\\"], ["__ESC_QUOTE__", "\"", "\\\\"], $rawJson);
+                $cleaned = str_replace("__ESC_QUOTE__", "\\\"", $cleaned);
+                $parsed = json_decode($cleaned, true);
+            }
+            if (!$parsed) {
+                $parsed = json_decode(stripslashes($rawJson), true);
+            }
 
             if (!$parsed || !isset($parsed['matchCommentary'])) {
                 return ['status' => 'success', 'matchId' => $matchId, 'miniscore' => null, 'data' => []];

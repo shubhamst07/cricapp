@@ -1138,20 +1138,39 @@ class ScoreService:
             depth = 0
             brace_end = -1
             text_len = len(text)
+            in_string = False
             for i in range(brace_start, text_len):
-                if text[i] == "{":
-                    depth += 1
-                elif text[i] == "}":
-                    depth -= 1
-                    if depth == 0:
-                        brace_end = i
-                        break
+                c = text[i]
+                if c == '"':
+                    bs = 0
+                    k = i - 1
+                    while k >= brace_start and text[k] == "\\":
+                        bs += 1
+                        k -= 1
+                    if bs <= 1:
+                        in_string = not in_string
+                elif not in_string:
+                    if c == "{":
+                        depth += 1
+                    elif c == "}":
+                        depth -= 1
+                        if depth == 0:
+                            brace_end = i
+                            break
 
             if brace_end == -1:
                 return {"status": "success", "matchId": match_id, "miniscore": None, "data": []}
 
-            raw_json = text[brace_start:brace_end+1].replace('\\\\\\"', '"').replace('\\"', '"').replace('\\\\\\\\', '\\')
-            data = json.loads(raw_json)
+            raw_json = text[brace_start:brace_end+1]
+            try:
+                data = json.loads(raw_json)
+            except Exception:
+                try:
+                    s = raw_json.replace('\\\\\\"', '__ESC_QUOTE__').replace('\\"', '"').replace('__ESC_QUOTE__', '\\"').replace('\\\\\\\\', '\\\\')
+                    data = json.loads(s)
+                except Exception:
+                    s = raw_json.replace('\\\\\\"', '"').replace('\\"', '"').replace('\\\\\\\\', '\\')
+                    data = json.loads(s)
 
             match_comm = data.get("matchCommentary", {})
             miniscore = data.get("miniscore", {})
