@@ -1062,6 +1062,54 @@ class ScoreService:
             }
 
     @classmethod
+    def parse_transposed_stats_table(cls, table_el) -> Dict[str, Any]:
+        if not table_el:
+            return {"formats": [], "stats": []}
+        rows = table_el.find_all("tr")
+        if not rows:
+            return {"formats": [], "stats": []}
+
+        raw_headers = [th.get_text(strip=True) for th in rows[0].find_all(["th", "td"])]
+        formats = [h for h in raw_headers if h and h.lower() not in ["", "format", "stat", "stats", "career"]]
+
+        metric_rows = {}
+        for tr in rows[1:]:
+            cells = [td.get_text(strip=True) for td in tr.find_all(["th", "td"])]
+            if len(cells) >= 2:
+                label = cells[0].lower().strip()
+                metric_rows[label] = cells[1:]
+
+        format_stats = []
+        for i, fmt in enumerate(formats):
+            def get_val(key_patterns, default="-"):
+                for k, vals in metric_rows.items():
+                    if any(p in k for p in key_patterns):
+                        if i < len(vals):
+                            return vals[i]
+                return default
+
+            stat_row = {
+                "format": fmt,
+                "matches": get_val(["mat", "matches"]),
+                "innings": get_val(["inn", "innings"]),
+                "runs": get_val(["runs", "run"], "0"),
+                "highest_score": get_val(["hs", "highest"]),
+                "average": get_val(["avg", "average"]),
+                "strike_rate": get_val(["sr", "strike"]),
+                "hundreds": get_val(["100", "hundred"], "0"),
+                "fifties": get_val(["50", "fifty"], "0"),
+                "fours": get_val(["4s", "four"]),
+                "sixes": get_val(["6s", "six"]),
+                "balls": get_val(["balls", "ball"]),
+                "wickets": get_val(["wkt", "wickets", "wicket"], "0"),
+                "best_bowling": get_val(["bbi", "best", "bbm"]),
+                "economy": get_val(["econ", "economy"]),
+            }
+            format_stats.append(stat_row)
+
+        return {"formats": formats, "stats": format_stats}
+
+    @classmethod
     async def fetch_player_profile(cls, player_id: str, name: str = "") -> Dict[str, Any]:
         cached = get_cached(f"player_{player_id}", ttl=3600)
         if cached:
@@ -1097,32 +1145,8 @@ class ScoreService:
                         personal[label.lower().replace(" ", "_")] = next_val.get_text(strip=True)
 
             tables = soup.find_all("table")
-            batting_career = {}
-            bowling_career = {}
-
-            if len(tables) > 1:
-                t_bat = tables[1]
-                rows = t_bat.find_all("tr")
-                if rows:
-                    headers_row = [th.get_text(strip=True) for th in rows[0].find_all(["th", "td"]) if th.get_text(strip=True)]
-                    stats = []
-                    for tr in rows[1:]:
-                        cells = [td.get_text(strip=True) for td in tr.find_all(["th", "td"])]
-                        if cells:
-                            stats.append({"label": cells[0], "values": cells[1:]})
-                    batting_career = {"formats": headers_row, "stats": stats}
-
-            if len(tables) > 2:
-                t_bowl = tables[2]
-                rows = t_bowl.find_all("tr")
-                if rows:
-                    headers_row = [th.get_text(strip=True) for th in rows[0].find_all(["th", "td"]) if th.get_text(strip=True)]
-                    stats = []
-                    for tr in rows[1:]:
-                        cells = [td.get_text(strip=True) for td in tr.find_all(["th", "td"])]
-                        if cells:
-                            stats.append({"label": cells[0], "values": cells[1:]})
-                    bowling_career = {"formats": headers_row, "stats": stats}
+            batting_career = cls.parse_transposed_stats_table(tables[1]) if len(tables) > 1 else {"formats": [], "stats": []}
+            bowling_career = cls.parse_transposed_stats_table(tables[2]) if len(tables) > 2 else {"formats": [], "stats": []}
 
             res = {
                 "status": "success",

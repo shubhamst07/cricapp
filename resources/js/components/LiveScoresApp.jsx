@@ -335,6 +335,24 @@ export default function LiveScoresApp({
         }
     };
 
+    // Helper to find matches for a given player or country
+    const getMatchesForPlayer = (player) => {
+        if (!player) return [];
+        const pCountry = (player.country || '').toLowerCase().trim();
+        const pName = (player.name || '').toLowerCase().trim();
+        const allPool = [...liveMatches, ...scheduledMatches, ...completedMatches];
+        return allPool.filter(m => {
+            const nameStr = (m.name || '').toLowerCase();
+            const seriesStr = (m.series || m.series_name || '').toLowerCase();
+            const teamsArr = Array.isArray(m.teams) ? m.teams.map(t => (t || '').toLowerCase()) : [];
+            if (pName && (nameStr.includes(pName) || seriesStr.includes(pName))) return true;
+            if (pCountry && pCountry !== 'local club' && pCountry !== 'grassroots cricket') {
+                if (nameStr.includes(pCountry) || seriesStr.includes(pCountry) || teamsArr.includes(pCountry)) return true;
+            }
+            return false;
+        });
+    };
+
     // Filter by Section (International vs Local)
     const sectionLive = useMemo(() => {
         return liveMatches.filter(m => currentSection === 'local' ? isLocalMatch(m) : !isLocalMatch(m));
@@ -398,9 +416,37 @@ export default function LiveScoresApp({
             .sort((a, b) => b.count - a.count);
     }, [currentList]);
 
-    // Filter matches by search query, format, and selected series
+    // Filter matches by search query, format, and selected series (supports player search e.g. Rohit -> India match)
     const filteredMatches = useMemo(() => {
         const q = searchQuery.toLowerCase().trim();
+        if (!q) return currentList;
+
+        // Player to team mapping dictionary
+        const playerTeamMap = {
+            'rohit': 'india', 'sharma': 'india', 'hitman': 'india',
+            'virat': 'india', 'kohli': 'india', 'cheeku': 'india',
+            'bumrah': 'india', 'jassi': 'india',
+            'dhoni': 'india', 'msd': 'india', 'thala': 'india',
+            'gill': 'india', 'shubman': 'india',
+            'pant': 'india', 'rishabh': 'india',
+            'hardik': 'india', 'pandya': 'india',
+            'jadeja': 'india', 'jaddu': 'india',
+            'shami': 'india', 'siraj': 'india',
+            'kl rahul': 'india', 'rahul': 'india',
+            'surya': 'india', 'sky': 'india', 'suryakumar': 'india',
+            'jaiswal': 'india', 'ashwin': 'india', 'kuldeep': 'india',
+            'axar': 'india', 'arshdeep': 'india', 'samson': 'india', 'ishan': 'india',
+            'babar': 'pakistan', 'rizwan': 'pakistan', 'shaheen': 'pakistan', 'naseem': 'pakistan',
+            'cummins': 'australia', 'head': 'australia', 'starc': 'australia', 'smith': 'australia', 'warner': 'australia', 'maxwell': 'australia',
+            'root': 'england', 'stokes': 'england', 'buttler': 'england', 'brook': 'england',
+            'williamson': 'new zealand', 'boult': 'new zealand', 'ravindra': 'new zealand',
+            'rashid': 'afghanistan', 'gurbaz': 'afghanistan',
+            'rabada': 'south africa', 'klaasen': 'south africa', 'de kock': 'south africa',
+        };
+
+        const playerCountries = playerResults.map(p => (p.country || '').toLowerCase().trim()).filter(c => c && c !== 'local club' && c !== 'grassroots cricket');
+        const mappedTeam = playerTeamMap[q] || (playerCountries.length > 0 ? playerCountries[0] : null);
+
         return currentList.filter(match => {
             const nameMatch = (match.name || '').toLowerCase().includes(q);
             const venueMatch = (match.venue || '').toLowerCase().includes(q);
@@ -416,7 +462,14 @@ export default function LiveScoresApp({
                 ? match.current_batsmen.some(b => (b?.name || '').toLowerCase().includes(q))
                 : false;
 
-            const matchesSearch = !q || nameMatch || venueMatch || seriesMatch || statusMatch || teamsMatch || playersMatch || batsmenMatch;
+            // Match if this player's national team is in this match
+            const teamPlayerMatch = mappedTeam && (
+                (match.name || '').toLowerCase().includes(mappedTeam) ||
+                (match.series || match.series_name || '').toLowerCase().includes(mappedTeam) ||
+                (Array.isArray(match.teams) && match.teams.some(t => (t || '').toLowerCase().includes(mappedTeam)))
+            );
+
+            const matchesSearch = nameMatch || venueMatch || seriesMatch || statusMatch || teamsMatch || playersMatch || batsmenMatch || teamPlayerMatch;
             if (!matchesSearch) return false;
 
             if (selectedFormat !== 'all') {
@@ -431,7 +484,7 @@ export default function LiveScoresApp({
 
             return true;
         });
-    }, [currentList, searchQuery, selectedFormat, selectedSeries]);
+    }, [currentList, searchQuery, selectedFormat, selectedSeries, playerResults]);
 
     // Group filtered matches by series for series-wise presentation
     const matchesGroupedBySeries = useMemo(() => {
@@ -570,38 +623,48 @@ export default function LiveScoresApp({
                             <span className="text-[10px] text-slate-400">Click any cricketer to open career profile & records</span>
                         </div>
                         <div className="flex items-center gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
-                            {playerResults.map((player) => (
-                                <button
-                                    key={player.id}
-                                    type="button"
-                                    onClick={() => handleOpenPlayerProfile(player)}
-                                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-950/90 border border-white/10 hover:border-indigo-500/60 hover:bg-slate-900 transition-all shrink-0 text-left group shadow-md"
-                                >
-                                    <img
-                                        src={player.avatar}
-                                        alt={player.name}
-                                        className="w-8 h-8 rounded-lg object-cover border border-white/10 shrink-0 group-hover:scale-105 transition"
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(player.name)}&background=0D8ABC&color=fff`;
-                                        }}
-                                    />
-                                    <div className="min-w-0 pr-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-xs font-black text-white group-hover:text-indigo-400 transition truncate">
-                                                {player.name}
-                                            </span>
-                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-white/10 text-slate-300">
-                                                {player.country}
-                                            </span>
+                            {playerResults.map((player) => {
+                                const pMatches = getMatchesForPlayer(player);
+                                const hasLiveMatch = pMatches.some(m => m.status === 'live' || (Array.isArray(m.score) && m.score.length > 0));
+                                return (
+                                    <button
+                                        key={player.id}
+                                        type="button"
+                                        onClick={() => handleOpenPlayerProfile(player)}
+                                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-950/90 border border-white/10 hover:border-indigo-500/60 hover:bg-slate-900 transition-all shrink-0 text-left group shadow-md"
+                                    >
+                                        <img
+                                            src={player.avatar}
+                                            alt={player.name}
+                                            className="w-8 h-8 rounded-lg object-cover border border-white/10 shrink-0 group-hover:scale-105 transition"
+                                            onError={(e) => {
+                                                e.target.onerror = null;
+                                                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(player.name)}&background=0D8ABC&color=fff`;
+                                            }}
+                                        />
+                                        <div className="min-w-0 pr-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-xs font-black text-white group-hover:text-indigo-400 transition truncate">
+                                                    {player.name}
+                                                </span>
+                                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-white/10 text-slate-300">
+                                                    {player.country}
+                                                </span>
+                                                {hasLiveMatch && (
+                                                    <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1 shrink-0">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                                        Match Live
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 truncate">
+                                                {player.role}
+                                            </p>
                                         </div>
-                                        <p className="text-[10px] text-slate-400 truncate">
-                                            {player.role}
-                                        </p>
-                                    </div>
-                                    <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 transition shrink-0 ml-1" />
-                                </button>
-                            ))}
+                                        <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 transition shrink-0 ml-1" />
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -874,6 +937,7 @@ export default function LiveScoresApp({
                                             type={activeTab}
                                             onSelectSeries={setSelectedSeries}
                                             onQuickScorecard={() => openScorecardModal(match)}
+                                            highlightedPlayer={playerResults[0] || null}
                                         />
                                     ))}
                                 </div>
@@ -890,6 +954,7 @@ export default function LiveScoresApp({
                                 type={activeTab}
                                 onSelectSeries={setSelectedSeries}
                                 onQuickScorecard={() => openScorecardModal(match)}
+                                highlightedPlayer={playerResults[0] || null}
                             />
                         ))}
                     </div>
@@ -917,50 +982,58 @@ export default function LiveScoresApp({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                        {playerResults.map((player) => (
-                            <div
-                                key={player.id}
-                                onClick={() => handleOpenPlayerProfile(player)}
-                                className="p-4 rounded-2xl bg-slate-950/70 border border-white/10 hover:border-indigo-500/60 hover:bg-slate-900/90 transition-all cursor-pointer group flex items-center justify-between gap-4 shadow-lg hover:shadow-indigo-500/10"
-                            >
-                                <div className="flex items-center gap-3.5 min-w-0">
-                                    <img
-                                        src={player.avatar}
-                                        alt={player.name}
-                                        className="w-14 h-14 rounded-2xl object-cover border border-white/10 bg-slate-900 shrink-0 group-hover:scale-105 transition"
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(player.name)}&background=0D8ABC&color=fff`;
-                                        }}
-                                    />
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2 mb-0.5">
-                                            <h4 className="text-sm font-black text-white group-hover:text-indigo-400 transition truncate">
-                                                {player.name}
-                                            </h4>
-                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">
-                                                {player.country}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-slate-400 truncate">
-                                            {player.role} • {player.batting_style}
-                                        </p>
-                                        {player.highlights && (
-                                            <p className="text-[11px] text-amber-400 font-semibold truncate mt-1">
-                                                ★ {player.highlights}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    className="px-3.5 py-2 rounded-xl bg-indigo-600/20 group-hover:bg-indigo-600 text-indigo-300 group-hover:text-white border border-indigo-500/30 text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-sm"
+                        {playerResults.map((player) => {
+                            const pMatches = getMatchesForPlayer(player);
+                            return (
+                                <div
+                                    key={player.id}
+                                    onClick={() => handleOpenPlayerProfile(player)}
+                                    className="p-4 rounded-2xl bg-slate-950/70 border border-white/10 hover:border-indigo-500/60 hover:bg-slate-900/90 transition-all cursor-pointer group flex items-center justify-between gap-4 shadow-lg hover:shadow-indigo-500/10"
                                 >
-                                    <span>Profile</span>
-                                    <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        ))}
+                                    <div className="flex items-center gap-3.5 min-w-0">
+                                        <img
+                                            src={player.avatar}
+                                            alt={player.name}
+                                            className="w-14 h-14 rounded-2xl object-cover border border-white/10 bg-slate-900 shrink-0 group-hover:scale-105 transition"
+                                            onError={(e) => {
+                                                e.target.onerror = null;
+                                                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(player.name)}&background=0D8ABC&color=fff`;
+                                            }}
+                                        />
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <h4 className="text-sm font-black text-white group-hover:text-indigo-400 transition truncate">
+                                                    {player.name}
+                                                </h4>
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">
+                                                    {player.country}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-400 truncate">
+                                                {player.role} • {player.batting_style}
+                                            </p>
+                                            {pMatches.length > 0 ? (
+                                                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold truncate">
+                                                    <Radio className="w-3 h-3 text-rose-500 animate-pulse shrink-0" />
+                                                    <span className="truncate">{pMatches[0].name} ({pMatches[0].status_text || pMatches[0].status})</span>
+                                                </div>
+                                            ) : player.highlights && (
+                                                <p className="text-[11px] text-amber-400 font-semibold truncate mt-1">
+                                                    ★ {player.highlights}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="px-3.5 py-2 rounded-xl bg-indigo-600/20 group-hover:bg-indigo-600 text-indigo-300 group-hover:text-white border border-indigo-500/30 text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-sm"
+                                    >
+                                        <span>Profile</span>
+                                        <ChevronRight className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             ) : (
@@ -1243,6 +1316,69 @@ export default function LiveScoresApp({
                                         </div>
                                     )}
 
+                                    {/* Active & Scheduled Matches for this Player */}
+                                    {(() => {
+                                        const pMatches = (playerProfileData.active_matches && playerProfileData.active_matches.length > 0)
+                                            ? playerProfileData.active_matches
+                                            : getMatchesForPlayer(selectedPlayer);
+                                        if (pMatches.length === 0) return null;
+                                        return (
+                                            <div className="space-y-3 p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30">
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                        <Radio className="w-3.5 h-3.5 text-rose-500 animate-pulse" /> Active & Scheduled Matches ({pMatches.length})
+                                                    </h4>
+                                                    <span className="text-[10px] text-indigo-300 font-bold">Matches featuring {selectedPlayer.country}</span>
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {pMatches.map((pm) => {
+                                                        const isLive = pm.status === 'live' || (Array.isArray(pm.score) && pm.score.length > 0);
+                                                        const scores = pm.score || [];
+                                                        return (
+                                                            <div
+                                                                key={pm.id}
+                                                                className="p-3.5 rounded-xl bg-slate-950/80 border border-white/10 hover:border-indigo-500/50 transition flex flex-col justify-between gap-3 shadow-md"
+                                                            >
+                                                                <div>
+                                                                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-white/10 text-indigo-300">
+                                                                            {pm.matchType || 'Match'}
+                                                                        </span>
+                                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                                                            isLive ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse' : 'bg-white/10 text-slate-400'
+                                                                        }`}>
+                                                                            {pm.status_text || pm.status || 'Scheduled'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <h5 className="text-xs font-black text-white line-clamp-1">{pm.name}</h5>
+                                                                    <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">{pm.series || pm.venue}</p>
+
+                                                                    {scores.length > 0 && (
+                                                                        <div className="mt-2 pt-2 border-t border-white/5 space-y-1">
+                                                                            {scores.map((sc, sIdx) => (
+                                                                                <div key={sIdx} className="flex justify-between items-center text-[11px]">
+                                                                                    <span className="text-slate-300 font-medium truncate">{sc.batting_team || sc.inning || `Team ${sIdx + 1}`}</span>
+                                                                                    <span className="font-black text-white font-mono">{sc.display_score || `${sc.runs ?? sc.r ?? 0}/${sc.wickets ?? sc.w ?? 0}`}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                <a
+                                                                    href={`/live-scores/${pm.id}?tab=live`}
+                                                                    className="w-full py-2 px-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-center text-xs font-bold transition flex items-center justify-center gap-1 shadow-md shadow-indigo-600/20"
+                                                                >
+                                                                    <span>Open Match Center & Live Score →</span>
+                                                                </a>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
                                     {/* Batting Career Records Table */}
                                     {playerProfileData.batting_career?.stats?.length > 0 && (
                                         <div className="space-y-2">
@@ -1269,21 +1405,34 @@ export default function LiveScoresApp({
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-white/5 font-medium">
-                                                        {playerProfileData.batting_career.stats.map((row, idx) => (
-                                                            <tr key={idx} className="hover:bg-white/5 transition">
-                                                                <td className="px-3 py-2 font-black text-white">{row.format}</td>
-                                                                <td className="px-3 py-2 text-right text-slate-300 font-mono">{row.matches}</td>
-                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.innings ?? '-'}</td>
-                                                                <td className="px-3 py-2 text-right font-black text-white font-mono">{row.runs ?? 0}</td>
-                                                                <td className="px-3 py-2 text-right text-slate-300 font-mono">{row.highest_score ?? '-'}</td>
-                                                                <td className="px-3 py-2 text-right font-bold text-emerald-400 font-mono">{row.average ?? '-'}</td>
-                                                                <td className="px-3 py-2 text-right font-bold text-sky-400 font-mono">{row.strike_rate ?? '-'}</td>
-                                                                <td className="px-3 py-2 text-right font-bold text-amber-400 font-mono">{row.hundreds ?? 0}</td>
-                                                                <td className="px-3 py-2 text-right font-bold text-blue-300 font-mono">{row.fifties ?? 0}</td>
-                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.fours ?? 0}</td>
-                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.sixes ?? 0}</td>
-                                                            </tr>
-                                                        ))}
+                                                        {playerProfileData.batting_career.stats.map((row, idx) => {
+                                                            const fmt = row.format || row.label || `Format ${idx + 1}`;
+                                                            const mat = row.matches ?? (row.values ? row.values[0] : '-');
+                                                            const inns = row.innings ?? (row.values ? row.values[1] : '-');
+                                                            const runs = row.runs ?? (row.values ? row.values[2] : 0);
+                                                            const hs = row.highest_score ?? (row.values ? row.values[3] : '-');
+                                                            const avg = row.average ?? (row.values ? row.values[4] : '-');
+                                                            const sr = row.strike_rate ?? (row.values ? row.values[5] : '-');
+                                                            const hundreds = row.hundreds ?? (row.values ? row.values[6] : 0);
+                                                            const fifties = row.fifties ?? (row.values ? row.values[7] : 0);
+                                                            const fours = row.fours ?? (row.values ? row.values[8] : '-');
+                                                            const sixes = row.sixes ?? (row.values ? row.values[9] : '-');
+                                                            return (
+                                                                <tr key={idx} className="hover:bg-white/5 transition">
+                                                                    <td className="px-3 py-2 font-black text-white">{fmt}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-300 font-mono">{mat}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-400 font-mono">{inns}</td>
+                                                                    <td className="px-3 py-2 text-right font-black text-white font-mono">{runs}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-300 font-mono">{hs}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold text-emerald-400 font-mono">{avg}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold text-sky-400 font-mono">{sr}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold text-amber-400 font-mono">{hundreds}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold text-blue-300 font-mono">{fifties}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-400 font-mono">{fours}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-400 font-mono">{sixes}</td>
+                                                                </tr>
+                                                            );
+                                                        })}
                                                     </tbody>
                                                 </table>
                                             </div>
@@ -1313,18 +1462,28 @@ export default function LiveScoresApp({
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-white/5 font-medium">
-                                                        {playerProfileData.bowling_career.stats.map((row, idx) => (
-                                                            <tr key={idx} className="hover:bg-white/5 transition">
-                                                                <td className="px-3 py-2 font-black text-white">{row.format}</td>
-                                                                <td className="px-3 py-2 text-right text-slate-300 font-mono">{row.matches}</td>
-                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.balls ?? '-'}</td>
-                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.runs ?? '-'}</td>
-                                                                <td className="px-3 py-2 text-right font-black text-rose-400 font-mono">{row.wickets ?? 0}</td>
-                                                                <td className="px-3 py-2 text-right font-bold text-amber-400 font-mono">{row.best_bowling ?? '-'}</td>
-                                                                <td className="px-3 py-2 text-right font-bold text-emerald-400 font-mono">{row.economy ?? '-'}</td>
-                                                                <td className="px-3 py-2 text-right font-bold text-sky-400 font-mono">{row.average ?? '-'}</td>
-                                                            </tr>
-                                                        ))}
+                                                        {playerProfileData.bowling_career.stats.map((row, idx) => {
+                                                            const fmt = row.format || row.label || `Format ${idx + 1}`;
+                                                            const mat = row.matches ?? (row.values ? row.values[0] : '-');
+                                                            const balls = row.balls ?? (row.values ? row.values[1] : '-');
+                                                            const runs = row.runs ?? (row.values ? row.values[2] : '-');
+                                                            const wkts = row.wickets ?? (row.values ? row.values[3] : 0);
+                                                            const bbi = row.best_bowling ?? (row.values ? row.values[4] : '-');
+                                                            const econ = row.economy ?? (row.values ? row.values[5] : '-');
+                                                            const avg = row.average ?? (row.values ? row.values[6] : '-');
+                                                            return (
+                                                                <tr key={idx} className="hover:bg-white/5 transition">
+                                                                    <td className="px-3 py-2 font-black text-white">{fmt}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-300 font-mono">{mat}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-400 font-mono">{balls}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-400 font-mono">{runs}</td>
+                                                                    <td className="px-3 py-2 text-right font-black text-rose-400 font-mono">{wkts}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold text-amber-400 font-mono">{bbi}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold text-emerald-400 font-mono">{econ}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold text-sky-400 font-mono">{avg}</td>
+                                                                </tr>
+                                                            );
+                                                        })}
                                                     </tbody>
                                                 </table>
                                             </div>
@@ -1364,7 +1523,7 @@ export default function LiveScoresApp({
 }
 
 // ==================== PREMIUM MATCH CARD COMPONENT ====================
-function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
+function MatchCard({ match, type, onSelectSeries, onQuickScorecard, highlightedPlayer = null }) {
     const stLower = (match.status_text || '').toLowerCase();
     const isInningsBreak = ['innings break', 'inn break', 'break', 'lunch', 'tea', 'dinner', 'strategic timeout', 'drinks'].some(w => stLower.includes(w));
     const hasLiveScore = Array.isArray(match.score) && match.score.length > 0;
@@ -1397,6 +1556,14 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                 {/* Header Tag Row */}
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
+                        {highlightedPlayer && (
+                            (match.name || '').toLowerCase().includes((highlightedPlayer.country || '').toLowerCase()) ||
+                            (Array.isArray(match.teams) && match.teams.some(t => (t || '').toLowerCase().includes((highlightedPlayer.country || '').toLowerCase())))
+                        ) && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 shadow-xs">
+                                🏏 {highlightedPlayer.name}'s Team
+                            </span>
+                        )}
                         {match.is_network_match && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                                 ⭐ My Network

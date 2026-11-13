@@ -143,9 +143,33 @@ class PlayerDataService
      */
     public function getProfile(string $playerId, string $name = ''): array
     {
-        $cacheKey = "player_profile_v2_{$playerId}_" . Str::slug($name);
+        $cacheKey = "player_profile_v3_{$playerId}_" . Str::slug($name);
         return Cache::remember($cacheKey, 3600, function () use ($playerId, $name) {
-            // A. Check if Python Cricbuzz engine has live data for this player ID
+            $stars = $this->getInternationalStarsDatabase();
+            $star = $stars[$playerId] ?? null;
+
+            if (!$star && !empty($name)) {
+                $nameClean = strtolower(trim($name));
+                foreach ($stars as $sId => $s) {
+                    if (strtolower($s['name']) === $nameClean || str_contains(strtolower($s['name']), $nameClean)) {
+                        $star = $s;
+                        $playerId = (string) $sId;
+                        break;
+                    }
+                }
+            }
+
+            // If it is a known international superstar, use our verified records as guaranteed source of truth
+            if ($star) {
+                $formatted = $this->formatStarProfile($playerId, $star);
+                $formatted['active_matches'] = $this->findPlayerMatches($star['country'] ?? '', $star['name'] ?? '');
+                return [
+                    'status' => 'success',
+                    'data' => $formatted
+                ];
+            }
+
+            // Check if Python Cricbuzz engine has live data for this player ID
             if (is_numeric($playerId)) {
                 try {
                     $response = Http::timeout(4)->get("{$this->localUrl}/player/{$playerId}", [
@@ -154,44 +178,32 @@ class PlayerDataService
                     if ($response->successful()) {
                         $json = $response->json();
                         if (($json['status'] ?? '') === 'success' && !empty($json['data'])) {
-                            return $json;
+                            $data = $json['data'];
+                            $data['batting_career'] = $this->normalizeCricbuzzStats($data['batting_career'] ?? []);
+                            $data['bowling_career'] = $this->normalizeCricbuzzStats($data['bowling_career'] ?? []);
+                            $country = $data['personal_info']['birth_place'] ?? $name;
+                            $data['active_matches'] = $this->findPlayerMatches($country, $data['name'] ?? $name);
+                            return [
+                                'status' => 'success',
+                                'data' => $data,
+                            ];
                         }
                     }
                 } catch (\Throwable $e) {
-                    // Fall through to rich local data
+                    // Fall through
                 }
             }
 
-            // B. Check International Star database
-            $stars = $this->getInternationalStarsDatabase();
-            if (isset($stars[$playerId])) {
-                return [
-                    'status' => 'success',
-                    'data' => $this->formatStarProfile($playerId, $stars[$playerId])
-                ];
-            }
-
-            // Match by name in international database
-            if (!empty($name)) {
-                $nameClean = strtolower(trim($name));
-                foreach ($stars as $sId => $star) {
-                    if (strtolower($star['name']) === $nameClean || str_contains(strtolower($star['name']), $nameClean)) {
-                        return [
-                            'status' => 'success',
-                            'data' => $this->formatStarProfile((string) $sId, $star)
-                        ];
-                    }
-                }
-            }
-
-            // C. Check local user database
+            // Check local user database
             if (is_numeric($playerId)) {
                 try {
                     $user = User::find($playerId);
                     if ($user) {
+                        $userProfile = $this->formatUserProfile($user);
+                        $userProfile['active_matches'] = $this->findPlayerMatches('local', $user->name);
                         return [
                             'status' => 'success',
-                            'data' => $this->formatUserProfile($user)
+                            'data' => $userProfile,
                         ];
                     }
                 } catch (\Throwable $e) {
@@ -199,7 +211,7 @@ class PlayerDataService
                 }
             }
 
-            // D. Fallback generic profile
+            // Fallback generic profile
             $displayName = $name ?: 'Cricket Player';
             return [
                 'status' => 'success',
@@ -226,10 +238,143 @@ class PlayerDataService
                             ['format' => 'T20', 'matches' => 12, 'balls' => 120, 'runs' => 150, 'wickets' => 8, 'best_bowling' => '3/22', 'economy' => 7.5, 'average' => 18.7],
                             ['format' => 'ODI', 'matches' => 8, 'balls' => 240, 'runs' => 210, 'wickets' => 7, 'best_bowling' => '2/35', 'economy' => 5.25, 'average' => 30.0],
                         ]
-                    ]
+                    ],
+                    'active_matches' => $this->findPlayerMatches('', $displayName),
                 ]
             ];
         });
+    }
+
+    /**
+     * Find active, live, upcoming or recent matches involving the player or player's country.
+     */
+    public function findPlayerMatches(string $country, string $playerName): array
+    {
+        try {
+            $cricket = app(CricketDataService::class);
+            $matches = $cricket->getCurrentMatches();
+            $matched = [];
+
+            $cLower = strtolower(trim($country));
+            $pLower = strtolower(trim($playerName));
+
+            foreach ($matches as $m) {
+                $name = strtolower($m['name'] ?? '');
+                $series = strtolower($m['series'] ?? $m['series_name'] ?? '');
+                $teams = array_map('strtolower', $m['teams'] ?? []);
+
+                $matchHit = false;
+                if (!empty($pLower) && (str_contains($name, $pLower) || str_contains($series, $pLower))) {
+                    $matchHit = true;
+                }
+                if (!$matchHit && !empty($cLower) && $cLower !== 'n/a') {
+                    if (str_contains($name, $cLower) || str_contains($series, $cLower) || in_array($cLower, $teams)) {
+                        $matchHit = true;
+                    }
+                }
+
+                if ($matchHit) {
+                    $matched[] = [
+                        'id' => $m['id'],
+                        'name' => $m['name'],
+                        'series' => $m['series'] ?? $m['series_name'] ?? 'International Series',
+                        'status' => $m['status'] ?? 'live',
+                        'status_text' => $m['status_text'] ?? '',
+                        'score' => $m['score'] ?? [],
+                        'matchType' => $m['matchType'] ?? 'ODI',
+                        'venue' => $m['venue'] ?? '',
+                    ];
+                }
+            }
+
+            return $matched;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Normalize transposed stats table into format-centric rows.
+     */
+    public function normalizeCricbuzzStats(array $career): array
+    {
+        if (empty($career['stats']) || !is_array($career['stats'])) {
+            return ['formats' => [], 'stats' => []];
+        }
+
+        $firstRow = $career['stats'][0] ?? [];
+        if (isset($firstRow['format']) && (isset($firstRow['runs']) || isset($firstRow['matches']))) {
+            return $career;
+        }
+
+        $rawFormats = $career['formats'] ?? [];
+        $formats = [];
+        foreach ($rawFormats as $f) {
+            $fTrim = trim((string) $f);
+            if ($fTrim !== '' && !in_array(strtolower($fTrim), ['format', 'stat', 'stats', 'career'])) {
+                $formats[] = $fTrim;
+            }
+        }
+
+        $metrics = [];
+        foreach ($career['stats'] as $item) {
+            if (isset($item['label']) && isset($item['values']) && is_array($item['values'])) {
+                $metrics[strtolower(trim($item['label']))] = $item['values'];
+            }
+        }
+
+        $normalizedStats = [];
+        foreach ($formats as $idx => $fmt) {
+            $getRowVal = function (array $patterns, $default = '-') use ($metrics, $idx) {
+                foreach ($metrics as $label => $vals) {
+                    foreach ($patterns as $p) {
+                        if (str_contains($label, $p)) {
+                            return $vals[$idx] ?? $default;
+                        }
+                    }
+                }
+                return $default;
+            };
+
+            $runsVal = $getRowVal(['runs', 'run'], 0);
+            $matVal = $getRowVal(['mat', 'matches'], '-');
+            $innVal = $getRowVal(['inn', 'innings'], '-');
+            $hsVal = $getRowVal(['hs', 'highest'], '-');
+            $avgVal = $getRowVal(['avg', 'average'], '-');
+            $srVal = $getRowVal(['sr', 'strike'], '-');
+            $hundredsVal = $getRowVal(['100', 'hundred'], 0);
+            $fiftiesVal = $getRowVal(['50', 'fifty'], 0);
+            $foursVal = $getRowVal(['4s', 'four'], '-');
+            $sixesVal = $getRowVal(['6s', 'six'], '-');
+
+            $ballsVal = $getRowVal(['balls', 'ball'], '-');
+            $wktsVal = $getRowVal(['wkt', 'wickets', 'wicket'], 0);
+            $bbiVal = $getRowVal(['bbi', 'best', 'bbm'], '-');
+            $econVal = $getRowVal(['econ', 'economy'], '-');
+
+            $normalizedStats[] = [
+                'format' => $fmt,
+                'matches' => is_numeric($matVal) ? (int) $matVal : $matVal,
+                'innings' => is_numeric($innVal) ? (int) $innVal : $innVal,
+                'runs' => is_numeric($runsVal) ? (int) $runsVal : $runsVal,
+                'highest_score' => (string) $hsVal,
+                'average' => $avgVal,
+                'strike_rate' => $srVal,
+                'hundreds' => is_numeric($hundredsVal) ? (int) $hundredsVal : $hundredsVal,
+                'fifties' => is_numeric($fiftiesVal) ? (int) $fiftiesVal : $fiftiesVal,
+                'fours' => $foursVal,
+                'sixes' => $sixesVal,
+                'balls' => $ballsVal,
+                'wickets' => is_numeric($wktsVal) ? (int) $wktsVal : $wktsVal,
+                'best_bowling' => (string) $bbiVal,
+                'economy' => $econVal,
+            ];
+        }
+
+        return [
+            'formats' => $formats,
+            'stats' => $normalizedStats,
+        ];
     }
 
     /**
