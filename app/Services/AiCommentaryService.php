@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+
 class AiCommentaryService
 {
     /**
@@ -13,7 +16,7 @@ class AiCommentaryService
         $transformed = [];
 
         foreach ($deliveries as $item) {
-            // If already processed by AI, retain it
+            // If already processed by AI and has Hindi commentary, retain it
             if (!empty($item['is_ai']) && !empty($item['ai_hindi'])) {
                 $transformed[] = $item;
                 continue;
@@ -25,10 +28,13 @@ class AiCommentaryService
                 $item = $this->transformBall($item);
             } elseif ($type === 'over-separator') {
                 $item = $this->transformOverSeparator($item);
+            } elseif ($type === 'interview' || ($item['over'] ?? '') === 'QUOTE') {
+                $item = $this->transformInterview($item);
+            } elseif ($type === 'match_wrap' || ($item['over'] ?? '') === 'FINAL') {
+                $item = $this->transformMatchWrap($item);
             } else {
-                // General note or announcement
-                $item['is_ai'] = true;
-                $item['ai_flair'] = 'Live Match Desk';
+                // Tactical notes, updates, and announcements
+                $item = $this->transformNote($item);
             }
 
             $transformed[] = $item;
@@ -165,5 +171,112 @@ class AiCommentaryService
         $sep['ai_flair'] = 'AI Over Recap';
 
         return $sep;
+    }
+
+    /**
+     * Transform a player quote or interview take into AI commentary with Hindi translation.
+     */
+    protected function transformInterview(array $item): array
+    {
+        $speech = (string) ($item['desc'] ?? $item['rawText'] ?? '');
+        $title = (string) ($item['title'] ?? '');
+        $speaker = '';
+        if (preg_match('/^([^(]+)/', $title, $m)) {
+            $speaker = trim($m[1]);
+        }
+        $speaker = $speaker ?: 'Player';
+
+        $hiSpeech = $this->translateToHindi($speech);
+
+        $item['desc'] = $speech;
+        $item['ai_hindi'] = $hiSpeech ?: $speech;
+        $item['title_hi'] = "{$speaker} (मैच के बाद बयान)";
+        $item['tag_hi'] = 'खिलाड़ी का बयान 🎙️';
+        $item['is_ai'] = true;
+        $item['ai_flair'] = 'Post-Match Presentation';
+
+        return $item;
+    }
+
+    /**
+     * Transform a match wrap-up announcement into AI commentary with Hindi translation.
+     */
+    protected function transformMatchWrap(array $item): array
+    {
+        $text = (string) ($item['desc'] ?? $item['rawText'] ?? '');
+        $hiText = $this->translateToHindi($text);
+
+        $item['desc'] = $text;
+        $item['ai_hindi'] = $hiText ?: $text;
+        $item['title_hi'] = 'मैच सारांश व परिणाम';
+        $item['tag_hi'] = 'मैच परिणाम 🏆';
+        $item['is_ai'] = true;
+        $item['ai_flair'] = 'Match Review';
+
+        return $item;
+    }
+
+    /**
+     * Transform a tactical match note or desk announcement into AI commentary with Hindi translation.
+     */
+    protected function transformNote(array $item): array
+    {
+        $text = (string) ($item['desc'] ?? $item['rawText'] ?? '');
+        $hiText = $this->translateToHindi($text);
+
+        $item['desc'] = $text;
+        $item['ai_hindi'] = $hiText ?: $text;
+        $item['title_hi'] = 'मैच नोट (Match Note)';
+        $item['tag_hi'] = 'मैच अपडेट 📋';
+        $item['is_ai'] = true;
+        $item['ai_flair'] = 'Live Match Desk';
+
+        return $item;
+    }
+
+    /**
+     * Translate English cricket prose into Hindi with caching.
+     */
+    public function translateToHindi(string $text): string
+    {
+        $text = trim(strip_tags($text));
+        if (empty($text)) {
+            return '';
+        }
+
+        $cacheKey = 'trans_hi_' . md5($text);
+        try {
+            return Cache::remember($cacheKey, 86400 * 7, function () use ($text) {
+                try {
+                    $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=hi&dt=t&q=' . urlencode($text);
+                    $response = Http::timeout(4)
+                        ->withHeaders([
+                            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                            'Accept' => '*/*',
+                        ])
+                        ->get($url);
+
+                    if ($response->successful()) {
+                        $arr = $response->json();
+                        if (is_array($arr) && isset($arr[0]) && is_array($arr[0])) {
+                            $translated = '';
+                            foreach ($arr[0] as $part) {
+                                $translated .= $part[0] ?? '';
+                            }
+                            $translated = trim($translated);
+                            if (!empty($translated)) {
+                                return $translated;
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Fall back to original text
+                }
+
+                return $text;
+            });
+        } catch (\Throwable $e) {
+            return $text;
+        }
     }
 }

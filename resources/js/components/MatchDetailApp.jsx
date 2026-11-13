@@ -939,10 +939,16 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     {/* Prose */}
                     <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
-                            <h5 className="text-xs sm:text-sm font-black text-white">{item.title}</h5>
+                            <h5 className="text-xs sm:text-sm font-black text-white">
+                                {commLanguage === 'hi'
+                                    ? (item.title_hi || (item.title === 'Match Note' ? 'मैच नोट (Match Note)' : item.title === 'Match Summary & Wrap-up' ? 'मैच सारांश व परिणाम' : item.title?.replace?.('(Post-Match Take)', '(मैच के बाद बयान)') || item.title))
+                                    : item.title}
+                            </h5>
                             {item.tag && (
                                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                    {item.tag}
+                                    {commLanguage === 'hi'
+                                        ? (item.tag_hi || (item.tag?.includes?.('Tactical Note') ? 'मैच अपडेट 📋' : item.tag?.includes?.('Player Quote') ? 'खिलाड़ी का बयान 🎙️' : item.tag?.includes?.('Match Result') ? 'मैच परिणाम 🏆' : item.tag))
+                                        : item.tag}
                                 </span>
                             )}
                         </div>
