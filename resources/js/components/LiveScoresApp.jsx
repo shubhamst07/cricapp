@@ -333,18 +333,23 @@ export default function LiveScoresApp({
 
     // Filter matches by search query, format, and selected series
     const filteredMatches = useMemo(() => {
+        const q = searchQuery.toLowerCase().trim();
         return currentList.filter(match => {
-            const nameMatch = (match.name || '').toLowerCase().includes(searchQuery.toLowerCase());
-            const venueMatch = (match.venue || '').toLowerCase().includes(searchQuery.toLowerCase());
-            const seriesMatch = (match.series || match.series_name || '').toLowerCase().includes(searchQuery.toLowerCase());
+            const nameMatch = (match.name || '').toLowerCase().includes(q);
+            const venueMatch = (match.venue || '').toLowerCase().includes(q);
+            const seriesMatch = (match.series || match.series_name || '').toLowerCase().includes(q);
+            const statusMatch = (match.status_text || '').toLowerCase().includes(q);
             const teamsMatch = Array.isArray(match.teams)
-                ? match.teams.some(t => (t || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                ? match.teams.some(t => (t || '').toLowerCase().includes(q))
                 : false;
             const playersMatch = Array.isArray(match.players)
-                ? match.players.some(p => (p || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                ? match.players.some(p => (p || '').toLowerCase().includes(q))
+                : false;
+            const batsmenMatch = Array.isArray(match.current_batsmen)
+                ? match.current_batsmen.some(b => (b?.name || '').toLowerCase().includes(q))
                 : false;
 
-            const matchesSearch = !searchQuery || nameMatch || venueMatch || seriesMatch || teamsMatch || playersMatch;
+            const matchesSearch = !q || nameMatch || venueMatch || seriesMatch || statusMatch || teamsMatch || playersMatch || batsmenMatch;
             if (!matchesSearch) return false;
 
             if (selectedFormat !== 'all') {
@@ -437,7 +442,7 @@ export default function LiveScoresApp({
                         <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                         <input
                             type="text"
-                            placeholder="Search team, tournament, player, or venue..."
+                            placeholder="Search team (e.g. India), tournament, or venue..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-10 pr-9 py-2.5 text-xs bg-slate-950/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition"
