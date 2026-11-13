@@ -16,6 +16,16 @@ class AiCommentaryService
         $transformed = [];
 
         foreach ($deliveries as $item) {
+            $rawCheck = trim(strip_tags((string)($item['desc'] ?? $item['rawText'] ?? '')));
+            // Drop invalid template tokens (e.g. $2b, $B0$) or corrupted short items
+            if ($rawCheck === '$2b' || str_contains($rawCheck, '$2b') || str_starts_with($rawCheck, '$')) {
+                continue;
+            }
+            $cleanContent = trim(preg_replace('/^(?:Match Desk Analysis|Match Note|Match Wrap):\s*/i', '', $rawCheck));
+            if ($cleanContent === '$2b' || str_contains($cleanContent, '$2b') || str_starts_with($cleanContent, '$') || (isset($item['type']) && $item['type'] === 'note' && strlen($cleanContent) < 4)) {
+                continue;
+            }
+
             // If already processed by AI and has all three languages, retain it
             if (!empty($item['is_ai']) && !empty($item['ai_hindi']) && !empty($item['ai_hinglish'])) {
                 $transformed[] = $item;

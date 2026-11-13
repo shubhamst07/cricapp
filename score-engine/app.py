@@ -1389,7 +1389,7 @@ class ScoreService:
                                 "timestamp": timestamp,
                                 "time": "Presentation"
                             })
-                        elif any(k in clean_text.lower() for k in ["clinch", "win", "local time", "semis", "champions", "victory"]):
+                        elif any(k in clean_text.lower() for k in ["won by", "match tied", "match drawn", "clinched the series", "champions", "crowned champion"]):
                             formatted.append({
                                 "id": f"wrap-{comm_id}",
                                 "type": "match_wrap",
@@ -1406,9 +1406,10 @@ class ScoreService:
                             })
                         else:
                             # Skip raw Cricbuzz internal formatting tokens (e.g. $2b, $B0$, $D$, etc.)
-                            if not clean_text or len(clean_text) < 4 or clean_text.startswith("$") or re.match(r"^\$[a-zA-Z0-9_]+", clean_text):
+                            if not clean_text or len(clean_text) < 4 or clean_text.startswith("$") or re.match(r"^\$[a-zA-Z0-9_]+", clean_text) or clean_text == "$2b" or "$2b" in clean_text:
                                 continue
 
+                            is_time_update = bool(re.search(r"(local time|gmt|ist)", clean_text, re.IGNORECASE))
                             formatted.append({
                                 "id": f"note-{comm_id}",
                                 "type": "note",
@@ -1417,9 +1418,9 @@ class ScoreService:
                                 "over": "NOTE",
                                 "badge": "📋",
                                 "badgeType": "expert",
-                                "title": "Match Note",
+                                "title": "Match Update" if is_time_update else "Match Note",
                                 "desc": clean_text,
-                                "tag": "Tactical Note",
+                                "tag": "Session Update" if is_time_update else "Tactical Note",
                                 "timestamp": timestamp,
                                 "time": "Update"
                             })

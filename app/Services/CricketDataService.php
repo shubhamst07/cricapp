@@ -821,7 +821,7 @@ class CricketDataService
                                 'timestamp' => $timestamp,
                                 'time' => 'Presentation',
                             ];
-                        } elseif (preg_match('/(clinch|win|local time|semis|champions|victory)/i', $cleanText)) {
+                        } elseif (preg_match('/(won by|match tied|match drawn|clinched the series|champions|crowned champion)/i', $cleanText)) {
                             $formatted[] = [
                                 'id' => "wrap-{$commId}",
                                 'type' => 'match_wrap',
@@ -837,9 +837,10 @@ class CricketDataService
                                 'time' => 'Wrap-up',
                             ];
                         } else {
-                            if (strlen($cleanText) < 4 || str_starts_with($cleanText, '$') || preg_match('/^\$[a-zA-Z0-9_]+/', $cleanText)) {
+                            if (strlen($cleanText) < 4 || str_starts_with($cleanText, '$') || preg_match('/^\$[a-zA-Z0-9_]+/', $cleanText) || $cleanText === '$2b' || str_contains($cleanText, '$2b')) {
                                 continue;
                             }
+                            $isTimeUpdate = (bool) preg_match('/(local time|gmt|ist)/i', $cleanText);
                             $formatted[] = [
                                 'id' => "note-{$commId}",
                                 'type' => 'note',
@@ -848,9 +849,9 @@ class CricketDataService
                                 'over' => 'NOTE',
                                 'badge' => '📋',
                                 'badgeType' => 'expert',
-                                'title' => 'Match Note',
+                                'title' => $isTimeUpdate ? 'Match Update' : 'Match Note',
                                 'desc' => $cleanText,
-                                'tag' => 'Tactical Note',
+                                'tag' => $isTimeUpdate ? 'Session Update' : 'Tactical Note',
                                 'timestamp' => $timestamp,
                                 'time' => 'Update',
                             ];
