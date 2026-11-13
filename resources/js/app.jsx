@@ -42,6 +42,7 @@ if (matchDetailRoot) {
         const scorecard = JSON.parse(matchDetailRoot.getAttribute('data-scorecard') || '{}');
         const commentary = JSON.parse(matchDetailRoot.getAttribute('data-commentary') || '{}');
         const matchId = matchDetailRoot.getAttribute('data-match-id') || '';
+        const isAdmin = matchDetailRoot.getAttribute('data-is-admin') === 'true';
 
         createRoot(matchDetailRoot).render(
             <MatchDetailApp
@@ -49,6 +50,7 @@ if (matchDetailRoot) {
                 initialScorecard={scorecard}
                 initialCommentary={commentary}
                 matchId={matchId}
+                initialIsAdmin={isAdmin}
             />
         );
     } catch (e) {

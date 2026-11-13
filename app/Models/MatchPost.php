@@ -22,10 +22,15 @@ class MatchPost extends Model
         'insta_url',
         'team_tag',
         'likes_count',
+        'is_approved',
+        'over_metric',
+        'ball_metric',
     ];
 
     protected $casts = [
         'likes_count' => 'integer',
+        'is_approved' => 'boolean',
+        'ball_metric' => 'float',
     ];
 
     public function user(): BelongsTo

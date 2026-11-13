@@ -12,23 +12,59 @@ use Illuminate\Support\Facades\Auth;
 class MatchPostController extends Controller
 {
     /**
+     * Check if current request is from an authorized Administrator.
+     */
+    protected function checkIsAdmin(Request $request): bool
+    {
+        $user = Auth::user();
+        $adminEmail = env('ADMIN_EMAIL') ?: 'shubhamthakurst007@gmail.com';
+        if ($user && ($user->email === $adminEmail || $user->email === 'shubhamthakurst07@gmail.com' || str_starts_with($user->email, 'admin@') || ($user->is_admin ?? false))) {
+            return true;
+        }
+
+        $headerKey = $request->header('X-Admin-Key') ?: $request->get('admin_key');
+        if ($headerKey && $headerKey === env('ADMIN_KEY', 'cricadmin2026')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Get social posts for a match.
      */
-    public function index(string $matchId, CricketDataService $cricket): JsonResponse
+    public function index(string $matchId, CricketDataService $cricket, Request $request): JsonResponse
     {
-        $posts = MatchPost::where('match_id', $matchId)
-            ->latest()
-            ->take(50)
-            ->get();
+        $isAdmin = $this->checkIsAdmin($request);
+
+        $query = MatchPost::where('match_id', $matchId);
+
+        // For public timeline: commentary posts MUST be approved
+        // Admin sees all posts (including pending ones for approval review)
+        if (!$isAdmin) {
+            $query->where(function ($q) {
+                $q->where('post_type', '!=', 'commentary')
+                  ->orWhere('is_approved', true);
+            });
+        }
+
+        $posts = $query->latest()->take(50)->get();
 
         // If no posts exist yet, auto-seed customized posts for THIS specific match
-        if ($posts->isEmpty()) {
+        if ($posts->isEmpty() && !$isAdmin) {
             $this->seedStarterPosts($matchId, $cricket);
-            $posts = MatchPost::where('match_id', $matchId)->latest()->get();
+            $posts = MatchPost::where('match_id', $matchId)
+                ->where(function ($q) {
+                    $q->where('post_type', '!=', 'commentary')
+                      ->orWhere('is_approved', true);
+                })
+                ->latest()
+                ->get();
         }
 
         return response()->json([
             'status' => 'success',
+            'is_admin' => $isAdmin,
             'data' => $posts,
         ]);
     }
@@ -46,6 +82,8 @@ class MatchPostController extends Controller
             'insta_url' => 'nullable|string|max:500',
             'team_tag' => 'nullable|string|max:50',
             'post_type' => 'nullable|string|in:text,meme,instagram,highlight,commentary',
+            'over_metric' => 'nullable|string|max:20',
+            'ball_metric' => 'nullable|numeric',
         ]);
 
         $user = Auth::user();
@@ -87,7 +125,7 @@ class MatchPostController extends Controller
         }
 
         // 4. Bad words & Spam promo link filter
-        $spamPattern = '/(satta|betting|telegram|t\.me\/|wa\.me\/|whatsapp\s*group|bonus\s*\d+|casino|rummy|1xbet|stake|porn|xxx|nude|madarchod|bhenchod|chutiya|gandu|bhosdi|harami|lund|gaand)/i';
+        $spamPattern = '/(satta|betting|telegram|t\.me\/|wa\.me\/|whatsapp\s*group|bonus\s*\d+|casino|rummy|1xbet|stake|porn|xxx|nude|madarchod|bhenchod|chutiya|gandu|bhosdi|harami|lund|gaand|bkl)/i';
         if (preg_match($spamPattern, $pureText) || preg_match($spamPattern, $authorName)) {
             return response()->json([
                 'status' => 'error',
@@ -139,6 +177,17 @@ class MatchPostController extends Controller
         $colors = ['indigo', 'emerald', 'rose', 'amber', 'purple', 'sky', 'cyan'];
         $avatarColor = $colors[array_rand($colors)];
 
+        // Admin Approval Check:
+        // Admin posts are approved immediately; regular fan commentary requires admin approval!
+        $isAdmin = $this->checkIsAdmin($request);
+        $isApproved = $isAdmin;
+        if ($postType !== 'commentary') {
+            $isApproved = true; // Regular fan buzz memes are public
+        }
+
+        $overMetric = $validated['over_metric'] ?? $request->input('over_metric');
+        $ballMetric = isset($validated['ball_metric']) ? (float) $validated['ball_metric'] : (is_numeric($request->input('ball_metric')) ? (float) $request->input('ball_metric') : null);
+
         $post = MatchPost::create([
             'match_id' => $matchId,
             'user_id' => $user ? $user->id : null,
@@ -150,13 +199,64 @@ class MatchPostController extends Controller
             'insta_url' => $instaUrl,
             'team_tag' => $validated['team_tag'] ?? null,
             'likes_count' => 0,
+            'is_approved' => $isApproved,
+            'over_metric' => $overMetric ? (string) $overMetric : null,
+            'ball_metric' => $ballMetric,
         ]);
+
+        $message = $isApproved
+            ? 'Commentary posted live! ⚡'
+            : 'Commentary submit ho gayi hai! Pehle Admin review karega, approve hote hi match ke over mein live show hogi. ⏳';
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Post published successfully!',
+            'message' => $message,
+            'is_approved' => $isApproved,
             'data' => $post,
         ], 201);
+    }
+
+    /**
+     * Admin Approve commentary post.
+     */
+    public function approve(int $id, Request $request): JsonResponse
+    {
+        if (!$this->checkIsAdmin($request)) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        $post = MatchPost::find($id);
+        if (!$post) {
+            return response()->json(['status' => 'error', 'message' => 'Post not found'], 404);
+        }
+
+        $post->update(['is_approved' => true]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Commentary approved and published to live match! ✅',
+            'data' => $post
+        ]);
+    }
+
+    /**
+     * Admin Delete / Reject post.
+     */
+    public function destroy(int $id, Request $request): JsonResponse
+    {
+        if (!$this->checkIsAdmin($request)) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        $post = MatchPost::find($id);
+        if ($post) {
+            $post->delete();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Post deleted successfully.'
+        ]);
     }
 
     /**

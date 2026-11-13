@@ -1,3 +1,11 @@
+@php
+    $isAdmin = auth()->check() && (
+        in_array(auth()->user()->email, ['shubhamthakurst007@gmail.com', 'shubhamthakurst07@gmail.com', env('ADMIN_EMAIL')]) ||
+        str_starts_with(auth()->user()->email, 'admin@') ||
+        (auth()->user()->is_admin ?? false)
+    );
+@endphp
+
 @extends('layouts.app')
 
 @section('content')
@@ -5,7 +13,8 @@
          data-match='@json($match)'
          data-scorecard='@json($scorecard)'
          data-commentary='@json($commentary ?? [])'
-         data-match-id='{{ $match["id"] ?? "" }}'>
+         data-match-id='{{ $match["id"] ?? "" }}'
+         data-is-admin='{{ $isAdmin ? "true" : "false" }}'>
         {{-- Loading Skeleton while React mounts --}}
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse space-y-6">
             <div class="h-8 w-40 bg-gray-200 rounded-lg"></div>

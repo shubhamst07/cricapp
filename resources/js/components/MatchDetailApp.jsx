@@ -29,14 +29,25 @@ import {
     ChevronDown,
     ChevronUp,
     ChevronRight,
-    Layers
+    Layers,
+    Check,
+    Trash2,
+    Clock
 } from 'lucide-react';
 
 // Ball-by-ball commentary is loaded live directly from Cricbuzz API
 
-export default function MatchDetailApp({ initialMatch, initialScorecard, initialCommentary, matchId }) {
+export default function MatchDetailApp({ initialMatch, initialScorecard, initialCommentary, matchId, initialIsAdmin = false }) {
     const [match, setMatch] = useState(initialMatch || {});
     const [scorecard, setScorecard] = useState(initialScorecard || {});
+    const [isAdmin, setIsAdmin] = useState(() => {
+        if (initialIsAdmin) return true;
+        try {
+            return localStorage.getItem('cric_is_admin') === 'true' || localStorage.getItem('cric_admin_key') === 'cricadmin2026';
+        } catch {
+            return false;
+        }
+    });
     const [realCommentary, setRealCommentary] = useState(() => {
         if (initialCommentary && Array.isArray(initialCommentary.data)) {
             return initialCommentary.data;
@@ -118,6 +129,58 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         return () => clearInterval(timer);
     }, [postCooldownSeconds]);
 
+    const promptAdminLogin = () => {
+        const pin = window.prompt('Enter Admin Moderation PIN:');
+        if (pin === 'cricadmin2026') {
+            localStorage.setItem('cric_admin_key', pin);
+            localStorage.setItem('cric_is_admin', 'true');
+            setIsAdmin(true);
+            alert('Admin Mode Unlocked! You can now review, approve or reject comments directly.');
+            fetchPosts();
+        } else if (pin) {
+            alert('Incorrect Admin PIN.');
+        }
+    };
+
+    const handleApprovePost = async (postId) => {
+        try {
+            const res = await fetch(`/api/posts/${postId}/approve`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Admin-Key': localStorage.getItem('cric_admin_key') || 'cricadmin2026'
+                }
+            });
+            if (res.ok) {
+                setPosts(prev => prev.map(p => p.id === postId ? { ...p, is_approved: true } : p));
+                setCommentarySuccessMsg('Commentary approved and published to over! ✅');
+                setTimeout(() => setCommentarySuccessMsg(null), 3000);
+            }
+        } catch (err) {
+            console.error('Failed to approve post:', err);
+        }
+    };
+
+    const handleDeletePost = async (postId) => {
+        if (!confirm('Are you sure you want to reject/delete this commentary?')) return;
+        try {
+            const res = await fetch(`/api/posts/${postId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Admin-Key': localStorage.getItem('cric_admin_key') || 'cricadmin2026'
+                }
+            });
+            if (res.ok) {
+                setPosts(prev => prev.filter(p => p.id !== postId));
+            }
+        } catch (err) {
+            console.error('Failed to delete post:', err);
+        }
+    };
+
     const handlePostCommentary = async (e) => {
         e.preventDefault();
         if (!newCommentaryText.trim() || isPostingCommentary || postCooldownSeconds > 0) return;
@@ -127,18 +190,40 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             const author = newPostName.trim() || 'Live Blogger';
             localStorage.setItem('cricket_fan_name', author);
 
+            // Detect active live over and ball from miniscore or realCommentary
+            let activeOverNum = null;
+            let activeBallMetric = null;
+            if (miniscore?.overs) {
+                const om = String(miniscore.overs).match(/(\d+)(?:\.\d+)?/);
+                if (om) activeOverNum = parseInt(om[1], 10);
+                activeBallMetric = parseFloat(miniscore.overs);
+            }
+            if (activeOverNum === null && realCommentary && realCommentary.length > 0) {
+                for (const r of realCommentary) {
+                    const ov = extractItemOverNumber(r);
+                    if (ov !== null) {
+                        activeOverNum = ov;
+                        activeBallMetric = (typeof r.ballMetric === 'number') ? r.ballMetric : (ov + 0.45);
+                        break;
+                    }
+                }
+            }
+
             const res = await fetch(`/api/matches/${matchId}/posts`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Admin-Key': localStorage.getItem('cric_admin_key') || ''
                 },
                 body: JSON.stringify({
                     content: `[Commentary] ${newCommentaryText.trim()}`,
                     user_name: author,
                     team_tag: newCommentaryTag,
-                    post_type: 'commentary'
+                    post_type: 'commentary',
+                    over_metric: activeOverNum !== null ? String(activeOverNum) : null,
+                    ball_metric: activeBallMetric,
                 })
             });
 
@@ -146,9 +231,9 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             if (res.ok && data.data) {
                 setPosts(prev => [data.data, ...prev]);
                 setNewCommentaryText('');
-                setCommentarySuccessMsg('Commentary posted live! ⚡');
+                setCommentarySuccessMsg(data.message || (data.is_approved ? 'Commentary posted live! ⚡' : 'Submitted for Admin Approval! ⏳'));
                 setPostCooldownSeconds(12);
-                setTimeout(() => setCommentarySuccessMsg(null), 3000);
+                setTimeout(() => setCommentarySuccessMsg(null), 4000);
             } else {
                 setCommentaryErrorMsg(data.message || 'Unable to post commentary.');
                 setTimeout(() => setCommentaryErrorMsg(null), 5000);
@@ -288,13 +373,18 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
     const fetchPosts = async () => {
         try {
             setPostsLoading(true);
-            const res = await fetch(`/api/matches/${matchId}/posts`, {
-                headers: { 'Accept': 'application/json' }
-            });
+            const headers = { 'Accept': 'application/json' };
+            const adminKey = localStorage.getItem('cric_admin_key');
+            if (adminKey) headers['X-Admin-Key'] = adminKey;
+
+            const res = await fetch(`/api/matches/${matchId}/posts`, { headers });
             if (res.ok) {
                 const json = await res.json();
                 if (json.status === 'success') {
                     setPosts(json.data || []);
+                }
+                if (json.is_admin) {
+                    setIsAdmin(true);
                 }
             }
         } catch (e) {
@@ -506,35 +596,50 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
     const returnTab = (tabParam && ['live', 'upcoming', 'recent'].includes(tabParam) && !hasActiveScorecard) ? tabParam : fallbackTab;
     const backUrl = `/live-scores?tab=${returnTab}`;
 
-    // 1. Fan Posts formatted as community commentary
+    // 1. Fan Posts formatted as community commentary (like Cricbuzz)
     const fanCommentaryList = useMemo(() => {
         return (posts || [])
-            .filter(p => p.post_type === 'commentary' || (p.content && p.content.startsWith('[Commentary]')))
+            .filter(p => (p.post_type === 'commentary' || (p.content && p.content.startsWith('[Commentary]'))) && (p.is_approved || isAdmin))
             .map(cp => {
                 const rawContent = cp.content ? cp.content.replace(/^\[Commentary\]\s*/, '') : '';
+                const author = cp.user_name || 'Fan';
+                const overNum = cp.over_metric ? parseInt(cp.over_metric, 10) : null;
+                const ballMetric = (typeof cp.ball_metric === 'number' && !isNaN(cp.ball_metric))
+                    ? cp.ball_metric
+                    : (overNum !== null ? overNum + 0.45 : null);
+
                 return {
                     id: `fan-${cp.id}`,
-                    over: 'FAN',
+                    postId: cp.id,
+                    isApproved: Boolean(cp.is_approved),
+                    type: 'fan_commentary',
+                    overNumber: overNum,
+                    over_metric: cp.over_metric ? String(cp.over_metric) : (overNum !== null ? String(overNum) : null),
+                    over: cp.over_metric ? String(cp.over_metric) : (overNum !== null ? String(overNum) : null),
+                    ballMetric: ballMetric,
                     badge: '💬',
-                    badgeType: 'expert',
-                    title: `${cp.user_name || 'Fan'} (Community):`,
+                    badgeType: 'fan',
+                    author: author,
+                    title: author,
                     desc: rawContent,
-                    type: 'fan_update',
-                    tag: cp.team_tag || 'Live Take',
-                    time: cp.created_at ? new Date(cp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-                    timestamp: new Date(cp.created_at || Date.now()).getTime()
+                    rawText: rawContent,
+                    tag: cp.team_tag || 'Fan View 💬',
+                    time: cp.created_at ? new Date(cp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live',
+                    timestamp: new Date(cp.created_at || Date.now()).getTime(),
                 };
             });
-    }, [posts]);
+    }, [posts, isAdmin]);
 
-    // 2. Real Cricbuzz Live Commentary + Fan commentary combined
+    // 2. Real Cricbuzz Live Commentary + Fan commentary combined & sorted into overs
     const allCommentaryList = useMemo(() => {
-        if (realCommentary && realCommentary.length > 0) {
-            return [...fanCommentaryList, ...realCommentary];
-        }
+        const list = [...(realCommentary || [])];
 
-        const list = [...fanCommentaryList];
-        if (match?.status_text) {
+        // Insert approved fan comments into the stream so each goes inside its proper over
+        fanCommentaryList.forEach(fanItem => {
+            list.push(fanItem);
+        });
+
+        if (list.length === 0 && match?.status_text) {
             list.push({
                 id: 'match-status-banner',
                 over: 'RESULT',
@@ -677,14 +782,17 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         if (typeof item.overNumber === 'string' && !isNaN(parseInt(item.overNumber, 10))) {
             return parseInt(item.overNumber, 10);
         }
+        if (typeof item.over_metric === 'string' && !isNaN(parseInt(item.over_metric, 10))) {
+            return parseInt(item.over_metric, 10);
+        }
         if (typeof item.over === 'number' && !isNaN(item.over)) {
             return Math.floor(item.over);
         }
-        if (typeof item.over === 'string') {
+        if (typeof item.over === 'string' && item.over !== 'FAN' && item.over !== 'NOTE' && item.over !== 'QUOTE' && item.over !== 'FINAL') {
             const m = item.over.match(/(\d+)(?:\.\d+)?/);
             if (m) return parseInt(m[1], 10);
         }
-        if (typeof item.time === 'string') {
+        if (typeof item.time === 'string' && !item.time.includes(':')) {
             const m = item.time.match(/(\d+)(?:\.\d+)?/);
             if (m) return parseInt(m[1], 10);
         }
@@ -780,6 +888,9 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             }
             if (typeof item.ballMetric === 'number' && !isNaN(item.ballMetric)) {
                 return item.ballMetric;
+            }
+            if (typeof item.ball_metric === 'number' && !isNaN(item.ball_metric)) {
+                return item.ball_metric;
             }
             if (typeof item.over === 'number' && !isNaN(item.over)) {
                 return item.over;
@@ -883,6 +994,68 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         const cardTime = isHi
             ? (item.time === 'Update' ? 'अपडेट' : item.time === 'Over Break' ? 'ओवर ब्रेक' : item.time === 'Speech' ? 'इंटरव्यू' : item.time === 'Result' ? 'परिणाम' : item.time?.startsWith?.('Ball ') ? item.time.replace('Ball ', 'गेंद ') : item.time)
             : item.time;
+
+        // Custom Fan / Community Commentary Card (Cricbuzz Style embedded between balls)
+        if (item.type === 'fan_commentary' || item.type === 'fan_update') {
+            return (
+                <React.Fragment key={item.id || idx}>
+                    <div className={`p-3.5 sm:p-4 rounded-2xl transition shadow-sm border ${
+                        item.isApproved
+                            ? 'bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border-amber-500/30'
+                            : 'bg-gradient-to-r from-yellow-500/10 via-slate-900 to-slate-900 border-yellow-500/50 border-dashed'
+                    }`}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                    <span className="font-black text-amber-400 text-xs sm:text-sm">
+                                        {item.author || item.title}:
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+                                        {item.tag || 'Fan View 💬'}
+                                    </span>
+                                    {!item.isApproved && (
+                                        <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 text-[10px] font-black border border-yellow-500/40 animate-pulse flex items-center gap-1">
+                                            <Clock className="w-3 h-3" /> Pending Admin Approval ⏳
+                                        </span>
+                                    )}
+                                    <span className="text-[10px] text-slate-500 ml-auto">{item.time}</span>
+                                </div>
+                                <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans">
+                                    {cardDesc}
+                                </p>
+                            </div>
+
+                            {/* Admin Moderation Actions */}
+                            {isAdmin && (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    {!item.isApproved && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleApprovePost(item.postId)}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow transition flex items-center gap-1"
+                                            title="Approve for live match"
+                                        >
+                                            <Check className="w-3.5 h-3.5" /> Approve
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeletePost(item.postId)}
+                                        className="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-white font-black text-xs shadow transition flex items-center gap-1"
+                                        title="Reject / Delete"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" /> Reject
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    {showInfeedAd && (
+                        <AdSlot type="infeed" slotId={`infeed-comm-${idx}`} />
+                    )}
+                </React.Fragment>
+            );
+        }
 
         // Custom Presentation / Quote Card
         if (item.type === 'interview') {
@@ -1644,12 +1817,29 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                     {/* Live Blogger & Fan Commentary Input Box */}
                     <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
-                        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
                             <div className="flex items-center gap-2">
                                 <Mic className="w-4 h-4 text-amber-400" />
                                 <h3 className="font-black text-sm text-white">Post Live Commentary / Match Note</h3>
                             </div>
-                            <span className="text-[11px] text-slate-400">Live for all viewers</span>
+                            <div className="flex items-center gap-2">
+                                {isAdmin ? (
+                                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-black flex items-center gap-1">
+                                        <Shield className="w-3 h-3" /> Admin Mode (Direct Publishing)
+                                    </span>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={promptAdminLogin}
+                                        className="text-[10px] text-slate-500 hover:text-amber-400 transition underline underline-offset-2"
+                                    >
+                                        Admin?
+                                    </button>
+                                )}
+                                <span className="text-[11px] text-slate-400">
+                                    {isAdmin ? 'Direct to Over' : 'Admin review ke baad live hoga ⏳'}
+                                </span>
+                            </div>
                         </div>
 
                         <form onSubmit={handlePostCommentary} className="space-y-3">

@@ -19,6 +19,8 @@ Route::delete('/match-players/{player}', [MatchesController::class, 'removeMatch
 // Match Posts & Social Feed
 Route::get('/matches/{matchId}/posts', [MatchPostController::class, 'index'])->name('api.match-posts.index');
 Route::post('/matches/{matchId}/posts', [MatchPostController::class, 'store'])->name('api.match-posts.store');
+Route::post('/posts/{id}/approve', [MatchPostController::class, 'approve'])->name('api.match-posts.approve');
+Route::delete('/posts/{id}', [MatchPostController::class, 'destroy'])->name('api.match-posts.destroy');
 Route::post('/posts/{id}/like', [MatchPostController::class, 'like'])->name('api.match-posts.like');
 Route::get('/posts/{id}/comments', [MatchPostController::class, 'getComments'])->name('api.match-posts.comments');
 Route::post('/posts/{id}/comments', [MatchPostController::class, 'addComment'])->name('api.match-posts.add-comment');
