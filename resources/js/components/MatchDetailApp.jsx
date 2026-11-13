@@ -620,6 +620,8 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     title: author,
                     desc: rawContent,
                     rawText: rawContent,
+                    ai_hindi: cp.content_hi || rawContent,
+                    ai_hinglish: cp.content_hn || rawContent,
                     tag: cp.team_tag || 'Live Comm 🎙️',
                     time: cp.created_at ? new Date(cp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live',
                     timestamp: new Date(cp.created_at || Date.now()).getTime(),

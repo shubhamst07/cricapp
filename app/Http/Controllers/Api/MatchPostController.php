@@ -191,6 +191,15 @@ class MatchPostController extends Controller
         $overMetric = $validated['over_metric'] ?? $request->input('over_metric');
         $ballMetric = isset($validated['ball_metric']) ? (float) $validated['ball_metric'] : (is_numeric($request->input('ball_metric')) ? (float) $request->input('ball_metric') : null);
 
+        $contentHi = null;
+        $contentHn = $pureText;
+        if ($postType === 'commentary') {
+            try {
+                $aiService = app(\App\Services\AiCommentaryService::class);
+                $contentHi = $aiService->translateToHindi($pureText);
+            } catch (\Throwable $e) {}
+        }
+
         $post = MatchPost::create([
             'match_id' => $matchId,
             'user_id' => $user ? $user->id : null,
@@ -205,6 +214,8 @@ class MatchPostController extends Controller
             'is_approved' => $isApproved,
             'over_metric' => $overMetric ? (string) $overMetric : null,
             'ball_metric' => $ballMetric,
+            'content_hi' => $contentHi,
+            'content_hn' => $contentHn,
         ]);
 
         $message = 'Live commentary published directly to over! ⚡';

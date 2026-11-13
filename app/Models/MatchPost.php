@@ -25,6 +25,8 @@ class MatchPost extends Model
         'is_approved',
         'over_metric',
         'ball_metric',
+        'content_hi',
+        'content_hn',
     ];
 
     protected $casts = [
