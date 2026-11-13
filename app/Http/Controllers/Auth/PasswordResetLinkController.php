@@ -64,8 +64,22 @@ class PasswordResetLinkController extends Controller
         // Attempt email dispatch
         $emailSent = false;
         try {
-            Mail::raw("Hello {$user->name},\n\nYour 6-digit Password Reset OTP for LiveCricket is: {$otp}\n\nThis OTP is valid for 10 minutes. If you did not request this, please ignore this email.\n\nWarm regards,\nLiveCricket Pitch Team", function ($msg) use ($user) {
-                $msg->to($user->email)->subject("Your 6-Digit Password Reset OTP - LiveCricket");
+            Mail::send([], [], function ($msg) use ($user, $otp, $inputEmail) {
+                $msg->to($inputEmail)
+                    ->subject("{$otp} is your LiveCricket Password Reset Code")
+                    ->html("
+                        <div style='font-family: Arial, sans-serif; background: #0f172a; color: #ffffff; padding: 30px; border-radius: 16px; max-width: 500px; margin: 0 auto; border: 1px solid #1e293b;'>
+                            <h2 style='color: #6366f1; margin-top: 0; font-size: 22px;'>🏏 LiveCricket Password Recovery</h2>
+                            <p style='color: #cbd5e1; font-size: 14px;'>Hello <strong>{$user->name}</strong>,</p>
+                            <p style='color: #cbd5e1; font-size: 14px;'>We received a request to reset your LiveCricket account password. Here is your 6-digit verification OTP code:</p>
+                            <div style='background: #1e293b; border: 2px dashed #6366f1; padding: 18px; text-align: center; border-radius: 12px; margin: 24px 0;'>
+                                <span style='font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #38bdf8; font-family: monospace;'>{$otp}</span>
+                            </div>
+                            <p style='color: #94a3b8; font-size: 12px;'>⚠️ This OTP code is valid for <strong>10 minutes</strong>. Never share this code with anyone.</p>
+                            <hr style='border: none; border-top: 1px solid #334155; margin: 20px 0;' />
+                            <p style='color: #64748b; font-size: 11px;'>If you did not request this password reset, you can safely ignore this email.</p>
+                        </div>
+                    ");
             });
             $emailSent = true;
         } catch (\Throwable $mailEx) {
@@ -76,9 +90,9 @@ class PasswordResetLinkController extends Controller
             'step' => 2,
             'otp_email' => $inputEmail,
             'status' => $emailSent
-                ? "6-digit OTP has been sent to {$inputEmail}. Please check your inbox or spam."
+                ? "6-digit OTP has been sent directly to your email ({$inputEmail})! Please check your Inbox and Spam folder."
                 : "OTP generated successfully!",
-            'screen_otp' => $otp, // Instant fallback visible on screen
+            'screen_otp' => $emailSent ? null : $otp, // Show screen fallback only if email failed
         ]);
     }
 
