@@ -17,9 +17,20 @@
 
             <!-- Session Status -->
             @if (session('status'))
-                <div class="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold flex items-center gap-2">
-                    <span>✓</span>
-                    <span>{{ session('status') }}</span>
+                <div class="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold space-y-2.5">
+                    <div class="flex items-center gap-2">
+                        <span>✓</span>
+                        <span>{{ session('status') }}</span>
+                    </div>
+                    @if (session('direct_reset_url'))
+                        <div class="pt-1">
+                            <a href="{{ session('direct_reset_url') }}"
+                               class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-900/40 transition transform active:scale-95">
+                                <span>🔑 Click Here to Reset Password Now</span>
+                                <span>→</span>
+                            </a>
+                        </div>
+                    @endif
                 </div>
             @endif
 

