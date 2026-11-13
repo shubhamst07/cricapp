@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', ($match->team1_name ?? 'Team 1') . ' vs ' . ($match->team2_name ?? 'Team 2') . ' - Live Score | ' . config('app.name', 'LiveCricket'))
+
 @section('header')
     @php
         $isOwner = auth()->check() && (auth()->id() === $match->user_id);

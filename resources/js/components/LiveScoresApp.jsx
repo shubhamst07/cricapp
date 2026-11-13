@@ -35,6 +35,10 @@ export default function LiveScoresApp({
     initialTab = 'live',
     initialSection = 'international'
 }) {
+    useEffect(() => {
+        document.title = 'LiveCricket - Real-Time Cricket Scores & Updates';
+    }, []);
+
     // Current primary section: 'international' or 'local'
     const [currentSection, setCurrentSection] = useState(() => {
         const urlParams = new URLSearchParams(window.location.search);

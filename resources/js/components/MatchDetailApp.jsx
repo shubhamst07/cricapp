@@ -1267,6 +1267,65 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         return '';
     })();
 
+    // Dynamic Browser Tab Title with Live Score (Cricbuzz Style: e.g. "PAK 434/9 & 207/5 (66 ov) - PAK vs SL | LiveCricket")
+    useEffect(() => {
+        try {
+            const scoreParts = [];
+
+            // 1. Current innings from scorecard
+            const scInns = scorecard?.data?.innings || scorecard?.innings || [];
+            if (scInns && scInns.length > 0) {
+                scInns.forEach(inn => {
+                    const t = inn.short_name || (inn.team ? (inn.team.length > 5 ? inn.team.split(' ').map(w => w[0]).join('').toUpperCase() : inn.team) : '');
+                    const sc = inn.score;
+                    if (sc && sc !== '0/0') {
+                        const ov = inn.overs ? ` (${inn.overs} ov)` : '';
+                        scoreParts.push(`${t ? `${t} ` : ''}${sc}${ov}`.trim());
+                    }
+                });
+            }
+
+            // 2. Fallback to match.score array
+            if (scoreParts.length === 0 && match?.score && Array.isArray(match.score)) {
+                match.score.forEach(s => {
+                    const t = s.batting_team || s.inning || '';
+                    const shortT = t ? (t.length > 5 ? t.split(' ').map(w => w[0]).join('').toUpperCase() : t) : '';
+                    const runs = s.r ?? s.runs ?? 0;
+                    const wkts = s.w ?? s.wickets ?? 0;
+                    const sc = s.display_score || `${runs}/${wkts}`;
+                    if (sc && sc !== '0/0') {
+                        const ov = (s.overs || s.o) ? ` (${s.overs || s.o} ov)` : '';
+                        scoreParts.push(`${shortT ? `${shortT} ` : ''}${sc}${ov}`.trim());
+                    }
+                });
+            }
+
+            // 3. Fallback to miniscore live crease
+            if (scoreParts.length === 0 && liveCreaseScore) {
+                const liveTeam = liveCreaseBatTeam ? (liveCreaseBatTeam.length > 5 ? liveCreaseBatTeam.split(' ').map(w => w[0]).join('').toUpperCase() : liveCreaseBatTeam) : '';
+                const ov = miniscore?.overs ? ` (${miniscore.overs} ov)` : '';
+                scoreParts.push(`${liveTeam ? `${liveTeam} ` : ''}${liveCreaseScore}${ov}`.trim());
+            }
+
+            const matchName = match?.name || (match?.team1_name && match?.team2_name ? `${match.team1_name} vs ${match.team2_name}` : '');
+
+            if (scoreParts.length > 0) {
+                const scoreText = scoreParts.join(' & ');
+                document.title = matchName ? `${scoreText} - ${matchName} | LiveCricket` : `${scoreText} | LiveCricket`;
+            } else if (matchName) {
+                document.title = `${matchName} Live Score | LiveCricket`;
+            } else {
+                document.title = 'LiveCricket';
+            }
+        } catch {
+            document.title = 'LiveCricket';
+        }
+
+        return () => {
+            document.title = 'LiveCricket';
+        };
+    }, [match, scorecard, miniscore, liveCreaseScore, liveCreaseBatTeam]);
+
     return (
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
             {/* Top Navigation & Actions */}

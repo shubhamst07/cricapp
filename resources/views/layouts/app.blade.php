@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'LiveCricket') }}</title>
+        <title>@yield('title', config('app.name', 'LiveCricket'))</title>
 
         <!-- PWA & Mobile App Meta Tags -->
         <link rel="manifest" href="/manifest.json">
