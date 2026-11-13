@@ -830,10 +830,10 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/40 border border-amber-500/30 shadow-md flex items-start gap-3 sm:gap-4">
                         <div className="shrink-0 text-center w-12 sm:w-14">
                             <span className="px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-mono font-black text-xs text-amber-300 block">
-                                QUOTE
+                                {commLanguage === 'hi' ? 'बयान' : 'QUOTE'}
                             </span>
                             <span className="text-[9px] text-amber-400/80 mt-1 block truncate font-semibold">
-                                Speech
+                                {commLanguage === 'hi' ? 'इंटरव्यू' : 'Speech'}
                             </span>
                         </div>
                         <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300 text-base shadow-sm">
@@ -843,14 +843,20 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                             <div className="flex flex-wrap items-center justify-between gap-1.5">
                                 <h5 className="text-xs sm:text-sm font-black text-amber-200 flex items-center gap-1.5">
                                     <span>🎙️</span>
-                                    <span>{item.title}</span>
+                                    <span>
+                                        {commLanguage === 'hi'
+                                            ? (item.title_hi || item.title?.replace?.('(Post-Match Take)', '(मैच के बाद बयान)') || item.title)
+                                            : item.title}
+                                    </span>
                                 </h5>
                                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0">
-                                    {item.tag || 'Post-Match Quote'}
+                                    {commLanguage === 'hi'
+                                        ? (item.tag_hi || 'खिलाड़ी का बयान 🎙️')
+                                        : (item.tag || 'Player Quote 🎙️')}
                                 </span>
                             </div>
                             <p className="text-xs sm:text-sm text-slate-200 mt-1.5 leading-relaxed font-sans italic border-l-2 border-amber-500/40 pl-3">
-                                “{item.desc}”
+                                “{commLanguage === 'hi' ? (item.ai_hindi || item.desc) : (item.desc || item.rawText)}”
                             </p>
                         </div>
                     </div>
@@ -868,10 +874,10 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-md flex items-start gap-3 sm:gap-4">
                         <div className="shrink-0 text-center w-12 sm:w-14">
                             <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-mono font-black text-xs text-emerald-300 block">
-                                FINAL
+                                {commLanguage === 'hi' ? 'समाप्त' : 'FINAL'}
                             </span>
                             <span className="text-[9px] text-emerald-400/80 mt-1 block truncate font-semibold">
-                                Result
+                                {commLanguage === 'hi' ? 'परिणाम' : 'Result'}
                             </span>
                         </div>
                         <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-base shadow-sm">
@@ -881,14 +887,20 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                             <div className="flex flex-wrap items-center justify-between gap-1.5">
                                 <h5 className="text-xs sm:text-sm font-black text-emerald-200 flex items-center gap-1.5">
                                     <span>🏆</span>
-                                    <span>{item.title}</span>
+                                    <span>
+                                        {commLanguage === 'hi'
+                                            ? (item.title_hi || 'मैच सारांश व परिणाम')
+                                            : item.title}
+                                    </span>
                                 </h5>
                                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shrink-0">
-                                    {item.tag || 'Match Conclusion'}
+                                    {commLanguage === 'hi'
+                                        ? (item.tag_hi || 'मैच परिणाम 🏆')
+                                        : (item.tag || 'Match Result 🏆')}
                                 </span>
                             </div>
                             <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed font-sans">
-                                {item.desc}
+                                {commLanguage === 'hi' ? (item.ai_hindi || item.desc) : (item.desc || item.rawText)}
                             </p>
                         </div>
                     </div>
@@ -906,10 +918,14 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     {/* Over Badge */}
                     <div className="shrink-0 text-center w-12 sm:w-14">
                         <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
-                            {item.over}
+                            {commLanguage === 'hi'
+                                ? (item.over === 'NOTE' ? 'नोट' : item.over?.startsWith?.('Over ') ? item.over.replace('Over ', 'ओवर ') : item.over)
+                                : item.over}
                         </span>
                         <span className="text-[9px] text-slate-500 mt-1 block truncate">
-                            {item.time}
+                            {commLanguage === 'hi'
+                                ? (item.time === 'Update' ? 'अपडेट' : item.time === 'Over Break' ? 'ओवर ब्रेक' : item.time?.startsWith?.('Ball ') ? item.time.replace('Ball ', 'गेंद ') : item.time)
+                                : item.time}
                         </span>
                     </div>
 

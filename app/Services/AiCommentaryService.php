@@ -16,8 +16,8 @@ class AiCommentaryService
         $transformed = [];
 
         foreach ($deliveries as $item) {
-            // If already processed by AI and has Hindi commentary, retain it
-            if (!empty($item['is_ai']) && !empty($item['ai_hindi'])) {
+            // If already processed by AI and has Hindi commentary and title_hi, retain it
+            if (!empty($item['is_ai']) && !empty($item['ai_hindi']) && !empty($item['title_hi'])) {
                 $transformed[] = $item;
                 continue;
             }
@@ -141,10 +141,41 @@ class AiCommentaryService
             $aiHin = $choice[1];
         }
 
+        // Action text for title and tag in Hindi
+        $titleHi = '';
+        $tagHi = '';
+        if ($isWicket) {
+            $titleHi = "{$bowler} to {$batsman}, आउट (WICKET)";
+            $tagHi = 'विकेट ☝️';
+        } elseif ($isSix) {
+            $titleHi = "{$bowler} to {$batsman}, छक्का (SIX)";
+            $tagHi = 'मैक्सिमम 6';
+        } elseif ($isFour) {
+            $titleHi = "{$bowler} to {$batsman}, चौका (FOUR)";
+            $tagHi = 'बाउंड्री 4';
+        } elseif ($isWide) {
+            $titleHi = "{$bowler} to {$batsman}, वाइड (Wide)";
+            $tagHi = 'अतिरिक्त रन';
+        } elseif ($isNoBall) {
+            $titleHi = "{$bowler} to {$batsman}, नो बॉल (No Ball)";
+            $tagHi = 'नो बॉल';
+        } elseif ($badge === '1') {
+            $titleHi = "{$bowler} to {$batsman}, 1 रन";
+            $tagHi = '1 रन';
+        } elseif ($badge === '2' || $badge === '3') {
+            $titleHi = "{$bowler} to {$batsman}, {$badge} रन";
+            $tagHi = "{$badge} रन";
+        } else {
+            $titleHi = "{$bowler} to {$batsman}, कोई रन नहीं";
+            $tagHi = 'डॉट बॉल';
+        }
+
         // Replace raw description and rawText with AI output
         $ball['desc'] = $aiEng;
         $ball['rawText'] = "{$bowler} to {$batsman}, " . ($badge === 'W' ? 'OUT' : ($badge . ' runs')) . " - {$aiEng}";
         $ball['ai_hindi'] = $aiHin;
+        $ball['title_hi'] = $titleHi;
+        $ball['tag_hi'] = $tagHi;
         $ball['is_ai'] = true;
         $ball['ai_flair'] = 'LiveCricket AI Engine';
 
@@ -160,6 +191,7 @@ class AiCommentaryService
         $runs = $sep['overRuns'] ?? 0;
         $summary = $sep['overSummary'] ?? '';
         $score = $sep['teamScore'] ?? '';
+        $batTeam = $sep['batTeam'] ?? '';
 
         $sep['desc'] = "End of Over {$overNum}: {$runs} runs conceded ({$summary}). " .
             ($runs > 10 ? "An expensive over for the bowling side!" : ($runs <= 3 ? "A very tight and disciplined over." : "Steady passage of play in the middle."));
@@ -167,6 +199,8 @@ class AiCommentaryService
         $sep['ai_hindi'] = "Over {$overNum} samapt: {$runs} run aaye ({$summary}). " .
             ($runs > 10 ? "Batting team ke liye faydemand over!" : "Bowling team ne tight line banaye rakhi.");
 
+        $sep['title_hi'] = "ओवर {$overNum} समाप्त" . ($batTeam && $score ? " • {$batTeam} {$score}" : "");
+        $sep['tag_hi'] = "ओवर {$overNum}";
         $sep['is_ai'] = true;
         $sep['ai_flair'] = 'AI Over Recap';
 
@@ -174,7 +208,7 @@ class AiCommentaryService
     }
 
     /**
-     * Transform a player quote or interview take into AI commentary with Hindi translation.
+     * Transform a player quote or interview take into AI commentary with rephrased wording and Hindi translation.
      */
     protected function transformInterview(array $item): array
     {
@@ -186,11 +220,19 @@ class AiCommentaryService
         }
         $speaker = $speaker ?: 'Player';
 
-        $hiSpeech = $this->translateToHindi($speech);
+        // Rephrase English wording with AI paraphrase
+        $paraSpeech = $this->paraphraseEnglish($speech);
+        $aiEng = "\"{$paraSpeech}\"";
 
-        $item['desc'] = $speech;
-        $item['ai_hindi'] = $hiSpeech ?: $speech;
+        // Translate rephrased quote to natural Hindi
+        $hiSpeech = $this->translateToHindi($paraSpeech ?: $speech);
+        $aiHin = "{$speaker} ने मैच के बाद अपनी राय साझा करते हुए कहा: \"{$hiSpeech}\"";
+
+        $item['desc'] = $aiEng;
+        $item['ai_hindi'] = $aiHin;
+        $item['title'] = "{$speaker} (Post-Match Take)";
         $item['title_hi'] = "{$speaker} (मैच के बाद बयान)";
+        $item['tag'] = 'Player Quote 🎙️';
         $item['tag_hi'] = 'खिलाड़ी का बयान 🎙️';
         $item['is_ai'] = true;
         $item['ai_flair'] = 'Post-Match Presentation';
@@ -199,16 +241,19 @@ class AiCommentaryService
     }
 
     /**
-     * Transform a match wrap-up announcement into AI commentary with Hindi translation.
+     * Transform a match wrap-up announcement into AI commentary with rephrased wording and Hindi translation.
      */
     protected function transformMatchWrap(array $item): array
     {
         $text = (string) ($item['desc'] ?? $item['rawText'] ?? '');
-        $hiText = $this->translateToHindi($text);
+        $paraText = $this->paraphraseEnglish($text);
+        $hiText = $this->translateToHindi($paraText ?: $text);
 
-        $item['desc'] = $text;
-        $item['ai_hindi'] = $hiText ?: $text;
+        $item['desc'] = "Match Wrap: " . $paraText;
+        $item['ai_hindi'] = "मैच परिणाम सारांश: " . $hiText;
+        $item['title'] = 'Match Summary & Wrap-up';
         $item['title_hi'] = 'मैच सारांश व परिणाम';
+        $item['tag'] = 'Match Result 🏆';
         $item['tag_hi'] = 'मैच परिणाम 🏆';
         $item['is_ai'] = true;
         $item['ai_flair'] = 'Match Review';
@@ -217,21 +262,116 @@ class AiCommentaryService
     }
 
     /**
-     * Transform a tactical match note or desk announcement into AI commentary with Hindi translation.
+     * Transform a tactical match note into AI commentary with completely rewritten wording and Hindi translation.
      */
     protected function transformNote(array $item): array
     {
-        $text = (string) ($item['desc'] ?? $item['rawText'] ?? '');
-        $hiText = $this->translateToHindi($text);
+        $raw = (string) ($item['desc'] ?? $item['rawText'] ?? '');
+        $rawTrimmed = trim(strip_tags($raw));
 
-        $item['desc'] = $text;
-        $item['ai_hindi'] = $hiText ?: $text;
+        // Pattern 1: Bowling change e.g. "Amir Hamza [2.0-0-13-0] is back into the attack"
+        if (preg_match('/^([A-Za-z\s.\-]+?)\s*(?:\[[^\]]*\])?\s*(?:is\s+back\s+into\s+the\s+attack|comes\s+into\s+the\s+attack|begins\s+a\s+new\s+spell)/i', $rawTrimmed, $m)) {
+            $bowler = trim($m[1]);
+            $aiEng = "Bowling Change: Captain brings {$bowler} into the attack to break the rhythm and apply pressure.";
+            $aiHin = "गेंदबाजी में बदलाव: कप्तान ने साझेदारी को तोड़ने और रन रोकने के लिए {$bowler} को गेंदबाजी पर लगाया है।";
+            $tagEn = 'Bowling Change';
+            $tagHi = 'गेंदबाजी बदलाव 🎳';
+        }
+        // Pattern 2: New batter arrives e.g. "Michael Bracewell, left handed bat, comes to the crease"
+        elseif (preg_match('/^([A-Za-z\s.\-]+?),\s*(?:left|right)[\s\-]+handed\s+bat,\s*comes\s+to\s+the\s+crease/i', $rawTrimmed, $m)) {
+            $batter = trim($m[1]);
+            $aiEng = "Batter In: {$batter} walks out to the pitch, tasked with anchoring the innings and building momentum.";
+            $aiHin = "नए बल्लेबाज क्रीज पर: {$batter} बल्लेबाजी के लिए मैदान में उतरे हैं, टीम को इनसे एक मजबूत पारी की उम्मीद होगी।";
+            $tagEn = 'New Batter';
+            $tagHi = 'नया बल्लेबाज 🏏';
+        }
+        // Pattern 3: Drinks break
+        elseif (preg_match('/(?:drink|drinks|hydration\s+break)/i', $rawTrimmed)) {
+            $aiEng = "Drinks Interval: Players take a hydration pause as team management and captains review on-field tactics.";
+            $aiHin = "ड्रिंक्स ब्रेक: मैदान पर खिलाड़ियों के लिए ड्रिंक्स ब्रेक, दोनों टीमें पानी पीकर मैच की अगली रणनीति पर चर्चा कर रही हैं।";
+            $tagEn = 'Drinks Break';
+            $tagHi = 'ड्रिंक्स ब्रेक 🥤';
+        }
+        // Pattern 4: General analysis / observation note
+        else {
+            $para = $this->paraphraseEnglish($rawTrimmed);
+            $aiEng = "Match Desk Analysis: " . $para;
+            $hi = $this->translateToHindi($para ?: $rawTrimmed);
+            $aiHin = "मैच विश्लेषण: " . $hi;
+            $tagEn = 'Tactical Note';
+            $tagHi = 'मैच अपडेट 📋';
+        }
+
+        $item['desc'] = $aiEng;
+        $item['ai_hindi'] = $aiHin;
+        $item['title'] = 'Match Note';
         $item['title_hi'] = 'मैच नोट (Match Note)';
-        $item['tag_hi'] = 'मैच अपडेट 📋';
+        $item['tag'] = $tagEn;
+        $item['tag_hi'] = $tagHi;
         $item['is_ai'] = true;
         $item['ai_flair'] = 'Live Match Desk';
 
         return $item;
+    }
+
+    /**
+     * Paraphrase English text to ensure original, non-verbatim wording.
+     */
+    public function paraphraseEnglish(string $text): string
+    {
+        $text = trim(strip_tags($text));
+        if (empty($text) || strlen($text) < 15) {
+            return $text;
+        }
+
+        $cacheKey = 'para_en_' . md5($text);
+        try {
+            return Cache::remember($cacheKey, 86400 * 7, function () use ($text) {
+                try {
+                    // English -> German -> English back-translation produces clean, idiomatic rephrasing
+                    $urlDe = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=de&dt=t&q=' . urlencode($text);
+                    $resDe = Http::timeout(3)
+                        ->withHeaders(['User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'])
+                        ->get($urlDe);
+
+                    if ($resDe->successful()) {
+                        $arrDe = $resDe->json();
+                        $deText = '';
+                        if (is_array($arrDe) && isset($arrDe[0]) && is_array($arrDe[0])) {
+                            foreach ($arrDe[0] as $p) {
+                                $deText .= $p[0] ?? '';
+                            }
+                        }
+
+                        if (!empty(trim($deText))) {
+                            $urlEn = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=de&tl=en&dt=t&q=' . urlencode($deText);
+                            $resEn = Http::timeout(3)
+                                ->withHeaders(['User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'])
+                                ->get($urlEn);
+
+                            if ($resEn->successful()) {
+                                $arrEn = $resEn->json();
+                                $enText = '';
+                                if (is_array($arrEn) && isset($arrEn[0]) && is_array($arrEn[0])) {
+                                    foreach ($arrEn[0] as $p) {
+                                        $enText .= $p[0] ?? '';
+                                    }
+                                }
+                                if (!empty(trim($enText))) {
+                                    return trim($enText);
+                                }
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Fall back
+                }
+
+                return $text;
+            });
+        } catch (\Throwable $e) {
+            return $text;
+        }
     }
 
     /**
