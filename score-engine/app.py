@@ -1405,6 +1405,10 @@ class ScoreService:
                                 "time": "Wrap-up"
                             })
                         else:
+                            # Skip raw Cricbuzz internal formatting tokens (e.g. $2b, $B0$, $D$, etc.)
+                            if not clean_text or len(clean_text) < 4 or clean_text.startswith("$") or re.match(r"^\$[a-zA-Z0-9_]+", clean_text):
+                                continue
+
                             formatted.append({
                                 "id": f"note-{comm_id}",
                                 "type": "note",

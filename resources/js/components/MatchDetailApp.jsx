@@ -629,9 +629,19 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
     // 2. Real Cricbuzz Live Commentary + Fan commentary combined & sorted into overs
     const allCommentaryList = useMemo(() => {
-        const list = [...(realCommentary || [])];
+        // Clean out raw Cricbuzz tokens like $2b, $B0$, or corrupted short notes
+        const cleanedReal = (realCommentary || []).filter(item => {
+            if (!item) return false;
+            const desc = String(item.desc || item.rawText || '').trim();
+            if (desc === '$2b' || desc.startsWith('$') || (item.type === 'note' && desc.length < 4)) {
+                return false;
+            }
+            return true;
+        });
 
-        // Insert approved fan comments into the stream so each goes inside its proper over
+        const list = [...cleanedReal];
+
+        // Insert approved fan/admin comments into the stream
         fanCommentaryList.forEach(fanItem => {
             list.push(fanItem);
         });
@@ -815,12 +825,16 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             over: extractItemOverNumber(item)
         }));
 
-        // Pass 2: fill null overs (such as notes/quotes) from the nearest delivery in the stream
+        // Pass 2: fill null overs (such as tactical notes) from the nearest delivery in the stream
         for (let i = 0; i < mapped.length; i++) {
+            // NEVER assign a match-wrap or post-match final summary to a single over!
+            if (mapped[i].item.type === 'match_wrap' || mapped[i].item.over === 'FINAL') {
+                continue;
+            }
             if (mapped[i].over === null) {
                 // Look ahead in descending list
                 for (let j = i + 1; j < mapped.length; j++) {
-                    if (mapped[j].over !== null) {
+                    if (mapped[j].over !== null && mapped[j].item.type !== 'match_wrap') {
                         mapped[i].over = mapped[j].over;
                         break;
                     }
@@ -828,7 +842,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                 // If still null, look behind
                 if (mapped[i].over === null) {
                     for (let j = i - 1; j >= 0; j--) {
-                        if (mapped[j].over !== null) {
+                        if (mapped[j].over !== null && mapped[j].item.type !== 'match_wrap') {
                             mapped[i].over = mapped[j].over;
                             break;
                         }
@@ -863,10 +877,8 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             const grp = groupsMap.get(groupKey);
             if (item.type === 'fan_commentary' || item.type === 'fan_update') {
                 grp.hasAdminCommentary = true;
-                grp.items.unshift(item);
-            } else {
-                grp.items.push(item);
             }
+            grp.items.push(item);
 
             if (item.type === 'over-separator') {
                 if (item.overRuns !== undefined) grp.runs = item.overRuns;
@@ -892,22 +904,29 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             if (item.type === 'over-separator') {
                 return 9999999999;
             }
+            const isFan = item.type === 'fan_commentary' || item.type === 'fan_update';
             if (typeof item.ballMetric === 'number' && !isNaN(item.ballMetric)) {
-                return item.ballMetric;
+                return isFan ? (item.ballMetric - 0.01) : item.ballMetric;
             }
             if (typeof item.ball_metric === 'number' && !isNaN(item.ball_metric)) {
-                return item.ball_metric;
+                return isFan ? (item.ball_metric - 0.01) : item.ball_metric;
             }
             if (typeof item.over === 'number' && !isNaN(item.over)) {
-                return item.over;
+                return isFan ? (item.over - 0.01) : item.over;
             }
             if (typeof item.over === 'string') {
                 const m = item.over.match(/(\d+\.\d+)/);
-                if (m) return parseFloat(m[1]);
+                if (m) {
+                    const val = parseFloat(m[1]);
+                    return isFan ? (val - 0.01) : val;
+                }
             }
             if (typeof item.title === 'string') {
                 const m = item.title.match(/(\d+\.\d+)/);
-                if (m) return parseFloat(m[1]);
+                if (m) {
+                    const val = parseFloat(m[1]);
+                    return isFan ? (val - 0.01) : val;
+                }
             }
             if (typeof item.timestamp === 'number') {
                 return item.timestamp / 10000000000;
@@ -917,11 +936,14 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
         // Sort items inside each numeric over in reverse chronological order (latest ball on top: 6, 5, 4, 3, 2, 1)
         allGroups.forEach(grp => {
-            if (grp.isNumeric && grp.items.length > 1) {
+            if (grp.items && grp.items.length > 1) {
                 grp.items.sort((a, b) => {
                     const scoreA = getItemSortScore(a);
                     const scoreB = getItemSortScore(b);
-                    return scoreB - scoreA; // Latest ball on top!
+                    if (scoreB !== scoreA) {
+                        return scoreB - scoreA; // Latest ball on top!
+                    }
+                    return (b.timestamp || 0) - (a.timestamp || 0);
                 });
             }
         });
@@ -1006,33 +1028,34 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         if (item.type === 'fan_commentary' || item.type === 'fan_update') {
             return (
                 <React.Fragment key={item.id || idx}>
-                    <div className="p-3.5 sm:p-4 rounded-2xl transition shadow-sm border bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border-amber-500/30">
+                    <div className="py-3 px-4 rounded-xl bg-amber-500/[0.08] border-l-4 border-amber-400 border-y border-r border-amber-500/20 my-1 transition hover:bg-amber-500/[0.12] shadow-xs">
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                                    <span className="font-black text-amber-400 text-xs sm:text-sm">
+                                <p className="text-xs sm:text-sm text-slate-100 leading-relaxed font-sans">
+                                    <span className="font-extrabold text-amber-400 mr-1.5">
                                         {item.author || item.title}:
                                     </span>
-                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+                                    <span>{cardDesc}</span>
+                                </p>
+                                <div className="flex items-center gap-2 mt-1.5 text-[10px] text-slate-400">
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
                                         {item.tag || 'Live Comm 🎙️'}
                                     </span>
-                                    <span className="text-[10px] text-slate-500 ml-auto">{item.time}</span>
+                                    <span>•</span>
+                                    <span className="font-mono">{item.time}</span>
                                 </div>
-                                <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans">
-                                    {cardDesc}
-                                </p>
                             </div>
 
                             {/* Admin Moderation Actions */}
                             {isAdmin && (
-                                <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
                                     <button
                                         type="button"
                                         onClick={() => handleDeletePost(item.postId)}
-                                        className="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-white font-black text-xs shadow transition flex items-center gap-1"
+                                        className="px-2 py-0.5 rounded-md bg-rose-600/80 hover:bg-rose-500 text-white font-bold text-[10px] shadow transition flex items-center gap-1"
                                         title="Delete Commentary"
                                     >
-                                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                                        <Trash2 className="w-3 h-3" /> Delete
                                     </button>
                                 </div>
                             )}
@@ -1973,64 +1996,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                         </div>
                     )}
 
-                    {/* Featured Admin Commentary & Live Blog Feed */}
-                    {fanCommentaryList && fanCommentaryList.length > 0 && (
-                        <div className="bg-gradient-to-br from-[#162038] via-[#11192e] to-[#0c1322] border-2 border-amber-500/40 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
-                            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
-                                <div className="flex items-center gap-2">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
-                                    <Mic className="w-4 h-4 text-amber-400" />
-                                    <h4 className="font-black text-sm sm:text-base text-white">
-                                        Live Match Blog & Commentator Updates ({fanCommentaryList.length})
-                                    </h4>
-                                </div>
-                                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-500/30 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Live Stream
-                                </span>
-                            </div>
 
-                            <div className="space-y-3">
-                                {fanCommentaryList.slice(0, 5).map((item, idx) => (
-                                    <div
-                                        key={item.id || idx}
-                                        className="p-4 rounded-2xl bg-slate-950/80 border border-amber-500/30 hover:border-amber-400/50 shadow-md space-y-2 transition"
-                                    >
-                                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-black text-[10px] uppercase">
-                                                    {item.over ? `Over ${item.over}` : 'Live Note'}
-                                                </span>
-                                                <span className="font-black text-amber-400 text-xs sm:text-sm">
-                                                    {item.author}:
-                                                </span>
-                                                <span className="px-2 py-0.5 rounded-full bg-white/5 text-amber-200 text-[10px] font-bold border border-white/10">
-                                                    {item.tag || 'Live Comm 🎙️'}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" /> {item.time}
-                                                </span>
-                                                {isAdmin && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeletePost(item.postId)}
-                                                        className="px-2 py-0.5 rounded-md bg-rose-600/80 hover:bg-rose-500 text-white font-bold text-[10px] transition flex items-center gap-1"
-                                                        title="Delete commentary"
-                                                    >
-                                                        <Trash2 className="w-3 h-3" /> Delete
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <p className="text-xs sm:text-sm text-slate-100 leading-relaxed font-sans font-medium pl-1">
-                                            {item.desc || item.rawText}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
                     {/* Commentary List Container */}
                     <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6">

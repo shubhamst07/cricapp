@@ -837,6 +837,9 @@ class CricketDataService
                                 'time' => 'Wrap-up',
                             ];
                         } else {
+                            if (strlen($cleanText) < 4 || str_starts_with($cleanText, '$') || preg_match('/^\$[a-zA-Z0-9_]+/', $cleanText)) {
+                                continue;
+                            }
                             $formatted[] = [
                                 'id' => "note-{$commId}",
                                 'type' => 'note',
