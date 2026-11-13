@@ -42,27 +42,20 @@ class MatchPostController extends Controller
     {
         $isAdmin = $this->checkIsAdmin($request);
 
-        $query = MatchPost::where('match_id', $matchId);
+        // Auto-approve any older pending posts so everything is direct live
+        try {
+            MatchPost::where('is_approved', false)->update(['is_approved' => true]);
+        } catch (\Throwable $e) {}
 
-        // For public timeline: commentary posts MUST be approved
-        // Admin sees all posts (including pending ones for approval review)
-        if (!$isAdmin) {
-            $query->where(function ($q) {
-                $q->where('post_type', '!=', 'commentary')
-                  ->orWhere('is_approved', true);
-            });
-        }
-
-        $posts = $query->latest()->take(50)->get();
+        $posts = MatchPost::where('match_id', $matchId)
+            ->latest()
+            ->take(60)
+            ->get();
 
         // If no posts exist yet, auto-seed customized posts for THIS specific match
-        if ($posts->isEmpty() && !$isAdmin) {
+        if ($posts->isEmpty()) {
             $this->seedStarterPosts($matchId, $cricket);
             $posts = MatchPost::where('match_id', $matchId)
-                ->where(function ($q) {
-                    $q->where('post_type', '!=', 'commentary')
-                      ->orWhere('is_approved', true);
-                })
                 ->latest()
                 ->get();
         }
@@ -182,13 +175,18 @@ class MatchPostController extends Controller
         $colors = ['indigo', 'emerald', 'rose', 'amber', 'purple', 'sky', 'cyan'];
         $avatarColor = $colors[array_rand($colors)];
 
-        // Admin Approval Check:
-        // Admin posts are approved immediately; regular fan commentary requires admin approval!
+        // Admin Check for Live Commentary:
+        // Live match commentary broadcasting is reserved exclusively for the Admin.
+        // All commentary posts published by the Admin are 100% direct live (no approval queue).
         $isAdmin = $this->checkIsAdmin($request);
-        $isApproved = $isAdmin;
-        if ($postType !== 'commentary') {
-            $isApproved = true; // Regular fan buzz memes are public
+        if ($postType === 'commentary' && !$isAdmin) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Live commentary posting is reserved for match administrators. Please unlock Admin mode with PIN.'
+            ], 403);
         }
+
+        $isApproved = true; // All authorized admin posts publish live directly without waiting for approval
 
         $overMetric = $validated['over_metric'] ?? $request->input('over_metric');
         $ballMetric = isset($validated['ball_metric']) ? (float) $validated['ball_metric'] : (is_numeric($request->input('ball_metric')) ? (float) $request->input('ball_metric') : null);
@@ -209,9 +207,7 @@ class MatchPostController extends Controller
             'ball_metric' => $ballMetric,
         ]);
 
-        $message = $isApproved
-            ? 'Commentary posted live! ⚡'
-            : 'Commentary submit ho gayi hai! Pehle Admin review karega, approve hote hi match ke over mein live show hogi. ⏳';
+        $message = 'Live commentary published directly to over! ⚡';
 
         return response()->json([
             'status' => 'success',

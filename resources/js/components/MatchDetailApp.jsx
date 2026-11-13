@@ -135,30 +135,10 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             localStorage.setItem('cric_admin_key', pin);
             localStorage.setItem('cric_is_admin', 'true');
             setIsAdmin(true);
-            alert('Admin Mode Unlocked! You can now review, approve or reject comments directly.');
+            alert('Admin Mode Unlocked! Ab aap direct live match commentary broadcast kar sakte hain.');
             fetchPosts();
         } else if (pin) {
             alert('Incorrect Admin PIN.');
-        }
-    };
-
-    const handleApprovePost = async (postId) => {
-        try {
-            const res = await fetch(`/api/posts/${postId}/approve`, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                    'X-Admin-Key': localStorage.getItem('cric_admin_key') || 'cricadmin2026'
-                }
-            });
-            if (res.ok) {
-                setPosts(prev => prev.map(p => p.id === postId ? { ...p, is_approved: true } : p));
-                setCommentarySuccessMsg('Commentary approved and published to over! ✅');
-                setTimeout(() => setCommentarySuccessMsg(null), 3000);
-            }
-        } catch (err) {
-            console.error('Failed to approve post:', err);
         }
     };
 
@@ -637,17 +617,12 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     title: author,
                     desc: rawContent,
                     rawText: rawContent,
-                    tag: cp.team_tag || 'Fan View 💬',
+                    tag: cp.team_tag || 'Live Comm 🎙️',
                     time: cp.created_at ? new Date(cp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live',
                     timestamp: new Date(cp.created_at || Date.now()).getTime(),
                 };
             });
     }, [posts, isAdmin]);
-
-    // Pending posts awaiting admin approval
-    const pendingCommentaryPosts = useMemo(() => {
-        return (posts || []).filter(p => !p.is_approved && (p.post_type === 'commentary' || (p.content && p.content.startsWith('[Commentary]'))));
-    }, [posts]);
 
     // 2. Real Cricbuzz Live Commentary + Fan commentary combined & sorted into overs
     const allCommentaryList = useMemo(() => {
@@ -1018,11 +993,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         if (item.type === 'fan_commentary' || item.type === 'fan_update') {
             return (
                 <React.Fragment key={item.id || idx}>
-                    <div className={`p-3.5 sm:p-4 rounded-2xl transition shadow-sm border ${
-                        item.isApproved
-                            ? 'bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border-amber-500/30'
-                            : 'bg-gradient-to-r from-yellow-500/10 via-slate-900 to-slate-900 border-yellow-500/50 border-dashed'
-                    }`}>
+                    <div className="p-3.5 sm:p-4 rounded-2xl transition shadow-sm border bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border-amber-500/30">
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -1030,13 +1001,8 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                         {item.author || item.title}:
                                     </span>
                                     <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
-                                        {item.tag || 'Fan View 💬'}
+                                        {item.tag || 'Live Comm 🎙️'}
                                     </span>
-                                    {!item.isApproved && (
-                                        <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 text-[10px] font-black border border-yellow-500/40 animate-pulse flex items-center gap-1">
-                                            <Clock className="w-3 h-3" /> Pending Admin Approval ⏳
-                                        </span>
-                                    )}
                                     <span className="text-[10px] text-slate-500 ml-auto">{item.time}</span>
                                 </div>
                                 <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans">
@@ -1047,23 +1013,13 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                             {/* Admin Moderation Actions */}
                             {isAdmin && (
                                 <div className="flex items-center gap-1.5 shrink-0">
-                                    {!item.isApproved && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleApprovePost(item.postId)}
-                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow transition flex items-center gap-1"
-                                            title="Approve for live match"
-                                        >
-                                            <Check className="w-3.5 h-3.5" /> Approve
-                                        </button>
-                                    )}
                                     <button
                                         type="button"
                                         onClick={() => handleDeletePost(item.postId)}
                                         className="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-white font-black text-xs shadow transition flex items-center gap-1"
-                                        title="Reject / Delete"
+                                        title="Delete Commentary"
                                     >
-                                        <Trash2 className="w-3.5 h-3.5" /> Reject
+                                        <Trash2 className="w-3.5 h-3.5" /> Delete
                                     </button>
                                 </div>
                             )}
@@ -1834,157 +1790,49 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                         </div>
                     </div>
 
-                    {/* Dedicated Admin Moderation Queue Panel */}
-                    {isAdmin && (
-                        <div className={`rounded-3xl p-5 sm:p-6 shadow-2xl transition border ${
-                            pendingCommentaryPosts.length > 0
-                                ? 'bg-gradient-to-br from-[#1a233a] via-[#131b2e] to-[#1c2438] border-amber-500/50'
-                                : 'bg-[#131b2e]/80 border-emerald-500/20'
-                        }`}>
-                            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
-                                <div className="flex items-center gap-2.5">
-                                    <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 ${
-                                        pendingCommentaryPosts.length > 0
-                                            ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
-                                            : 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
-                                    }`}>
-                                        🛡️
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-black text-white flex items-center gap-2">
-                                            <span>Admin Approval Queue</span>
-                                            {pendingCommentaryPosts.length > 0 ? (
-                                                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black animate-pulse">
-                                                    {pendingCommentaryPosts.length} Pending Approval
-                                                </span>
-                                            ) : (
-                                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                                                    Queue Clear ✓
-                                                </span>
-                                            )}
-                                        </h3>
-                                        <p className="text-[11px] text-slate-400">
-                                            {pendingCommentaryPosts.length > 0
-                                                ? 'Fans ke dwara bheje gaye comments tabhi live match me dikhenge jab aap yahan se Approve karenge.'
-                                                : 'Sabhi fan comments review ho chuke hain. Koi pending post nahi hai.'}
-                                        </p>
-                                    </div>
+                    {/* Live Commentary Broadcast Box */}
+                    {isAdmin ? (
+                        <div className="bg-[#131b2e] border border-amber-500/30 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+                                <div className="flex items-center gap-2">
+                                    <Mic className="w-4 h-4 text-amber-400" />
+                                    <h3 className="font-black text-sm text-white">Broadcast Live Commentary / Match Note</h3>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={fetchPosts}
-                                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition flex items-center gap-1.5"
-                                >
-                                    <RefreshCw className="w-3 h-3" /> Refresh Queue
-                                </button>
-                            </div>
-
-                            {/* Pending Items Cards */}
-                            {pendingCommentaryPosts.length > 0 ? (
-                                <div className="space-y-3 pt-3">
-                                    {pendingCommentaryPosts.map((post) => {
-                                        const cleanText = (post.content || '').replace(/^\[Commentary\]\s*/, '');
-                                        const overDisplay = post.over_metric ? `Over ${post.over_metric}` : 'Live Over';
-                                        return (
-                                            <div key={post.id} className="p-4 rounded-2xl bg-slate-950/80 border border-amber-500/25 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-amber-500/50 transition">
-                                                <div className="space-y-1.5 flex-1 min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="font-bold text-amber-300 text-xs">
-                                                            {post.user_name || 'Fan'}:
-                                                        </span>
-                                                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-mono font-bold">
-                                                            📍 Target: {overDisplay}
-                                                        </span>
-                                                        <span className="px-2 py-0.5 rounded-md bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 text-[10px] font-bold">
-                                                            ⏳ Awaiting Your Approval
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-500">
-                                                            {post.created_at ? new Date(post.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans bg-black/40 p-3 rounded-xl border border-white/5">
-                                                        "{cleanText}"
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleApprovePost(post.id)}
-                                                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 transition transform active:scale-95 flex items-center gap-1.5"
-                                                    >
-                                                        <Check className="w-3.5 h-3.5" /> Approve & Publish
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeletePost(post.id)}
-                                                        className="px-3 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-500 text-white font-black text-xs shadow transition transform active:scale-95 flex items-center gap-1.5"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" /> Reject
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : null}
-                        </div>
-                    )}
-
-                    {/* Live Blogger & Fan Commentary Input Box */}
-                    <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
-                            <div className="flex items-center gap-2">
-                                <Mic className="w-4 h-4 text-amber-400" />
-                                <h3 className="font-black text-sm text-white">Post Live Commentary / Match Note</h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {isAdmin ? (
+                                <div className="flex items-center gap-2">
                                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-black flex items-center gap-1">
-                                        <Shield className="w-3 h-3" /> Admin Mode (Direct Publishing)
+                                        <Shield className="w-3 h-3" /> Admin Live Broadcasting (Direct Over Publishing ⚡)
                                     </span>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={promptAdminLogin}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition"
-                                    >
-                                        <Shield className="w-3 h-3" /> Admin Unlock (PIN)
-                                    </button>
-                                )}
-                                <span className="text-[11px] text-slate-400">
-                                    {isAdmin ? 'Direct to Over' : 'Admin review ke baad live hoga ⏳'}
-                                </span>
-                            </div>
-                        </div>
-
-                        <form onSubmit={handlePostCommentary} className="space-y-3">
-                            {/* Tag Selection Chips */}
-                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold">
-                                {['4 Runs 🏏', '6 Six 💥', 'Wicket ☝️', 'Milestone 🌟', 'Tactical Note 📋'].map((tag) => (
-                                    <button
-                                        key={tag}
-                                        type="button"
-                                        onClick={() => setNewCommentaryTag(tag)}
-                                        className={`px-3 py-1 rounded-lg shrink-0 transition text-xs ${
-                                            newCommentaryTag === tag
-                                                ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
-                                                : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/5'
-                                        }`}
-                                    >
-                                        {tag}
-                                    </button>
-                                ))}
+                                </div>
                             </div>
 
-                            <div className="relative">
-                                <textarea
-                                    value={newCommentaryText}
-                                    onChange={(e) => setNewCommentaryText(e.target.value)}
-                                    placeholder="Add a live commentary moment (e.g. Sensational stroke over cover! India U19 shifting gears now...)"
-                                    rows={2}
-                                    className="w-full bg-slate-950/80 border border-white/10 rounded-2xl px-4 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition resize-none"
-                                />
-                            </div>
+                            <form onSubmit={handlePostCommentary} className="space-y-3">
+                                {/* Tag Selection Chips */}
+                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold">
+                                    {['4 Runs 🏏', '6 Six 💥', 'Wicket ☝️', 'Milestone 🌟', 'Tactical Note 📋'].map((tag) => (
+                                        <button
+                                            key={tag}
+                                            type="button"
+                                            onClick={() => setNewCommentaryTag(tag)}
+                                            className={`px-3 py-1 rounded-lg shrink-0 transition text-xs ${
+                                                newCommentaryTag === tag
+                                                    ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                                                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/5'
+                                            }`}
+                                        >
+                                            {tag}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="relative">
+                                    <textarea
+                                        value={newCommentaryText}
+                                        onChange={(e) => setNewCommentaryText(e.target.value)}
+                                        placeholder="Add a live commentary moment (e.g. Sensational stroke over cover! India shifting gears now...)"
+                                        rows={2}
+                                        className="w-full bg-slate-950/80 border border-white/10 rounded-2xl px-4 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition resize-none"
+                                    />
+                                </div>
 
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
@@ -1992,7 +1840,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                             type="text"
                                             value={newPostName}
                                             onChange={(e) => setNewPostName(e.target.value)}
-                                            placeholder="Your Name (Optional)"
+                                            placeholder="Commentator Name (Optional)"
                                             className="bg-slate-950/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 w-40 sm:w-48"
                                         />
                                         {commentarySuccessMsg && (
@@ -2009,7 +1857,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     <button
                                         type="submit"
                                         disabled={isPostingCommentary || !newCommentaryText.trim() || postCooldownSeconds > 0}
-                                        className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-slate-950 font-black text-xs transition shadow-lg shadow-amber-500/30 flex items-center gap-1.5"
+                                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-slate-950 font-black text-xs transition shadow-lg shadow-amber-500/30 flex items-center gap-1.5"
                                     >
                                         {isPostingCommentary ? (
                                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -2019,12 +1867,35 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                         <span>
                                             {postCooldownSeconds > 0
                                                 ? `Wait ${postCooldownSeconds}s ⏳`
-                                                : 'Post Commentary ⚡'}
+                                                : 'Publish Live Commentary ⚡'}
                                         </span>
                                     </button>
                                 </div>
-                        </form>
-                    </div>
+                            </form>
+                        </div>
+                    ) : (
+                        <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl space-y-3.5 text-center">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto text-xl">
+                                🎙️
+                            </div>
+                            <div className="space-y-1 max-w-md mx-auto">
+                                <h3 className="text-base font-black text-white">Live Commentary Broadcast</h3>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Ball-by-ball live match commentary aur notes publish karna verified Match Admin ke liye reserved hai.
+                                </p>
+                            </div>
+                            <div className="pt-2 flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={promptAdminLogin}
+                                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 hover:from-amber-500 hover:to-orange-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-600/30 transition transform active:scale-95 flex items-center gap-2"
+                                >
+                                    <Shield className="w-4 h-4" />
+                                    <span>Enter Admin PIN to Broadcast Commentary</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Live Match Situation & Crease Card */}
                     {miniscore && (
