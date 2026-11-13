@@ -644,6 +644,11 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             });
     }, [posts, isAdmin]);
 
+    // Pending posts awaiting admin approval
+    const pendingCommentaryPosts = useMemo(() => {
+        return (posts || []).filter(p => !p.is_approved && (p.post_type === 'commentary' || (p.content && p.content.startsWith('[Commentary]'))));
+    }, [posts]);
+
     // 2. Real Cricbuzz Live Commentary + Fan commentary combined & sorted into overs
     const allCommentaryList = useMemo(() => {
         const list = [...(realCommentary || [])];
@@ -1829,6 +1834,102 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                         </div>
                     </div>
 
+                    {/* Dedicated Admin Moderation Queue Panel */}
+                    {isAdmin && (
+                        <div className={`rounded-3xl p-5 sm:p-6 shadow-2xl transition border ${
+                            pendingCommentaryPosts.length > 0
+                                ? 'bg-gradient-to-br from-[#1a233a] via-[#131b2e] to-[#1c2438] border-amber-500/50'
+                                : 'bg-[#131b2e]/80 border-emerald-500/20'
+                        }`}>
+                            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                                <div className="flex items-center gap-2.5">
+                                    <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 ${
+                                        pendingCommentaryPosts.length > 0
+                                            ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
+                                            : 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
+                                    }`}>
+                                        🛡️
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-black text-white flex items-center gap-2">
+                                            <span>Admin Approval Queue</span>
+                                            {pendingCommentaryPosts.length > 0 ? (
+                                                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black animate-pulse">
+                                                    {pendingCommentaryPosts.length} Pending Approval
+                                                </span>
+                                            ) : (
+                                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                                                    Queue Clear ✓
+                                                </span>
+                                            )}
+                                        </h3>
+                                        <p className="text-[11px] text-slate-400">
+                                            {pendingCommentaryPosts.length > 0
+                                                ? 'Fans ke dwara bheje gaye comments tabhi live match me dikhenge jab aap yahan se Approve karenge.'
+                                                : 'Sabhi fan comments review ho chuke hain. Koi pending post nahi hai.'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={fetchPosts}
+                                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition flex items-center gap-1.5"
+                                >
+                                    <RefreshCw className="w-3 h-3" /> Refresh Queue
+                                </button>
+                            </div>
+
+                            {/* Pending Items Cards */}
+                            {pendingCommentaryPosts.length > 0 ? (
+                                <div className="space-y-3 pt-3">
+                                    {pendingCommentaryPosts.map((post) => {
+                                        const cleanText = (post.content || '').replace(/^\[Commentary\]\s*/, '');
+                                        const overDisplay = post.over_metric ? `Over ${post.over_metric}` : 'Live Over';
+                                        return (
+                                            <div key={post.id} className="p-4 rounded-2xl bg-slate-950/80 border border-amber-500/25 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-amber-500/50 transition">
+                                                <div className="space-y-1.5 flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="font-bold text-amber-300 text-xs">
+                                                            {post.user_name || 'Fan'}:
+                                                        </span>
+                                                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-mono font-bold">
+                                                            📍 Target: {overDisplay}
+                                                        </span>
+                                                        <span className="px-2 py-0.5 rounded-md bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 text-[10px] font-bold">
+                                                            ⏳ Awaiting Your Approval
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-500">
+                                                            {post.created_at ? new Date(post.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans bg-black/40 p-3 rounded-xl border border-white/5">
+                                                        "{cleanText}"
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleApprovePost(post.id)}
+                                                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 transition transform active:scale-95 flex items-center gap-1.5"
+                                                    >
+                                                        <Check className="w-3.5 h-3.5" /> Approve & Publish
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeletePost(post.id)}
+                                                        className="px-3 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-500 text-white font-black text-xs shadow transition transform active:scale-95 flex items-center gap-1.5"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" /> Reject
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : null}
+                        </div>
+                    )}
+
                     {/* Live Blogger & Fan Commentary Input Box */}
                     <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
                         <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
@@ -1845,9 +1946,9 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     <button
                                         type="button"
                                         onClick={promptAdminLogin}
-                                        className="text-[10px] text-slate-500 hover:text-amber-400 transition underline underline-offset-2"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition"
                                     >
-                                        Admin?
+                                        <Shield className="w-3 h-3" /> Admin Unlock (PIN)
                                     </button>
                                 )}
                                 <span className="text-[11px] text-slate-400">
