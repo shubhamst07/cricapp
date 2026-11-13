@@ -1104,16 +1104,16 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         if (item.type === 'interview') {
             return (
                 <React.Fragment key={item.id || idx}>
-                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/40 border border-amber-500/30 shadow-md flex items-start gap-3 sm:gap-4">
-                        <div className="shrink-0 text-center w-12 sm:w-14">
-                            <span className="px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-mono font-black text-xs text-amber-300 block">
+                    <div className="p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/40 border border-amber-500/30 shadow-md flex items-start gap-2.5 sm:gap-4">
+                        <div className="shrink-0 text-center w-11 sm:w-14">
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-mono font-black text-[11px] sm:text-xs text-amber-300 block">
                                 {cardOver}
                             </span>
                             <span className="text-[9px] text-amber-400/80 mt-1 block truncate font-semibold">
                                 {cardTime}
                             </span>
                         </div>
-                        <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300 text-base shadow-sm">
+                        <div className="shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300 text-sm sm:text-base shadow-sm">
                             🎙️
                         </div>
                         <div className="flex-1 min-w-0">
@@ -1126,7 +1126,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     {cardTag || (isHi ? 'खिलाड़ी का बयान 🎙️' : 'Player Quote 🎙️')}
                                 </span>
                             </div>
-                            <p className="text-xs sm:text-sm text-slate-200 mt-1.5 leading-relaxed font-sans italic border-l-2 border-amber-500/40 pl-3">
+                            <p className="text-xs sm:text-sm text-slate-200 mt-1 leading-relaxed font-sans italic border-l-2 border-amber-500/40 pl-2.5 sm:pl-3">
                                 “{cardDesc}”
                             </p>
                         </div>
@@ -1142,16 +1142,16 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         if (item.type === 'match_wrap') {
             return (
                 <React.Fragment key={item.id || idx}>
-                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-md flex items-start gap-3 sm:gap-4">
-                        <div className="shrink-0 text-center w-12 sm:w-14">
-                            <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-mono font-black text-xs text-emerald-300 block">
+                    <div className="p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-md flex items-start gap-2.5 sm:gap-4">
+                        <div className="shrink-0 text-center w-11 sm:w-14">
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-mono font-black text-[11px] sm:text-xs text-emerald-300 block">
                                 {cardOver}
                             </span>
                             <span className="text-[9px] text-emerald-400/80 mt-1 block truncate font-semibold">
                                 {cardTime}
                             </span>
                         </div>
-                        <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-base shadow-sm">
+                        <div className="shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-sm sm:text-base shadow-sm">
                             🏆
                         </div>
                         <div className="flex-1 min-w-0">
@@ -1179,20 +1179,20 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         // Regular Deliveries, Over Separators, and Notes
         return (
             <React.Fragment key={item.id || idx}>
-                <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-3 sm:gap-4">
+                <div className="p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition flex items-start gap-2.5 sm:gap-4">
                     {/* Over Badge */}
-                    <div className="shrink-0 text-center w-12 sm:w-14">
-                        <span className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-xs sm:text-sm text-slate-200 block">
+                    <div className="shrink-0 text-center w-11 sm:w-14">
+                        <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg bg-black/50 border border-white/10 font-mono font-bold text-[11px] sm:text-sm text-slate-200 block">
                             {cardOver}
                         </span>
-                        <span className="text-[9px] text-slate-500 mt-1 block truncate">
+                        <span className="text-[9px] text-slate-500 mt-0.5 sm:mt-1 block truncate">
                             {cardTime}
                         </span>
                     </div>
 
                     {/* Badge */}
                     <div
-                        className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
+                        className={`shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center font-mono font-black text-xs sm:text-sm shadow-md ${
                             item.badgeType === 'wicket' || item.badge === 'W'
                                 ? 'bg-rose-600 text-white shadow-rose-600/40 animate-pulse'
                                 : item.badgeType === 'six' || item.badge === '6'
@@ -1268,9 +1268,9 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
     })();
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
             {/* Top Navigation & Actions */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
                 <a
                     href={backUrl}
                     onClick={(e) => {
@@ -1279,39 +1279,39 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                             window.history.back();
                         }
                     }}
-                    className="inline-flex items-center text-sm font-bold text-indigo-400 hover:text-indigo-300 transition"
+                    className="inline-flex items-center text-xs sm:text-sm font-bold text-indigo-400 hover:text-indigo-300 transition"
                 >
-                    <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Live Scores
+                    <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5" /> Back to Live Scores
                 </a>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 ml-auto">
                     {lastRefreshMsg && (
-                        <span className="text-xs text-emerald-400 font-bold">{lastRefreshMsg}</span>
+                        <span className="text-[11px] sm:text-xs text-emerald-400 font-bold hidden xs:inline">{lastRefreshMsg}</span>
                     )}
                     <button
                         type="button"
                         onClick={handleRefresh}
                         disabled={isRefreshing}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-600/30 transition disabled:opacity-50 transform active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-[11px] sm:text-xs font-black shadow-lg shadow-indigo-600/30 transition disabled:opacity-50 transform active:scale-95 shrink-0"
                     >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                        {isRefreshing ? 'Refreshing...' : 'Refresh Score'}
+                        <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        <span>{isRefreshing ? 'Refreshing...' : 'Refresh Score'}</span>
                     </button>
                 </div>
             </div>
 
             {/* Match Header Hero Card */}
-            <div className="bg-[#131b2e] rounded-3xl shadow-2xl border border-white/10 p-6 md:p-8 space-y-4">
-                <div className="flex flex-wrap items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-white/5 border border-white/10 text-slate-300">
+            <div className="bg-[#131b2e] rounded-2xl sm:rounded-3xl shadow-2xl border border-white/10 p-4 sm:p-6 md:p-8 space-y-3 sm:space-y-4">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <span className="px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-black uppercase tracking-wider bg-white/5 border border-white/10 text-slate-300">
                         {match.matchType || 'Match'}
                     </span>
                     {match.season && (
-                        <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white/5 text-slate-400">
+                        <span className="px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-medium bg-white/5 text-slate-400">
                             Season {match.season}
                         </span>
                     )}
                     {effectiveStatus && (
-                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${
+                        <span className={`px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-black uppercase tracking-wider ${
                             effectiveStatus === 'live'
                                 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
                                 : (effectiveStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40')
@@ -1321,18 +1321,18 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     )}
                 </div>
 
-                <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-tight">
                     {match.name || match.title || 'Match Details'}
                 </h1>
 
-                <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[11px] sm:text-xs text-slate-400">
                     <span className="flex items-center">
-                        <MapPin className="w-4 h-4 mr-1 text-slate-500" />
+                        <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 text-slate-500" />
                         {match.venue || 'Venue TBA'}
                     </span>
                     {match.dateTimeGMT && (
                         <span className="flex items-center">
-                            <Calendar className="w-4 h-4 mr-1 text-slate-500" />
+                            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 text-slate-500" />
                             {match.dateTimeGMT} GMT
                         </span>
                     )}
@@ -1340,7 +1340,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                 {/* Status / Outcome Banner */}
                 {effectiveStatusText && (
-                    <div className={`p-3.5 rounded-2xl text-sm font-bold flex items-center gap-2 border ${
+                    <div className={`p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 border ${
                         effectiveStatus === 'live'
                             ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
                             : (effectiveStatus === 'completed' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' : 'bg-amber-500/15 border-amber-500/30 text-amber-300')
@@ -1460,60 +1460,60 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             <AdSlot type="leaderboard" slotId="match-detail-leaderboard" />
 
             {/* Cricbuzz Style Navigation Tabs */}
-            <div className="border-b border-white/10 bg-[#111827]/90 rounded-2xl px-6 pt-3 shadow-xl">
-                <nav className="flex space-x-8" aria-label="Tabs">
+            <div className="border-b border-white/10 bg-[#111827]/90 rounded-2xl px-2.5 sm:px-6 pt-1.5 sm:pt-3 shadow-xl overflow-x-auto scrollbar-none">
+                <nav className="flex items-center space-x-2 sm:space-x-8 min-w-max pb-0.5 sm:pb-0" aria-label="Tabs">
                     <button
                         type="button"
                         onClick={() => setActiveTab('scorecard')}
-                        className={`inline-flex items-center py-4 px-1 border-b-2 font-black text-sm transition ${
+                        className={`inline-flex items-center py-2.5 sm:py-4 px-2.5 sm:px-1 border-b-2 font-black text-xs sm:text-sm transition shrink-0 ${
                             activeTab === 'scorecard'
                                 ? 'border-indigo-500 text-indigo-400'
                                 : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
                         }`}
                     >
-                        <FileText className="w-4 h-4 mr-2" />
+                        <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                         Full Scorecard
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('commentary')}
-                        className={`inline-flex items-center py-4 px-1 border-b-2 font-black text-sm transition ${
+                        className={`inline-flex items-center py-2.5 sm:py-4 px-2.5 sm:px-1 border-b-2 font-black text-xs sm:text-sm transition shrink-0 ${
                             activeTab === 'commentary'
                                 ? 'border-amber-500 text-amber-400'
                                 : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
                         }`}
                     >
-                        <Radio className="w-4 h-4 mr-2 text-amber-400 animate-pulse" />
-                        🎙️ Ball-by-Ball Commentary
-                        <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-amber-400 animate-pulse" />
+                        Live Commentary
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                             {allCommentaryList.length}
                         </span>
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('live')}
-                        className={`inline-flex items-center py-4 px-1 border-b-2 font-black text-sm transition ${
+                        className={`inline-flex items-center py-2.5 sm:py-4 px-2.5 sm:px-1 border-b-2 font-black text-xs sm:text-sm transition shrink-0 ${
                             activeTab === 'live'
                                 ? 'border-indigo-500 text-indigo-400'
                                 : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
                         }`}
                     >
-                        <Activity className="w-4 h-4 mr-2" />
+                        <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                         Live Summary
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('buzz')}
-                        className={`inline-flex items-center py-4 px-1 border-b-2 font-black text-sm transition relative ${
+                        className={`inline-flex items-center py-2.5 sm:py-4 px-2.5 sm:px-1 border-b-2 font-black text-xs sm:text-sm transition relative shrink-0 ${
                             activeTab === 'buzz'
                                 ? 'border-rose-500 text-rose-400'
                                 : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
                         }`}
                     >
-                        <Flame className={`w-4 h-4 mr-1.5 ${activeTab === 'buzz' ? 'text-rose-500 fill-rose-500' : 'text-rose-400'}`} />
+                        <Flame className={`w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 ${activeTab === 'buzz' ? 'text-rose-500 fill-rose-500' : 'text-rose-400'}`} />
                         Fan Buzz & Reels
                         {posts.length > 0 && (
-                            <span className="ml-1.5 px-2 py-0.5 rounded-full text-[11px] font-black bg-rose-500 text-white">
+                            <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500 text-white">
                                 {posts.length}
                             </span>
                         )}
@@ -1521,13 +1521,13 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     <button
                         type="button"
                         onClick={() => setActiveTab('info')}
-                        className={`inline-flex items-center py-4 px-1 border-b-2 font-black text-sm transition ${
+                        className={`inline-flex items-center py-2.5 sm:py-4 px-2.5 sm:px-1 border-b-2 font-black text-xs sm:text-sm transition shrink-0 ${
                             activeTab === 'info'
                                 ? 'border-indigo-500 text-indigo-400'
                                 : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
                         }`}
                     >
-                        <Info className="w-4 h-4 mr-2" />
+                        <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                         Match Info
                     </button>
                 </nav>
@@ -1539,20 +1539,20 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     {/* Innings Selector Pills */}
                     {innings.length > 0 ? (
                         <div>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
                                 {innings.map((inn, idx) => (
                                     <button
                                         key={idx}
                                         type="button"
                                         onClick={() => setSelectedInningIdx(idx)}
-                                        className={`px-4 py-2.5 rounded-xl font-black text-xs transition flex items-center gap-2 border ${
+                                        className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-black text-xs transition flex items-center gap-2 border shrink-0 ${
                                             selectedInningIdx === idx
                                                 ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-transparent shadow-lg shadow-indigo-600/30'
                                                 : 'bg-[#131b2e] text-slate-300 hover:bg-white/10 hover:text-white border-white/10'
                                         }`}
                                     >
                                         <span>{inn.team || `Innings ${idx + 1}`}</span>
-                                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-black ${
+                                        <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-black ${
                                             selectedInningIdx === idx ? 'bg-black/30 text-white' : 'bg-white/10 text-slate-300'
                                         }`}>
                                             {inn.score} ({inn.overs} ov)
@@ -1563,33 +1563,33 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                             {/* Active Inning Detailed Tables */}
                             {activeInning && (
-                                <div className="space-y-6 mt-4">
+                                <div className="space-y-4 sm:space-y-6 mt-3 sm:mt-4">
                                     {/* Batting Table */}
                                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/70 flex justify-between items-center">
-                                            <h2 className="text-base font-bold text-gray-900">
+                                        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/70 flex flex-wrap justify-between items-center gap-2">
+                                            <h2 className="text-sm sm:text-base font-bold text-gray-900">
                                                 {activeInning.team} Batting
                                             </h2>
-                                            <span className="text-sm font-black text-gray-900 bg-indigo-50 text-indigo-900 px-3 py-1 rounded-lg">
+                                            <span className="text-xs sm:text-sm font-black text-indigo-900 bg-indigo-50 px-2.5 sm:px-3 py-1 rounded-lg">
                                                 {activeInning.score} ({activeInning.overs} Ov, RR: {activeInning.run_rate || 'N/A'})
                                             </span>
                                         </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                                <thead className="bg-gray-50 font-semibold text-gray-600 text-xs uppercase tracking-wider">
+                                        <div className="overflow-x-auto scrollbar-none">
+                                            <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                                                <thead className="bg-gray-50 font-semibold text-gray-600 text-[11px] sm:text-xs uppercase tracking-wider">
                                                     <tr>
-                                                        <th className="px-6 py-3.5 text-left">Batter</th>
-                                                        <th className="px-4 py-3.5 text-right">Runs</th>
-                                                        <th className="px-4 py-3.5 text-right">Balls</th>
-                                                        <th className="px-4 py-3.5 text-right">4s</th>
-                                                        <th className="px-4 py-3.5 text-right">6s</th>
-                                                        <th className="px-4 py-3.5 text-right">SR</th>
+                                                        <th className="px-3 sm:px-6 py-2.5 sm:py-3.5 text-left">Batter</th>
+                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">R</th>
+                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">B</th>
+                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">4s</th>
+                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">6s</th>
+                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">SR</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100 bg-white">
                                                     {activeInning.batting?.map((player, idx) => (
                                                         <tr key={idx} className="hover:bg-gray-50/80 transition">
-                                                            <td className="px-6 py-3.5">
+                                                            <td className="px-3 sm:px-6 py-2 sm:py-3.5">
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handlePlayerClick(player.id, player.name)}
@@ -1601,7 +1601,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                                         <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" title="On Crease"></span>
                                                                     )}
                                                                 </button>
-                                                                <div className={`text-xs mt-0.5 ${
+                                                                <div className={`text-[10px] sm:text-xs mt-0.5 ${
                                                                     player.out === 'batting' || player.out === 'not out'
                                                                         ? 'text-emerald-600 font-semibold'
                                                                         : 'text-gray-400'
@@ -1609,21 +1609,21 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                                     {player.out}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-3.5 text-right font-black text-gray-900 text-base">{player.runs ?? 0}</td>
-                                                            <td className="px-4 py-3.5 text-right text-gray-500 font-medium">{player.balls ?? 0}</td>
-                                                            <td className="px-4 py-3.5 text-right text-gray-500">{player.fours ?? 0}</td>
-                                                            <td className="px-4 py-3.5 text-right text-gray-500">{player.sixes ?? 0}</td>
-                                                            <td className="px-4 py-3.5 text-right text-gray-700 font-semibold">{player.strikeRate ?? 0}</td>
+                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right font-black text-gray-900 text-sm sm:text-base">{player.runs ?? 0}</td>
+                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 font-medium text-xs sm:text-sm">{player.balls ?? 0}</td>
+                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 text-xs sm:text-sm">{player.fours ?? 0}</td>
+                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 text-xs sm:text-sm">{player.sixes ?? 0}</td>
+                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-semibold text-xs sm:text-sm">{player.strikeRate ?? 0}</td>
                                                         </tr>
                                                     ))}
 
                                                     {/* Extras Row */}
                                                     {activeInning.extras && (
-                                                        <tr className="bg-gray-50/50 text-xs text-gray-600 font-medium">
-                                                            <td className="px-6 py-3 font-semibold text-gray-700">Extras</td>
-                                                            <td colSpan={5} className="px-4 py-3 text-right">
+                                                        <tr className="bg-gray-50/50 text-[11px] sm:text-xs text-gray-600 font-medium">
+                                                            <td className="px-3 sm:px-6 py-2.5 sm:py-3 font-semibold text-gray-700">Extras</td>
+                                                            <td colSpan={5} className="px-2 sm:px-4 py-2.5 sm:py-3 text-right">
                                                                 <span className="font-bold text-gray-900 mr-2">{activeInning.extras.total ?? 0}</span>
-                                                                <span className="text-gray-500">
+                                                                <span className="text-gray-500 text-[10px] sm:text-xs">
                                                                     (b {activeInning.extras.byes ?? 0}, lb {activeInning.extras.legByes ?? 0}, w {activeInning.extras.wides ?? 0}, nb {activeInning.extras.noBalls ?? 0}, p {activeInning.extras.penalty ?? 0})
                                                                 </span>
                                                             </td>
@@ -1631,11 +1631,11 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                     )}
 
                                                     {/* Total Row */}
-                                                    <tr className="bg-indigo-50/40 text-sm font-bold text-gray-900 border-t border-gray-200">
-                                                        <td className="px-6 py-3.5">Total</td>
-                                                        <td colSpan={5} className="px-4 py-3.5 text-right">
-                                                            <span className="text-base font-black text-indigo-900">{activeInning.score}</span>
-                                                            <span className="text-xs text-gray-500 ml-2 font-normal">({activeInning.overs} Overs, RR: {activeInning.run_rate || 'N/A'})</span>
+                                                    <tr className="bg-indigo-50/40 text-xs sm:text-sm font-bold text-gray-900 border-t border-gray-200">
+                                                        <td className="px-3 sm:px-6 py-2.5 sm:py-3.5">Total</td>
+                                                        <td colSpan={5} className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">
+                                                            <span className="text-sm sm:text-base font-black text-indigo-900">{activeInning.score}</span>
+                                                            <span className="text-[10px] sm:text-xs text-gray-500 ml-1.5 font-normal">({activeInning.overs} Overs, RR: {activeInning.run_rate || 'N/A'})</span>
                                                         </td>
                                                     </tr>
                                                 </tbody>
@@ -1644,7 +1644,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                                         {/* Did Not Bat */}
                                         {activeInning.did_not_bat && activeInning.did_not_bat.length > 0 && (
-                                            <div className="px-6 py-3.5 border-t border-gray-100 bg-gray-50/30 flex flex-wrap items-center gap-2 text-xs">
+                                            <div className="px-4 sm:px-6 py-3 border-t border-gray-100 bg-gray-50/30 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
                                                 <span className="font-bold text-gray-700">Yet to Bat:</span>
                                                 {activeInning.did_not_bat.map((p, i) => {
                                                     const pName = typeof p === 'string' ? p : (p.name || 'Player');
@@ -1654,7 +1654,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                             key={i}
                                                             type="button"
                                                             onClick={() => handlePlayerClick(pId, pName)}
-                                                            className="px-2.5 py-1 bg-white border border-gray-200 hover:border-indigo-400 hover:text-indigo-600 rounded-lg text-gray-700 font-medium shadow-xs transition cursor-pointer"
+                                                            className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-white border border-gray-200 hover:border-indigo-400 hover:text-indigo-600 rounded-lg text-gray-700 font-medium shadow-xs transition cursor-pointer text-xs"
                                                             title="Click to view career record"
                                                         >
                                                             {pName}
@@ -1667,11 +1667,11 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                                     {/* Fall of Wickets */}
                                     {activeInning.fall_of_wickets && activeInning.fall_of_wickets.length > 0 && (
-                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-                                            <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">Fall of Wickets</h3>
-                                            <div className="flex flex-wrap gap-2 text-xs">
+                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+                                            <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2.5 sm:mb-3">Fall of Wickets</h3>
+                                            <div className="flex flex-wrap gap-1.5 sm:gap-2 text-xs">
                                                 {activeInning.fall_of_wickets.map((f, idx) => (
-                                                    <div key={idx} className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-1.5">
+                                                    <div key={idx} className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-1.5 text-[11px] sm:text-xs">
                                                         <span className="font-black text-rose-600">{f.score}-{f.wkt_nbr}</span>
                                                         <span className="text-gray-700 font-semibold">({f.batsman}, {f.over} ov)</span>
                                                     </div>
@@ -1683,25 +1683,25 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     {/* Bowling Table */}
                                     {activeInning.bowling && activeInning.bowling.length > 0 && (
                                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/70">
-                                                <h2 className="text-base font-bold text-gray-900">Bowling</h2>
+                                            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/70">
+                                                <h2 className="text-sm sm:text-base font-bold text-gray-900">Bowling</h2>
                                             </div>
-                                            <div className="overflow-x-auto">
-                                                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                                    <thead className="bg-gray-50 font-semibold text-gray-600 text-xs uppercase tracking-wider">
+                                            <div className="overflow-x-auto scrollbar-none">
+                                                <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                                                    <thead className="bg-gray-50 font-semibold text-gray-600 text-[11px] sm:text-xs uppercase tracking-wider">
                                                         <tr>
-                                                            <th className="px-6 py-3.5 text-left">Bowler</th>
-                                                            <th className="px-4 py-3.5 text-right">O</th>
-                                                            <th className="px-4 py-3.5 text-right">M</th>
-                                                            <th className="px-4 py-3.5 text-right">R</th>
-                                                            <th className="px-4 py-3.5 text-right">W</th>
-                                                            <th className="px-4 py-3.5 text-right">Econ</th>
+                                                            <th className="px-3 sm:px-6 py-2.5 sm:py-3.5 text-left">Bowler</th>
+                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">O</th>
+                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">M</th>
+                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">R</th>
+                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">W</th>
+                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">Econ</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-100 bg-white">
                                                         {activeInning.bowling.map((bowler, idx) => (
                                                             <tr key={idx} className="hover:bg-gray-50/80 transition">
-                                                                <td className="px-6 py-3.5">
+                                                                <td className="px-3 sm:px-6 py-2 sm:py-3.5">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handlePlayerClick(bowler.id, bowler.name || bowler.bowler)}
@@ -1711,11 +1711,11 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                                         {bowler.name || bowler.bowler}
                                                                     </button>
                                                                 </td>
-                                                                <td className="px-4 py-3.5 text-right text-gray-700 font-medium">{bowler.overs ?? 0}</td>
-                                                                <td className="px-4 py-3.5 text-right text-gray-500">{bowler.maidens ?? 0}</td>
-                                                                <td className="px-4 py-3.5 text-right text-gray-700 font-medium">{bowler.runs ?? 0}</td>
-                                                                <td className="px-4 py-3.5 text-right font-black text-indigo-700 text-base">{bowler.wickets ?? 0}</td>
-                                                                <td className="px-4 py-3.5 text-right text-gray-600 font-semibold">{bowler.economy ?? 0}</td>
+                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{bowler.overs ?? 0}</td>
+                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500">{bowler.maidens ?? 0}</td>
+                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{bowler.runs ?? 0}</td>
+                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right font-black text-indigo-700 text-sm sm:text-base">{bowler.wickets ?? 0}</td>
+                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-600 font-semibold text-xs sm:text-sm">{bowler.economy ?? 0}</td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -1945,59 +1945,65 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                     {/* Live Match Situation & Crease Card */}
                     {miniscore && (
-                        <div className="bg-gradient-to-br from-[#18233c] to-[#0f172a] border border-amber-500/20 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
-                                <div className="flex items-center gap-2.5">
+                        <div className="bg-gradient-to-br from-[#18233c] to-[#0f172a] border border-amber-500/20 rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 shadow-xl space-y-3 sm:space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 pb-2.5 sm:pb-3 border-b border-white/10">
+                                <div className="flex items-center gap-2">
                                     <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
-                                    <span className="text-[11px] font-black tracking-wider uppercase text-rose-400">Live Crease</span>
-                                    <span className="text-white font-black text-sm sm:text-base">
+                                    <span className="text-[10px] sm:text-[11px] font-black tracking-wider uppercase text-rose-400">Live Crease</span>
+                                    <span className="text-white font-black text-xs sm:text-base">
                                         {liveCreaseBatTeam}{liveCreaseScore ? `: ${liveCreaseScore}` : ''} ({miniscore.overs} Ov)
                                     </span>
                                 </div>
                                 {miniscore.status && (
-                                    <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
                                         {miniscore.status}
                                     </span>
                                 )}
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                                <div className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-white/5 border border-white/5 space-y-2">
+                                    <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
                                         <span>Batters</span>
                                         <span>R (B) • 4s / 6s</span>
                                     </div>
                                     {miniscore.batsmanStriker?.name && (
-                                        <div className="flex items-center justify-between text-xs sm:text-sm font-black text-white">
-                                            <span className="flex items-center gap-1.5 text-amber-300">
-                                                <span>* {miniscore.batsmanStriker.name}</span>
-                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 uppercase">On Strike</span>
+                                        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-0.5 sm:gap-1 text-xs sm:text-sm font-black text-white">
+                                            <span className="flex items-center gap-1.5 text-amber-300 min-w-0">
+                                                <span className="truncate">* {miniscore.batsmanStriker.name}</span>
+                                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 uppercase shrink-0">On Strike</span>
                                             </span>
-                                            <span>{miniscore.batsmanStriker.runs} ({miniscore.batsmanStriker.balls}) • {miniscore.batsmanStriker.fours}x4 {miniscore.batsmanStriker.sixes}x6</span>
+                                            <span className="shrink-0 font-mono text-[11px] sm:text-xs text-slate-300">
+                                                <strong className="text-white text-xs sm:text-sm">{miniscore.batsmanStriker.runs}</strong> ({miniscore.batsmanStriker.balls}) • {miniscore.batsmanStriker.fours}x4 {miniscore.batsmanStriker.sixes}x6
+                                            </span>
                                         </div>
                                     )}
                                     {miniscore.batsmanNonStriker?.name && (
-                                        <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-300">
-                                            <span>{miniscore.batsmanNonStriker.name}</span>
-                                            <span>{miniscore.batsmanNonStriker.runs} ({miniscore.batsmanNonStriker.balls}) • {miniscore.batsmanNonStriker.fours}x4 {miniscore.batsmanNonStriker.sixes}x6</span>
+                                        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-0.5 sm:gap-1 text-xs sm:text-sm font-semibold text-slate-300">
+                                            <span className="truncate">{miniscore.batsmanNonStriker.name}</span>
+                                            <span className="shrink-0 font-mono text-[11px] sm:text-xs text-slate-400">
+                                                <strong className="text-white text-xs sm:text-sm">{miniscore.batsmanNonStriker.runs}</strong> ({miniscore.batsmanNonStriker.balls}) • {miniscore.batsmanNonStriker.fours}x4 {miniscore.batsmanNonStriker.sixes}x6
+                                            </span>
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                <div className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-white/5 border border-white/5 space-y-2">
+                                    <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
                                         <span>Bowler</span>
                                         <span>O-M-R-W</span>
                                     </div>
                                     {miniscore.bowlerStriker?.name && (
-                                        <div className="flex items-center justify-between text-xs sm:text-sm font-black text-white">
-                                            <span className="text-indigo-300">{miniscore.bowlerStriker.name}</span>
-                                            <span>{miniscore.bowlerStriker.overs}-{miniscore.bowlerStriker.maidens}-{miniscore.bowlerStriker.runs}-{miniscore.bowlerStriker.wickets}</span>
+                                        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-0.5 sm:gap-1 text-xs sm:text-sm font-black text-white">
+                                            <span className="text-indigo-300 truncate">{miniscore.bowlerStriker.name}</span>
+                                            <span className="shrink-0 font-mono text-[11px] sm:text-xs text-slate-300">
+                                                {miniscore.bowlerStriker.overs}-{miniscore.bowlerStriker.maidens}-{miniscore.bowlerStriker.runs}-<strong className="text-indigo-400 text-xs sm:text-sm">{miniscore.bowlerStriker.wickets}</strong>
+                                            </span>
                                         </div>
                                     )}
                                     {miniscore.recentOvsStats && (
-                                        <div className="text-xs text-slate-400 pt-1 border-t border-white/5 flex items-center justify-between">
-                                            <span className="font-medium text-slate-500">Recent Balls:</span>
+                                        <div className="text-[11px] sm:text-xs text-slate-400 pt-1 border-t border-white/5 flex items-center justify-between">
+                                            <span className="font-medium text-slate-500">Recent:</span>
                                             <span className="font-mono text-amber-300 font-bold">{miniscore.recentOvsStats}</span>
                                         </div>
                                     )}
@@ -2009,13 +2015,13 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
 
                     {/* Commentary List Container */}
-                    <div className="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                    <div className="bg-[#131b2e] border border-white/10 rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-7 shadow-2xl space-y-4 sm:space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pb-3 sm:pb-4 border-b border-white/10">
                             <div className="flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
-                                <h4 className="font-black text-base text-white">Ball-by-Ball Timeline & Commentary</h4>
+                                <h4 className="font-black text-sm sm:text-base text-white">Ball-by-Ball Timeline & Commentary</h4>
                                 <span className="px-2 py-0.5 rounded-md bg-white/10 text-[10px] font-mono text-slate-300">
-                                    {filteredCommentaryList.length} Entries
+                                    {filteredCommentaryList.length}
                                 </span>
                                 {isAdmin ? (
                                     <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1">
@@ -2033,12 +2039,12 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 )}
                             </div>
 
-                            {/* Filter Pills with Live Counts */}
-                            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 self-start sm:self-auto text-xs font-bold">
+                            {/* Filter Pills with Live Counts - Horizontally Scrollable on Mobile */}
+                            <div className="flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 overflow-x-auto scrollbar-none max-w-full text-xs font-bold">
                                 <button
                                     type="button"
                                     onClick={() => setCommentaryFilter('all')}
-                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                    className={`px-3 py-1.5 rounded-lg transition shrink-0 whitespace-nowrap ${
                                         commentaryFilter === 'all' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
@@ -2047,7 +2053,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 <button
                                     type="button"
                                     onClick={() => setCommentaryFilter('admin_blog')}
-                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                    className={`px-3 py-1.5 rounded-lg transition shrink-0 whitespace-nowrap ${
                                         commentaryFilter === 'admin_blog' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
@@ -2056,7 +2062,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 <button
                                     type="button"
                                     onClick={() => setCommentaryFilter('balls')}
-                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                    className={`px-3 py-1.5 rounded-lg transition shrink-0 whitespace-nowrap ${
                                         commentaryFilter === 'balls' ? 'bg-emerald-600 text-white font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
@@ -2065,7 +2071,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 <button
                                     type="button"
                                     onClick={() => setCommentaryFilter('boundaries')}
-                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                    className={`px-3 py-1.5 rounded-lg transition shrink-0 whitespace-nowrap ${
                                         commentaryFilter === 'boundaries' ? 'bg-blue-600 text-white font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
@@ -2074,7 +2080,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 <button
                                     type="button"
                                     onClick={() => setCommentaryFilter('wickets')}
-                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                    className={`px-3 py-1.5 rounded-lg transition shrink-0 whitespace-nowrap ${
                                         commentaryFilter === 'wickets' ? 'bg-rose-600 text-white font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
@@ -2083,7 +2089,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 <button
                                     type="button"
                                     onClick={() => setCommentaryFilter('notes')}
-                                    className={`px-3 py-1.5 rounded-lg transition ${
+                                    className={`px-3 py-1.5 rounded-lg transition shrink-0 whitespace-nowrap ${
                                         commentaryFilter === 'notes' ? 'bg-indigo-600 text-white font-black' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
@@ -2093,11 +2099,11 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                         </div>
 
                         {/* Innings Selector & AI Commentary Language Controls */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-gradient-to-r from-slate-900 via-black to-slate-900 rounded-2xl border border-white/10 shadow-lg">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-gradient-to-r from-slate-900 via-black to-slate-900 rounded-2xl border border-white/10 shadow-lg">
                             {/* Innings Tabs */}
-                            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 flex items-center gap-1.5 mr-1">
-                                    <Trophy className="w-3.5 h-3.5 text-indigo-400" /> Innings:
+                            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 flex items-center gap-1 mr-1">
+                                    <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-400" /> Innings:
                                 </span>
                                 {availableCommentaryInnings && availableCommentaryInnings.length > 0 ? (
                                     availableCommentaryInnings.map(inn => {
@@ -2111,18 +2117,18 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                     setSelectedOverTab('all');
                                                     setExpandedOvers({});
                                                 }}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 border shrink-0 ${
+                                                className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-black transition flex items-center gap-1.5 border shrink-0 ${
                                                     isSelected
                                                         ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-indigo-400/50 shadow-md shadow-indigo-600/30'
                                                         : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
                                                 }`}
                                             >
                                                 {inn.isLive && (
-                                                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-rose-500 animate-pulse"></span>
                                                 )}
                                                 <span>{inn.label}</span>
                                                 {inn.isLive && (
-                                                    <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-extrabold">
+                                                    <span className="text-[9px] uppercase px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 font-extrabold">
                                                         Live
                                                     </span>
                                                 )}
@@ -2135,11 +2141,11 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                             </div>
 
                             {/* Commentary Language Switcher - 3 distinct language options */}
-                            <div className="flex items-center gap-1 p-1 bg-black/60 rounded-xl border border-white/10 shrink-0 self-end sm:self-auto">
+                            <div className="flex items-center justify-center sm:justify-start gap-1 p-1 bg-black/60 rounded-xl border border-white/10 shrink-0 w-full sm:w-auto">
                                 <button
                                     type="button"
                                     onClick={() => handleSetLanguage('en')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition ${
+                                    className={`flex-1 sm:flex-none px-2.5 py-1 rounded-lg text-xs font-black transition text-center ${
                                         commLanguage === 'en'
                                             ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                                             : 'text-slate-400 hover:text-white'
@@ -2150,7 +2156,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 <button
                                     type="button"
                                     onClick={() => handleSetLanguage('hi')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1 ${
+                                    className={`flex-1 sm:flex-none px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center justify-center gap-1 ${
                                         commLanguage === 'hi'
                                             ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 font-black'
                                             : 'text-slate-400 hover:text-white'
@@ -2161,7 +2167,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                 <button
                                     type="button"
                                     onClick={() => handleSetLanguage('hinglish')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition ${
+                                    className={`flex-1 sm:flex-none px-2.5 py-1 rounded-lg text-xs font-black transition text-center ${
                                         commLanguage === 'hinglish'
                                             ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30 font-black'
                                             : 'text-slate-400 hover:text-white'
@@ -2174,21 +2180,21 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                         {/* Over Selector Bar & Group Controls */}
                         {hasNumericOvers && (
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-black/40 rounded-2xl border border-white/10">
-                                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
-                                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
-                                        <Layers className="w-3.5 h-3.5 text-amber-400" /> Overs:
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 p-2.5 sm:p-3 bg-black/40 rounded-2xl border border-white/10">
+                                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
+                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
+                                        <Layers className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" /> Overs:
                                     </span>
                                     <button
                                         type="button"
                                         onClick={() => setSelectedOverTab('all')}
-                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition shrink-0 ${
+                                        className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition shrink-0 ${
                                             selectedOverTab === 'all'
                                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                                                 : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
                                         }`}
                                     >
-                                        All Overs ({numericOverGroups.length})
+                                        All ({numericOverGroups.length})
                                     </button>
 
                                     {/* Dropdown Jump for Overs */}
@@ -2202,7 +2208,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                             }
                                         }}
                                         aria-label="Jump to specific over"
-                                        className="bg-slate-900 border border-white/15 text-white text-xs font-bold rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                        className="bg-slate-900 border border-white/15 text-white text-xs font-bold rounded-xl px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 shrink-0"
                                     >
                                         <option value="all">Jump to Over...</option>
                                         {numericOverGroups.map(grp => (
@@ -2223,7 +2229,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                     setSelectedOverTab(grp.key);
                                                     setExpandedOvers(prev => ({ ...prev, [grp.key]: true }));
                                                 }}
-                                                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 ${
+                                                className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 ${
                                                     isSelected
                                                         ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
                                                         : grp.isCurrent
@@ -2232,7 +2238,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                 }`}
                                             >
                                                 {grp.isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>}
-                                                <span>{grp.isCurrent ? `Live Over ${grp.overNumber}` : `Over ${grp.overNumber}`}</span>
+                                                <span>{grp.isCurrent ? `Live Ov ${grp.overNumber}` : `Ov ${grp.overNumber}`}</span>
                                                 {grp.wickets > 0 && (
                                                     <span className={`text-[10px] px-1 rounded ${isSelected ? 'bg-black/30 text-slate-950' : 'text-rose-400 font-bold'}`}>
                                                         {grp.wickets}W
@@ -2243,7 +2249,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     })}
                                 </div>
 
-                                <div className="flex items-center gap-2 text-xs shrink-0 self-end sm:self-auto">
+                                <div className="flex items-center justify-between sm:justify-end gap-2 text-xs w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-white/5 shrink-0">
                                     <button
                                         type="button"
                                         onClick={expandAllOvers}
