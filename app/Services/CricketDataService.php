@@ -1420,11 +1420,7 @@ class CricketDataService
             str_contains($status, 'drawn') ||
             str_contains($status, 'conceded');
 
-        if ($isCompletedText || $matchEnded) {
-            return 'completed';
-        }
-
-        // 3. Active in-game / live text indicators
+        // 3. Active in-game / live text indicators (Innings Break, lunch, tea, delay, etc.)
         $isLiveText = str_contains($status, 'need ') ||
             str_contains($status, 'opt to') ||
             str_contains($status, 'elected to') ||
@@ -1438,6 +1434,7 @@ class CricketDataService
             str_contains($status, 'stump') ||
             str_contains($status, 'tea') ||
             str_contains($status, 'lunch') ||
+            str_contains($status, 'dinner') ||
             str_contains($status, 'delay') ||
             str_contains($status, 'trail') ||
             str_contains($status, 'lead') ||
@@ -1446,7 +1443,20 @@ class CricketDataService
             str_contains($status, 'live') ||
             str_contains($status, 'rain') ||
             str_contains($status, 'innings break') ||
+            str_contains($status, 'inn break') ||
+            str_contains($status, 'strategic timeout') ||
             str_contains($status, 'drinks');
+
+        // Priority 1: If it has active in-game text (like innings break or chasing), it is ALWAYS LIVE!
+        // This overrides any premature upstream matchEnded flag that occurs at end of 1st innings.
+        if ($isLiveText && !$isCompletedText) {
+            return 'live';
+        }
+
+        // Priority 2: Truly completed matches
+        if ($isCompletedText || $matchEnded) {
+            return 'completed';
+        }
 
         // 4. If match has started (or in-game text active), it is Live!
         if ($isLiveText || $matchStarted) {

@@ -116,6 +116,29 @@ class LiveScoreController extends Controller
                 str_contains($statusLower, 'conceded') ||
                 str_contains($statusLower, 'match ended');
 
+            // 3. INNINGS BREAK / Ongoing Live Sessions / Chasing / Toss / Weather Delays: ALWAYS LIVE, NEVER COMPLETED!
+            $isInningsBreak = str_contains($statusLower, 'innings break') ||
+                str_contains($statusLower, 'inn break') ||
+                str_contains($statusLower, 'break') ||
+                str_contains($statusLower, 'lunch') ||
+                str_contains($statusLower, 'tea') ||
+                str_contains($statusLower, 'dinner') ||
+                str_contains($statusLower, 'strategic timeout') ||
+                str_contains($statusLower, 'drinks');
+            $isChasing = str_contains($statusLower, 'need ') || str_contains($statusLower, 'require ') || str_contains($statusLower, 'target ');
+            $isToss = (str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to') || (str_contains($statusLower, 'toss') && !str_contains($statusLower, 'abandon')));
+            $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
+                && !$isCompletedText;
+            $isInProgress = str_contains($statusLower, 'in progress') || str_contains($statusLower, 'rain') || str_contains($statusLower, 'delay') || $isChasing || $isToss || $isTestOngoing || $isInningsBreak;
+
+            // An Innings Break or ongoing live session takes 100% priority over any premature matchEnded flag!
+            if ($isInProgress && !$isCompletedText) {
+                $m['status'] = 'live';
+                $m['matchEnded'] = false;
+                $m['matchStarted'] = true;
+                return $m;
+            }
+
             if ($isCompletedText) {
                 $m['status'] = 'completed';
                 $m['matchEnded'] = true;
@@ -123,21 +146,7 @@ class LiveScoreController extends Controller
                 return $m;
             }
 
-            // 3. Chasing / In Progress / Toss / Ongoing Test: ALWAYS LIVE, NEVER COMPLETED!
-            $isChasing = str_contains($statusLower, 'need ') || str_contains($statusLower, 'require ') || str_contains($statusLower, 'target ');
-            $isToss = (str_contains($statusLower, 'opt to') || str_contains($statusLower, 'elected to') || str_contains($statusLower, 'chose to') || (str_contains($statusLower, 'toss') && !str_contains($statusLower, 'abandon')));
-            $isTestOngoing = (str_contains($statusLower, 'stump') || str_contains($statusLower, 'trail') || str_contains($statusLower, 'lead') || preg_match('/day\s*[1-4]/i', $statusLower))
-                && !str_contains($statusLower, 'won') && !str_contains($statusLower, 'beat') && !str_contains($statusLower, 'drawn');
-            $isInProgress = str_contains($statusLower, 'in progress') || str_contains($statusLower, 'rain') || str_contains($statusLower, 'delay') || $isChasing || $isToss || $isTestOngoing;
-
-            if ($isInProgress) {
-                $m['status'] = 'live';
-                $m['matchEnded'] = false;
-                $m['matchStarted'] = true;
-                return $m;
-            }
-
-            $isEnded = ($m['matchEnded'] ?? false) || ($m['status'] ?? '') === 'completed' || $isCompletedText;
+            $isEnded = ($m['matchEnded'] ?? false) || ($m['status'] ?? '') === 'completed';
 
             if ($isEnded) {
                 $m['status'] = 'completed';

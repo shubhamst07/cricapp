@@ -349,8 +349,15 @@ class ScoreService:
 
                             state = str(info.get('state', '')).lower()
                             status = info.get('status', '') or info.get('shortStatus', '') or info.get('stateTitle', '')
-                            match_ended = state in ['complete', 'result', 'finished']
-                            match_started = state in ['in progress', 'complete', 'toss'] or bool(scores)
+                            status_lower = status.lower()
+                            is_active_live_text = any(w in status_lower for w in [
+                                'innings break', 'inn break', 'break', 'lunch', 'tea', 'dinner',
+                                'strategic timeout', 'drinks', 'stump', 'trail', 'lead',
+                                'need ', 'require ', 'target ', 'in progress', 'rain', 'delay', 'opt to', 'elected to', 'chose to'
+                            ]) and not any(w in status_lower for w in ['won by', 'won the match', ' beat ', 'drawn', 'tied', 'abandon'])
+
+                            match_ended = (state in ['complete', 'result', 'finished']) and not is_active_live_text
+                            match_started = state in ['in progress', 'complete', 'toss'] or bool(scores) or is_active_live_text
                             series_name = info.get('seriesName', 'Other Matches')
                             match_desc = info.get('matchDesc', 'Match')
 
@@ -592,10 +599,11 @@ class ScoreService:
                                 if existing.get("id") == m["id"]:
                                     comb_st = (existing.get("status_text", "") + " " + m.get("status_text", "")).lower()
                                     is_comb_abandoned = any(w in comb_st for w in ["abandon", "cancel", "no result"])
-                                    is_comb_test_ongoing = not is_comb_abandoned and any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandon"])
+                                    is_comb_test_ongoing = not is_comb_abandoned and any(w in comb_st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch", "dinner"]) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandon"])
                                     is_comb_toss = not is_comb_abandoned and (any(w in comb_st for w in ["opt to", "elected to", "chose to", "choose to"]) or ("toss" in comb_st and "abandon" not in comb_st))
                                     is_comb_chasing = any(w in comb_st for w in ["need ", "require ", "target "])
-                                    is_comb_live = is_comb_test_ongoing or is_comb_toss or is_comb_chasing or ("in progress" in comb_st) or ("rain" in comb_st) or ("delay" in comb_st)
+                                    is_comb_innings_break = any(w in comb_st for w in ["innings break", "inn break", "break", "tea", "lunch", "dinner", "strategic timeout", "drinks"])
+                                    is_comb_live = (is_comb_test_ongoing or is_comb_toss or is_comb_chasing or is_comb_innings_break or ("in progress" in comb_st) or ("rain" in comb_st) or ("delay" in comb_st)) and not any(w in comb_st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandon"])
 
                                     if is_comb_live:
                                         existing["matchEnded"] = False
@@ -604,7 +612,7 @@ class ScoreService:
                                         existing["matchEnded"] = True
                                         existing["matchStarted"] = True
                                         if not existing.get("status_text") or existing["status_text"].lower() == "in progress":
-                                            existing["status_text"] = m.get("status_text") or "Match Completed"
+                                             existing["status_text"] = m.get("status_text") or "Match Completed"
                                     elif page_type == "upcoming" and not existing.get("score") and not is_comb_toss and not is_comb_test_ongoing:
                                         existing["matchEnded"] = False
                                         existing["matchStarted"] = False
@@ -620,7 +628,7 @@ class ScoreService:
                                     is_new_generic = new_st.lower() in ["match scheduled", "scheduled", "upcoming", "in progress", ""]
                                     if not (is_old_rich and is_new_generic):
                                         if new_st:
-                                            existing["status_text"] = new_st
+                                             existing["status_text"] = new_st
                                     if m.get("teams") and not existing.get("teams"):
                                         existing["teams"] = m["teams"]
                                     break
@@ -629,9 +637,9 @@ class ScoreService:
                     matches = cls.parse_cards_from_html(resp.text)
                     for m in matches:
                         st = (m.get("status_text") or "").lower()
-                        is_test_ongoing = any(w in st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch"]) and not any(w in st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
+                        is_live_card = (any(w in st for w in ["stump", "trail by", "lead by", "day 1", "day 2", "day 3", "day 4", "tea", "lunch", "dinner", "innings break", "inn break", "break", "need ", "require ", "target ", "in progress", "rain", "delay", "opt to", "elected to", "chose to"])) and not any(w in st for w in ["won by", "won the match", " beat ", "drawn", "tied", "abandoned"])
                         if page_type == "recent":
-                            if not is_test_ongoing:
+                            if not is_live_card:
                                 m["matchEnded"] = True
                                 m["matchStarted"] = True
                                 if not m.get("status_text") or m["status_text"].lower() == "in progress":

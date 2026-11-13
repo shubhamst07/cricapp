@@ -84,9 +84,32 @@ export default function LiveScoresApp({
             return true;
         }
 
+        // 2. INNINGS BREAK / BREAK / LUNCH / TEA / DINNER: ALWAYS LIVE, NEVER ENDED!
+        const isInningsBreak = ['innings break', 'inn break', 'break', 'lunch', 'tea', 'dinner', 'strategic timeout', 'drinks'].some(w => st.includes(w));
+        if (isInningsBreak) {
+            return false;
+        }
+
+        // 3. Chasing matches are ALWAYS LIVE, NEVER ended!
+        const isChasing = ['need ', 'require ', 'target '].some(w => st.includes(w));
+        if (isChasing) return false;
+
+        // 4. Real toss is LIVE/upcoming, not ended
+        const isToss = ['opt to', 'elected to', 'chose to'].some(w => st.includes(w)) || (st.includes('toss') && !st.includes('abandon'));
+        if (isToss) return false;
+
+        // 5. Ongoing Test match (Stumps, trail by, lead by, Day 1-4) is NOT ended!
+        if ((st.includes('stump') || st.includes('trail') || st.includes('lead') || /day\s*[1-4]/.test(st)) &&
+            !['won by', 'won the match', ' beat ', 'drawn', 'tied', 'abandon'].some(w => st.includes(w))) {
+            return false;
+        }
+
+        // 6. In-Progress, Rain, Weather Delays
+        const isInProgress = st.includes('in progress') || st.includes('rain') || st.includes('delay');
+        if (isInProgress) return false;
+
         if (m.status === 'completed' || m.status === 'abandoned' || m.matchEnded) {
-            const isChasingNow = ['need ', 'require ', 'target '].some(w => st.includes(w)) && !st.includes('won') && !st.includes('beat');
-            if (!isChasingNow) return true;
+            return true;
         }
 
         // Scheduled matches with no scores are definitely UPCOMING, never ended!
@@ -94,20 +117,6 @@ export default function LiveScoresApp({
             return false;
         }
 
-        // 2. Real toss is LIVE/upcoming, not ended
-        const isToss = ['opt to', 'elected to', 'chose to'].some(w => st.includes(w)) || (st.includes('toss') && !st.includes('abandon'));
-        if (isToss) return false;
-
-        // 3. Ongoing Test match (Stumps, trail by, lead by, Day 1-4) is NOT ended!
-        if ((st.includes('stump') || st.includes('trail') || st.includes('lead') || /day\s*[1-4]/.test(st)) &&
-            !['won by', 'won the match', ' beat ', 'drawn', 'tied', 'abandon'].some(w => st.includes(w))) {
-            return false;
-        }
-
-        // 4. Chasing / In-Progress matches are ALWAYS LIVE, NEVER ended!
-        const isChasing = ['need ', 'require ', 'target '].some(w => st.includes(w));
-        const isInProgress = st.includes('in progress') || st.includes('rain') || st.includes('delay') || isChasing || isToss;
-        if (isInProgress) return false;
         if (Array.isArray(m.score) && m.score.length >= 2) {
             const isTest = (m.matchType || '').toLowerCase().includes('test') || /day\s*[1-4]/.test(st);
             if (!isTest) {
@@ -942,12 +951,14 @@ export default function LiveScoresApp({
 
 // ==================== PREMIUM MATCH CARD COMPONENT ====================
 function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
+    const stLower = (match.status_text || '').toLowerCase();
+    const isInningsBreak = ['innings break', 'inn break', 'break', 'lunch', 'tea', 'dinner', 'strategic timeout', 'drinks'].some(w => stLower.includes(w));
     const hasLiveScore = Array.isArray(match.score) && match.score.length > 0;
-    const isLive = type === 'live' || (type === 'upcoming' && hasLiveScore);
-    const isUpcoming = type === 'upcoming' && !hasLiveScore;
-    const isRecent = type === 'recent';
-    const isArchives = type === 'archives';
-    const isDismissed = Boolean(match.is_dismissed || (match.status_text || '').toLowerCase() === 'match dismissed');
+    const isLive = type === 'live' || (type === 'upcoming' && hasLiveScore) || isInningsBreak;
+    const isUpcoming = type === 'upcoming' && !hasLiveScore && !isInningsBreak;
+    const isRecent = type === 'recent' && !isInningsBreak;
+    const isArchives = type === 'archives' && !isInningsBreak;
+    const isDismissed = Boolean(match.is_dismissed || stLower === 'match dismissed');
 
     // Format teams & scores cleanly
     const scores = match.score || [];
@@ -956,14 +967,16 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
     return (
         <div className={`rounded-3xl border transition-all duration-300 flex flex-col justify-between overflow-hidden group relative bg-[#131b2e] ${
             isLive
-                ? 'border-rose-500/30 hover:border-rose-500/60 shadow-xl hover:shadow-2xl hover:shadow-rose-500/10'
+                ? (isInningsBreak
+                    ? 'border-amber-500/30 hover:border-amber-500/60 shadow-xl hover:shadow-2xl hover:shadow-amber-500/10'
+                    : 'border-rose-500/30 hover:border-rose-500/60 shadow-xl hover:shadow-2xl hover:shadow-rose-500/10')
                 : isDismissed
                     ? 'border-rose-500/20 hover:border-rose-500/40 shadow-lg'
                     : 'border-white/10 hover:border-indigo-500/50 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/10'
         }`}>
             {/* Top Indicator Strip for Live Matches */}
             {isLive && (
-                <div className="h-1 w-full bg-gradient-to-r from-rose-500 via-red-500 to-amber-500"></div>
+                <div className={`h-1 w-full ${isInningsBreak ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400' : 'bg-gradient-to-r from-rose-500 via-red-500 to-amber-500'}`}></div>
             )}
 
             <div className="p-5 space-y-3.5">
@@ -985,7 +998,13 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard }) {
                                 🎥 Live Stream
                             </span>
                         )}
-                        {isLive && (
+                        {isInningsBreak && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                                INNINGS BREAK
+                            </span>
+                        )}
+                        {!isInningsBreak && isLive && (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
                                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                                 LIVE

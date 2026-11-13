@@ -562,7 +562,21 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         (match?.score && Array.isArray(match.score) && match.score.length > 0) ||
         (match?.current_batsmen && Array.isArray(match.current_batsmen) && match.current_batsmen.some(b => b.name && b.name !== 'score not found'));
 
-    const effectiveStatus = (match.status === 'scheduled' && hasActiveScorecard) ? 'live' : (match.status || 'live');
+    const effectiveStatus = (() => {
+        const lower = (match.status_text || '').toLowerCase().trim();
+        const isInningsBreak = ['innings break', 'inn break', 'break', 'lunch', 'tea', 'dinner', 'strategic timeout', 'drinks'].some(w => lower.includes(w));
+        const isChasing = ['need ', 'require ', 'target '].some(w => lower.includes(w));
+        const isOngoingLive = isInningsBreak || isChasing || lower.includes('in progress') || lower.includes('rain') || lower.includes('delay');
+        const isDefinitiveFinished = ['won by', 'won the match', 'won the series', ' beat ', 'drawn', 'tied', 'conceded', 'abandon'].some(w => lower.includes(w));
+
+        if (isOngoingLive && !isDefinitiveFinished) {
+            return 'live';
+        }
+        if (match.status === 'scheduled' && hasActiveScorecard) {
+            return 'live';
+        }
+        return match.status || 'live';
+    })();
 
     const effectiveStatusText = (() => {
         if (!match.status_text) return hasActiveScorecard ? 'Match in progress' : '';
