@@ -19,7 +19,12 @@ import {
     Globe,
     Archive,
     FolderArchive,
-    AlertCircle
+    AlertCircle,
+    User,
+    Sparkles,
+    TrendingUp,
+    Award,
+    Star
 } from 'lucide-react';
 
 export default function LiveScoresApp({
@@ -155,6 +160,13 @@ export default function LiveScoresApp({
     const [scorecardData, setScorecardData] = useState(null);
     const [loadingScorecard, setLoadingScorecard] = useState(false);
 
+    // Player Search & Career Profile Modal state
+    const [playerResults, setPlayerResults] = useState([]);
+    const [isSearchingPlayers, setIsSearchingPlayers] = useState(false);
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+    const [playerProfileData, setPlayerProfileData] = useState(null);
+    const [loadingPlayerProfile, setLoadingPlayerProfile] = useState(false);
+
     // Sync browser Back/Forward navigation with section and tab
     useEffect(() => {
         const handlePopState = () => {
@@ -265,6 +277,61 @@ export default function LiveScoresApp({
             console.error('Error loading scorecard:', err);
         } finally {
             setLoadingScorecard(false);
+        }
+    };
+
+    // Live Player Search Debounce
+    useEffect(() => {
+        const q = searchQuery.trim();
+        if (q.length < 2) {
+            setPlayerResults([]);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            try {
+                setIsSearchingPlayers(true);
+                const res = await fetch(`/api/players/lookup?query=${encodeURIComponent(q)}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'success' && Array.isArray(data.players)) {
+                        setPlayerResults(data.players);
+                    } else {
+                        setPlayerResults([]);
+                    }
+                }
+            } catch (err) {
+                console.error('Player search error:', err);
+            } finally {
+                setIsSearchingPlayers(false);
+            }
+        }, 220);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    // Open player career profile modal
+    const handleOpenPlayerProfile = async (player) => {
+        setSelectedPlayer(player);
+        setPlayerProfileData(null);
+        setLoadingPlayerProfile(true);
+        try {
+            const pId = player.id || player.user_id;
+            const res = await fetch(`/api/player/${pId}?name=${encodeURIComponent(player.name)}`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (res.ok) {
+                const json = await res.json();
+                if (json.status === 'success' && json.data) {
+                    setPlayerProfileData(json.data);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching player profile:', err);
+        } finally {
+            setLoadingPlayerProfile(false);
         }
     };
 
@@ -442,19 +509,28 @@ export default function LiveScoresApp({
                         <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                         <input
                             type="text"
-                            placeholder="Search team (e.g. India), tournament, or venue..."
+                            placeholder="Search team (e.g. India), venue, or player (e.g. Virat Kohli)..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-9 py-2.5 text-xs bg-slate-950/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition"
+                            className="w-full pl-10 pr-12 py-2.5 text-xs bg-slate-950/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition"
                         />
-                        {searchQuery && (
-                            <button
-                                onClick={() => setSearchQuery('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                            >
-                                <X className="w-3.5 h-3.5" />
-                            </button>
-                        )}
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                            {isSearchingPlayers && (
+                                <RefreshCw className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                            )}
+                            {searchQuery && (
+                                <button
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setPlayerResults([]);
+                                    }}
+                                    className="text-slate-400 hover:text-white transition p-0.5"
+                                    title="Clear search"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Format Filter Chips */}
@@ -483,6 +559,52 @@ export default function LiveScoresApp({
                         ))}
                     </div>
                 </div>
+
+                {/* Cricketers Found Bar (Quick Profile Preview chips) */}
+                {playerResults.length > 0 && (
+                    <div className="mt-4 pt-3.5 border-t border-white/5 animate-in fade-in duration-200">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Matching Cricketers ({playerResults.length})
+                            </span>
+                            <span className="text-[10px] text-slate-400">Click any cricketer to open career profile & records</span>
+                        </div>
+                        <div className="flex items-center gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                            {playerResults.map((player) => (
+                                <button
+                                    key={player.id}
+                                    type="button"
+                                    onClick={() => handleOpenPlayerProfile(player)}
+                                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-950/90 border border-white/10 hover:border-indigo-500/60 hover:bg-slate-900 transition-all shrink-0 text-left group shadow-md"
+                                >
+                                    <img
+                                        src={player.avatar}
+                                        alt={player.name}
+                                        className="w-8 h-8 rounded-lg object-cover border border-white/10 shrink-0 group-hover:scale-105 transition"
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(player.name)}&background=0D8ABC&color=fff`;
+                                        }}
+                                    />
+                                    <div className="min-w-0 pr-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-black text-white group-hover:text-indigo-400 transition truncate">
+                                                {player.name}
+                                            </span>
+                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-white/10 text-slate-300">
+                                                {player.country}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 truncate">
+                                            {player.role}
+                                        </p>
+                                    </div>
+                                    <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 transition shrink-0 ml-1" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Active Section Banner Header (Seamless with Top Navbar) */}
@@ -772,6 +894,75 @@ export default function LiveScoresApp({
                         ))}
                     </div>
                 )
+            ) : playerResults.length > 0 ? (
+                /* Player Search Results Showcase when match list is empty */
+                <div className="bg-[#111827]/90 rounded-3xl p-6 sm:p-8 shadow-xl border border-indigo-500/30 text-left animate-in fade-in duration-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                                <User className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Cricketer Career Search
+                                </span>
+                                <h3 className="text-lg font-black text-white">
+                                    {playerResults.length} Player{playerResults.length > 1 ? 's' : ''} found matching "{searchQuery}"
+                                </h3>
+                            </div>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                            Click any player card to view career statistics & records
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                        {playerResults.map((player) => (
+                            <div
+                                key={player.id}
+                                onClick={() => handleOpenPlayerProfile(player)}
+                                className="p-4 rounded-2xl bg-slate-950/70 border border-white/10 hover:border-indigo-500/60 hover:bg-slate-900/90 transition-all cursor-pointer group flex items-center justify-between gap-4 shadow-lg hover:shadow-indigo-500/10"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <img
+                                        src={player.avatar}
+                                        alt={player.name}
+                                        className="w-14 h-14 rounded-2xl object-cover border border-white/10 bg-slate-900 shrink-0 group-hover:scale-105 transition"
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(player.name)}&background=0D8ABC&color=fff`;
+                                        }}
+                                    />
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <h4 className="text-sm font-black text-white group-hover:text-indigo-400 transition truncate">
+                                                {player.name}
+                                            </h4>
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">
+                                                {player.country}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-400 truncate">
+                                            {player.role} • {player.batting_style}
+                                        </p>
+                                        {player.highlights && (
+                                            <p className="text-[11px] text-amber-400 font-semibold truncate mt-1">
+                                                ★ {player.highlights}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="px-3.5 py-2 rounded-xl bg-indigo-600/20 group-hover:bg-indigo-600 text-indigo-300 group-hover:text-white border border-indigo-500/30 text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-sm"
+                                >
+                                    <span>Profile</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             ) : (
                 <div className="bg-[#111827]/80 rounded-3xl p-12 text-center shadow-xl border border-white/10">
                     <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/5 text-slate-400 mb-3 border border-white/5">
@@ -943,6 +1134,224 @@ export default function LiveScoresApp({
                             >
                                 Open Full Match Center & Scorecard →
                             </a>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Player Career Profile Modal */}
+            {selectedPlayer && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-[#111827] border border-white/10 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                        {/* Modal Header */}
+                        <div className="p-5 border-b border-white/10 flex items-center justify-between bg-slate-950/80">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                                    <User className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                                        <Sparkles className="w-3 h-3 text-amber-400" /> Cricketer Career Profile
+                                    </span>
+                                    <h3 className="font-black text-white text-base leading-tight mt-0.5">
+                                        {selectedPlayer.name}
+                                    </h3>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setSelectedPlayer(null);
+                                    setPlayerProfileData(null);
+                                }}
+                                className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition"
+                                title="Close profile"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
+                            {loadingPlayerProfile ? (
+                                <div className="py-20 text-center space-y-3">
+                                    <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
+                                    <p className="text-xs font-bold text-slate-400">Loading {selectedPlayer.name}'s records & statistics...</p>
+                                </div>
+                            ) : playerProfileData ? (
+                                <>
+                                    {/* Player Hero Card */}
+                                    <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-950 border border-white/10 flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                                        <div className="relative shrink-0">
+                                            <img
+                                                src={playerProfileData.image || selectedPlayer.avatar}
+                                                alt={playerProfileData.name}
+                                                className="w-24 h-24 rounded-2xl object-cover border-2 border-indigo-500/40 shadow-xl bg-slate-950"
+                                                onError={(e) => {
+                                                    e.target.onerror = null;
+                                                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(playerProfileData.name)}&background=0D8ABC&color=fff&size=200`;
+                                                }}
+                                            />
+                                            <span className="absolute -bottom-2 -right-2 px-2 py-0.5 text-[9px] font-black bg-indigo-600 text-white rounded-md shadow-md uppercase tracking-wider">
+                                                {playerProfileData.personal_info?.role || selectedPlayer.role}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex-1 text-center sm:text-left min-w-0">
+                                            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1.5">
+                                                <h2 className="text-xl font-black text-white">{playerProfileData.name}</h2>
+                                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-white/10 text-slate-300 border border-white/10">
+                                                    {selectedPlayer.country}
+                                                </span>
+                                            </div>
+
+                                            {playerProfileData.highlights && (
+                                                <p className="text-xs text-amber-300 font-bold mb-3 flex items-center justify-center sm:justify-start gap-1.5">
+                                                    <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                                    <span>{playerProfileData.highlights}</span>
+                                                </p>
+                                            )}
+
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/5 text-[11px]">
+                                                <div>
+                                                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Batting Style</span>
+                                                    <span className="text-slate-200 font-semibold">{playerProfileData.personal_info?.batting_style || 'N/A'}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Bowling Style</span>
+                                                    <span className="text-slate-200 font-semibold">{playerProfileData.personal_info?.bowling_style || 'N/A'}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Born / Age</span>
+                                                    <span className="text-slate-200 font-semibold">{playerProfileData.personal_info?.born || 'N/A'}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Birth Place</span>
+                                                    <span className="text-slate-200 font-semibold">{playerProfileData.personal_info?.birth_place || 'N/A'}</span>
+                                                </div>
+                                                <div className="col-span-2 sm:col-span-2">
+                                                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Teams</span>
+                                                    <span className="text-indigo-300 font-semibold truncate block">{playerProfileData.personal_info?.teams || 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Bio summary */}
+                                    {playerProfileData.bio && (
+                                        <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 text-xs text-slate-300 leading-relaxed">
+                                            {playerProfileData.bio}
+                                        </div>
+                                    )}
+
+                                    {/* Batting Career Records Table */}
+                                    {playerProfileData.batting_career?.stats?.length > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                    <TrendingUp className="w-3.5 h-3.5 text-indigo-400" /> Batting Career Records
+                                                </h4>
+                                            </div>
+                                            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/60">
+                                                <table className="w-full text-left text-xs whitespace-nowrap">
+                                                    <thead>
+                                                        <tr className="border-b border-white/10 bg-white/5 text-slate-400 font-black text-[10px] uppercase">
+                                                            <th className="px-3 py-2.5">Format</th>
+                                                            <th className="px-3 py-2.5 text-right">Mat</th>
+                                                            <th className="px-3 py-2.5 text-right">Inns</th>
+                                                            <th className="px-3 py-2.5 text-right font-black text-indigo-400">Runs</th>
+                                                            <th className="px-3 py-2.5 text-right">HS</th>
+                                                            <th className="px-3 py-2.5 text-right text-emerald-400">Avg</th>
+                                                            <th className="px-3 py-2.5 text-right text-sky-400">SR</th>
+                                                            <th className="px-3 py-2.5 text-right text-amber-400">100s</th>
+                                                            <th className="px-3 py-2.5 text-right text-blue-300">50s</th>
+                                                            <th className="px-3 py-2.5 text-right">4s</th>
+                                                            <th className="px-3 py-2.5 text-right">6s</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-white/5 font-medium">
+                                                        {playerProfileData.batting_career.stats.map((row, idx) => (
+                                                            <tr key={idx} className="hover:bg-white/5 transition">
+                                                                <td className="px-3 py-2 font-black text-white">{row.format}</td>
+                                                                <td className="px-3 py-2 text-right text-slate-300 font-mono">{row.matches}</td>
+                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.innings ?? '-'}</td>
+                                                                <td className="px-3 py-2 text-right font-black text-white font-mono">{row.runs ?? 0}</td>
+                                                                <td className="px-3 py-2 text-right text-slate-300 font-mono">{row.highest_score ?? '-'}</td>
+                                                                <td className="px-3 py-2 text-right font-bold text-emerald-400 font-mono">{row.average ?? '-'}</td>
+                                                                <td className="px-3 py-2 text-right font-bold text-sky-400 font-mono">{row.strike_rate ?? '-'}</td>
+                                                                <td className="px-3 py-2 text-right font-bold text-amber-400 font-mono">{row.hundreds ?? 0}</td>
+                                                                <td className="px-3 py-2 text-right font-bold text-blue-300 font-mono">{row.fifties ?? 0}</td>
+                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.fours ?? 0}</td>
+                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.sixes ?? 0}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Bowling Career Records Table */}
+                                    {playerProfileData.bowling_career?.stats?.length > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                    <Flame className="w-3.5 h-3.5 text-rose-400" /> Bowling Career Records
+                                                </h4>
+                                            </div>
+                                            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/60">
+                                                <table className="w-full text-left text-xs whitespace-nowrap">
+                                                    <thead>
+                                                        <tr className="border-b border-white/10 bg-white/5 text-slate-400 font-black text-[10px] uppercase">
+                                                            <th className="px-3 py-2.5">Format</th>
+                                                            <th className="px-3 py-2.5 text-right">Mat</th>
+                                                            <th className="px-3 py-2.5 text-right">Balls</th>
+                                                            <th className="px-3 py-2.5 text-right">Runs</th>
+                                                            <th className="px-3 py-2.5 text-right font-black text-rose-400">Wkts</th>
+                                                            <th className="px-3 py-2.5 text-right text-amber-400">BBI</th>
+                                                            <th className="px-3 py-2.5 text-right text-emerald-400">Econ</th>
+                                                            <th className="px-3 py-2.5 text-right text-sky-400">Avg</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-white/5 font-medium">
+                                                        {playerProfileData.bowling_career.stats.map((row, idx) => (
+                                                            <tr key={idx} className="hover:bg-white/5 transition">
+                                                                <td className="px-3 py-2 font-black text-white">{row.format}</td>
+                                                                <td className="px-3 py-2 text-right text-slate-300 font-mono">{row.matches}</td>
+                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.balls ?? '-'}</td>
+                                                                <td className="px-3 py-2 text-right text-slate-400 font-mono">{row.runs ?? '-'}</td>
+                                                                <td className="px-3 py-2 text-right font-black text-rose-400 font-mono">{row.wickets ?? 0}</td>
+                                                                <td className="px-3 py-2 text-right font-bold text-amber-400 font-mono">{row.best_bowling ?? '-'}</td>
+                                                                <td className="px-3 py-2 text-right font-bold text-emerald-400 font-mono">{row.economy ?? '-'}</td>
+                                                                <td className="px-3 py-2 text-right font-bold text-sky-400 font-mono">{row.average ?? '-'}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="py-12 text-center text-xs text-slate-400">
+                                    Player records could not be loaded. Please try again.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 bg-slate-950/80 border-t border-white/10 flex items-center justify-between">
+                            <span className="text-[11px] text-slate-400 font-medium">
+                                Source: Verified International & Domestic Records
+                            </span>
+                            <button
+                                onClick={() => {
+                                    setSelectedPlayer(null);
+                                    setPlayerProfileData(null);
+                                }}
+                                className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition"
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
                 </div>

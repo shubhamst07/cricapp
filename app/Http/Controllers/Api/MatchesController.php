@@ -7,6 +7,7 @@ use App\Models\CricketMatch;
 use App\Models\MatchPlayer;
 use App\Models\User;
 use App\Services\CricketDataService;
+use App\Services\PlayerDataService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -320,10 +321,10 @@ class MatchesController extends Controller
         return response()->json($commentary);
     }
 
-    public function player(string $playerId, Request $request, CricketDataService $cricket): JsonResponse
+    public function player(string $playerId, Request $request, PlayerDataService $playerService): JsonResponse
     {
         $name = (string) $request->get('name', '');
-        $data = $cricket->getPlayerProfile($playerId, $name);
+        $data = $playerService->getProfile($playerId, $name);
         return response()->json($data);
     }
 
@@ -334,58 +335,72 @@ class MatchesController extends Controller
     }
 
     /**
-     * Look up a player by WhatsApp / Phone Number or Name (CricHeroes feature).
+     * Look up players by Name, Keyword, or WhatsApp / Phone (International stars + CricHeroes).
      */
-    public function lookupPlayer(Request $request): JsonResponse
+    public function lookupPlayer(Request $request, PlayerDataService $playerService): JsonResponse
     {
-        $query = trim($request->get('query', '') ?: $request->get('phone', ''));
+        $query = trim((string) ($request->get('query') ?: $request->get('q') ?: $request->get('phone') ?: ''));
         if (empty($query)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Please enter a WhatsApp/phone number or player name.',
+                'message' => 'Please enter a player name or search term.',
+                'players' => [],
             ], 400);
         }
 
-        $cleanPhone = preg_replace('/[^0-9]/', '', $query);
+        // 1. Search player directory (international superstars + local users + grassroots)
+        $players = $playerService->search($query);
 
-        $user = User::query()
-            ->when(!empty($cleanPhone) && strlen($cleanPhone) >= 4, function ($q) use ($cleanPhone) {
-                $q->where(function ($sub) use ($cleanPhone) {
-                    $sub->where('phone', 'LIKE', "%{$cleanPhone}%")
-                        ->orWhereRaw("REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ?", ["%{$cleanPhone}%"]);
-                });
-            })
-            ->orWhere('name', 'LIKE', "%{$query}%")
-            ->orWhere('username', 'LIKE', "%{$query}%")
-            ->first();
+        // 2. Backward compatibility for CricHeroes WhatsApp lookup
+        $cleanPhone = preg_replace('/[^0-9]/', '', $query);
+        $user = null;
+        if (!empty($cleanPhone) && strlen($cleanPhone) >= 4) {
+            $user = User::whereRaw("REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ?", ["%{$cleanPhone}%"])->first();
+        }
 
         if ($user) {
+            $userPlayer = [
+                'id' => (string) $user->id,
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'handle' => $user->handle,
+                'phone' => $user->phone ?? $query,
+                'avatar' => $user->avatar_url,
+                'country' => 'Local Club',
+                'role' => $user->player_role ?? 'All-Rounder',
+                'batting_style' => $user->batting_style ?? 'Right Handed Bat',
+                'bowling_style' => $user->bowling_style ?? 'Right Arm Medium',
+                'highlights' => "Registered Club Star • {$user->matches_played} matches",
+                'stats' => [
+                    'matches' => (int) $user->matches_played,
+                    'runs' => (int) $user->total_runs,
+                    'highest_score' => (string) $user->highest_score,
+                    'batting_avg' => (float) $user->batting_avg,
+                    'strike_rate' => (float) $user->strike_rate,
+                    'fifties' => (int) $user->fifties,
+                    'hundreds' => (int) $user->hundreds,
+                    'wickets' => (int) $user->wickets_taken,
+                    'best_bowling' => (string) $user->best_bowling,
+                    'economy' => (float) $user->economy_rate,
+                ]
+            ];
+
             return response()->json([
                 'status' => 'success',
                 'found' => true,
                 'source' => 'user_profile',
-                'player' => [
-                    'user_id' => $user->id,
-                    'name' => $user->name,
-                    'handle' => $user->handle,
-                    'phone' => $user->phone ?? $query,
-                    'avatar' => $user->avatar_url,
-                    'role' => $user->player_role ?? 'All-Rounder',
-                    'batting_style' => $user->batting_style ?? 'Right Handed Bat',
-                    'bowling_style' => $user->bowling_style ?? 'Right Arm Medium',
-                    'stats' => [
-                        'matches' => (int) $user->matches_played,
-                        'runs' => (int) $user->total_runs,
-                        'highest_score' => (string) $user->highest_score,
-                        'batting_avg' => (float) $user->batting_avg,
-                        'strike_rate' => (float) $user->strike_rate,
-                        'fifties' => (int) $user->fifties,
-                        'hundreds' => (int) $user->hundreds,
-                        'wickets' => (int) $user->wickets_taken,
-                        'best_bowling' => (string) $user->best_bowling,
-                        'economy' => (float) $user->economy_rate,
-                    ]
-                ]
+                'player' => $userPlayer,
+                'players' => array_merge([$userPlayer], $players),
+            ]);
+        }
+
+        if (!empty($players)) {
+            return response()->json([
+                'status' => 'success',
+                'found' => true,
+                'source' => 'player_directory',
+                'player' => $players[0],
+                'players' => $players,
             ]);
         }
 
@@ -416,39 +431,46 @@ class MatchesController extends Controller
                 ->when($pastPlayer->player_phone, fn($q) => $q->orWhere('player_phone', $pastPlayer->player_phone))
                 ->max('runs_scored');
 
+            $pastData = [
+                'id' => 'mp_' . md5($pastPlayer->player_name),
+                'user_id' => $pastPlayer->user_id,
+                'name' => $pastPlayer->player_name,
+                'handle' => '@' . Str::slug($pastPlayer->player_name),
+                'phone' => $pastPlayer->player_phone ?? $query,
+                'avatar' => 'https://ui-avatars.com/api/?name=' . urlencode($pastPlayer->player_name) . '&background=0D8ABC&color=fff',
+                'country' => 'Grassroots Cricket',
+                'role' => $pastPlayer->player_role ?? 'All-Rounder',
+                'batting_style' => 'Right Handed Bat',
+                'bowling_style' => 'Right Arm Medium',
+                'highlights' => 'Grassroots League Player',
+                'stats' => [
+                    'matches' => $matchesPlayedCount,
+                    'runs' => $runsScored,
+                    'highest_score' => (string) $highest,
+                    'batting_avg' => $matchesPlayedCount > 0 ? round($runsScored / $matchesPlayedCount, 1) : 0,
+                    'strike_rate' => 125.0,
+                    'fifties' => 0,
+                    'hundreds' => 0,
+                    'wickets' => $wickets,
+                    'best_bowling' => 'N/A',
+                    'economy' => 7.2,
+                ]
+            ];
+
             return response()->json([
                 'status' => 'success',
                 'found' => true,
                 'source' => 'past_matches',
-                'player' => [
-                    'user_id' => $pastPlayer->user_id,
-                    'name' => $pastPlayer->player_name,
-                    'handle' => '@' . Str::slug($pastPlayer->player_name),
-                    'phone' => $pastPlayer->player_phone ?? $query,
-                    'avatar' => 'https://ui-avatars.com/api/?name=' . urlencode($pastPlayer->player_name) . '&background=0D8ABC&color=fff',
-                    'role' => $pastPlayer->player_role ?? 'All-Rounder',
-                    'batting_style' => 'Right Handed Bat',
-                    'bowling_style' => 'Right Arm Medium',
-                    'stats' => [
-                        'matches' => $matchesPlayedCount,
-                        'runs' => $runsScored,
-                        'highest_score' => (string) $highest,
-                        'batting_avg' => $matchesPlayedCount > 0 ? round($runsScored / $matchesPlayedCount, 1) : 0,
-                        'strike_rate' => 125.0,
-                        'fifties' => 0,
-                        'hundreds' => 0,
-                        'wickets' => $wickets,
-                        'best_bowling' => 'N/A',
-                        'economy' => 7.2,
-                    ]
-                ]
+                'player' => $pastData,
+                'players' => [$pastData],
             ]);
         }
 
         return response()->json([
             'status' => 'success',
             'found' => false,
-            'message' => 'Player not registered yet. You can add them with this WhatsApp number.',
+            'message' => 'No cricketers or users found matching this search.',
+            'players' => [],
             'suggested_phone' => $query,
         ]);
     }
