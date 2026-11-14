@@ -188,10 +188,15 @@ class UmpireController extends Controller
      */
     public function show(UmpireProfile $umpire): View
     {
-        $umpire->load(['user', 'bookings' => fn($q) => $q->where('match_date', '>=', now()->toDateString())]);
+        $umpire->load([
+            'user',
+            'bookings' => fn($q) => $q->where('match_date', '>=', now()->toDateString()),
+            'matches' => fn($q) => $q->with('scores')->latest('match_date')->take(10),
+        ]);
+        $officiatedMatches = $umpire->matches;
         $isSelf = Auth::check() && Auth::id() === $umpire->user_id;
 
-        return view('umpires.show', compact('umpire', 'isSelf'));
+        return view('umpires.show', compact('umpire', 'isSelf', 'officiatedMatches'));
     }
 
     /**
@@ -257,6 +262,10 @@ class UmpireController extends Controller
         }
 
         $booking->update(['status' => $validated['status']]);
+
+        if ($validated['status'] === 'completed') {
+            $booking->umpireProfile?->recalculateStats();
+        }
 
         return back()->with('status', "Booking status updated to {$validated['status']}!");
     }

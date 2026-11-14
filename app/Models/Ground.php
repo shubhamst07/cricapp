@@ -26,6 +26,7 @@ class Ground extends Model
         'images',
         'description',
         'status',
+        'matches_hosted',
     ];
 
     protected $casts = [
@@ -66,5 +67,24 @@ class Ground extends Model
     public function bookings(): HasMany
     {
         return $this->hasMany(GroundBooking::class)->orderByDesc('booking_date');
+    }
+
+    public function matches(): HasMany
+    {
+        return $this->hasMany(CricketMatch::class, 'ground_id')->orderByDesc('match_date');
+    }
+
+    /**
+     * Recalculate matches hosted from completed matches and bookings.
+     */
+    public function recalculateStats(): void
+    {
+        $completedMatches = $this->matches()->where('status', 'completed')->count();
+        $completedBookings = $this->bookings()->where('status', 'completed')->count();
+        $totalHosted = max((int) $this->matches_hosted, $completedMatches + $completedBookings);
+
+        $this->update([
+            'matches_hosted' => $totalHosted,
+        ]);
     }
 }

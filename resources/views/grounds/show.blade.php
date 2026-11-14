@@ -160,6 +160,26 @@
             <!-- Left 2 Cols: Details -->
             <div class="lg:col-span-2 space-y-6">
 
+                <!-- Ground Key Stats Bar -->
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="p-5 rounded-2xl bg-[#131b2e] border border-white/10 text-center">
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Matches Hosted</span>
+                        <span class="text-3xl font-black text-emerald-400 mt-1 block">{{ $ground->matches_hosted ?? 0 }}+</span>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-[#131b2e] border border-white/10 text-center">
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Pitch Type</span>
+                        <span class="text-sm font-black text-white mt-2 block">{{ $ground->pitch_type }}</span>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-[#131b2e] border border-white/10 text-center">
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Ground Status</span>
+                        <span class="text-xs font-black uppercase text-emerald-400 mt-3 inline-block px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                            {{ ucfirst($ground->status) }} 🟢
+                        </span>
+                    </div>
+                </div>
+
                 <!-- Amenities Box -->
                 <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-3">
                     <h3 class="text-base font-black text-white flex items-center gap-2">
@@ -188,6 +208,41 @@
                     <div class="text-xs sm:text-sm text-slate-300 leading-relaxed space-y-2 whitespace-pre-line">
                         {{ $ground->description ?: 'High quality cricket pitch maintained for competitive local cricket tournaments, corporate matches, and friendly weekend games.' }}
                     </div>
+                </div>
+
+                <!-- Recent Matches Hosted at this Arena -->
+                <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-base font-black text-white flex items-center gap-2">
+                            <span>🏟️</span>
+                            <span>Matches Hosted at this Arena</span>
+                        </h3>
+                        <span class="text-xs text-emerald-400 font-bold">{{ $ground->matches_hosted ?? 0 }} Total Matches</span>
+                    </div>
+
+                    @if(isset($hostedMatches) && $hostedMatches->isNotEmpty())
+                        <div class="space-y-2.5">
+                            @foreach($hostedMatches as $m)
+                                <a href="{{ route('matches.show', $m) }}"
+                                   class="block p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition group">
+                                    <div class="flex items-center justify-between text-xs mb-1">
+                                        <span class="font-extrabold text-white group-hover:text-emerald-400 transition">{{ $m->team1_name }} vs {{ $m->team2_name }}</span>
+                                        <span class="text-[10px] text-slate-400">{{ $m->match_date?->format('M d, Y') }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[11px] text-slate-400">
+                                        <span>🏆 {{ $m->tournament_name ?? 'Club Match' }} • {{ $m->match_type ?? 'T20' }}</span>
+                                        <span class="font-bold {{ $m->status === 'completed' ? 'text-emerald-400' : 'text-amber-400' }}">
+                                            {{ ucfirst($m->status) }}
+                                        </span>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="text-center py-6 text-xs text-slate-400">
+                            <span>No matches hosted on LiveCricket recorded yet.</span>
+                        </div>
+                    @endif
                 </div>
 
             </div>

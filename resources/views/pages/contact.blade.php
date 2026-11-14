@@ -15,10 +15,10 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="https://wa.me/919876543210?text=Hi%20Shubham,%20I%20have%20an%20inquiry%20about%20LiveCricket" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition">
+            <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20inquiry%20about%20LiveCricket" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition">
                 <span>💬 Quick WhatsApp</span>
             </a>
-            <a href="tel:+919876543210" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-800 dark:text-white font-bold text-xs border border-slate-200 dark:border-white/10 transition">
+            <a href="tel:+918219795479" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-800 dark:text-white font-bold text-xs border border-slate-200 dark:border-white/10 transition">
                 <span>📞 Call Now</span>
             </a>
         </div>
@@ -51,8 +51,8 @@
                         </div>
                         <div>
                             <span class="block text-slate-400 text-[10px] uppercase font-bold">Phone Number</span>
-                            <a href="tel:+919876543210" class="font-extrabold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400">
-                                +91 98765 43210
+                            <a href="tel:+918219795479" class="font-extrabold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400">
+                                +91 82197 95479
                             </a>
                         </div>
                     </div>
@@ -63,7 +63,7 @@
                         </div>
                         <div>
                             <span class="block text-slate-400 text-[10px] uppercase font-bold">WhatsApp Direct</span>
-                            <a href="https://wa.me/919876543210?text=Hi%20Shubham,%20I%20have%20an%20inquiry%20regarding%20LiveCricket" target="_blank" rel="noopener noreferrer" class="font-extrabold text-emerald-600 dark:text-emerald-400 hover:underline">
+                            <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20inquiry%20regarding%20LiveCricket" target="_blank" rel="noopener noreferrer" class="font-extrabold text-emerald-600 dark:text-emerald-400 hover:underline">
                                 Chat on WhatsApp ⚡
                             </a>
                         </div>
@@ -140,7 +140,7 @@
                             </label>
                             <input type="text"
                                    name="phone"
-                                   placeholder="e.g. +91 98765 43210"
+                                   placeholder="e.g. +91 82197 95479"
                                    value="{{ old('phone') }}"
                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
                             @error('phone')

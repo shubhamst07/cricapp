@@ -285,10 +285,57 @@
                                class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Ground / Venue</label>
-                        <input type="text" name="venue" placeholder="e.g. Shivaji Park Ground"
-                               class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
+                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">🏟️ Ground / Venue</label>
+                        @if(isset($grounds) && $grounds->isNotEmpty())
+                            <div class="space-y-1.5" x-data="{ customVenue: false }">
+                                <div x-show="!customVenue">
+                                    <select name="ground_id" class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                                            @change="if($event.target.value === 'custom') { customVenue = true; $event.target.value = ''; }">
+                                        <option value="">-- Choose Registered Ground (Optional) --</option>
+                                        @foreach($grounds as $g)
+                                            <option value="{{ $g->id }}">{{ $g->name }} ({{ $g->city }}) • {{ $g->pitch_type }}</option>
+                                        @endforeach
+                                        <option value="custom">✍️ Type Custom Ground / Venue</option>
+                                    </select>
+                                </div>
+                                <div x-show="customVenue" class="flex gap-2">
+                                    <input type="text" name="venue" placeholder="e.g. Shivaji Park Ground, Dadar"
+                                           class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                    <button type="button" @click="customVenue = false" class="px-3 py-1 rounded-xl bg-white/10 text-xs text-slate-300 hover:text-white shrink-0">▾ List</button>
+                                </div>
+                            </div>
+                        @else
+                            <input type="text" name="venue" placeholder="e.g. Shivaji Park Ground"
+                                   class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
+                        @endif
                     </div>
+                </div>
+
+                <!-- Match Official / Umpire -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">⚖️ Official Match Umpire</label>
+                    @if(isset($umpires) && $umpires->isNotEmpty())
+                        <div class="space-y-1.5" x-data="{ customUmpire: false }">
+                            <div x-show="!customUmpire">
+                                <select name="umpire_id" class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                        @change="if($event.target.value === 'custom') { customUmpire = true; $event.target.value = ''; }">
+                                    <option value="">-- Select Certified Umpire (Optional) --</option>
+                                    @foreach($umpires as $u)
+                                        <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->city }}) • ⭐ {{ number_format($u->rating, 1) }} • {{ $u->matches_umpired }}+ matches</option>
+                                    @endforeach
+                                    <option value="custom">✍️ Type Custom Umpire Name</option>
+                                </select>
+                            </div>
+                            <div x-show="customUmpire" class="flex gap-2">
+                                <input type="text" name="umpire_name" placeholder="Enter umpire name (e.g. Anil Chaudhary)"
+                                       class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <button type="button" @click="customUmpire = false" class="px-3 py-1 rounded-xl bg-white/10 text-xs text-slate-300 hover:text-white shrink-0">▾ List</button>
+                            </div>
+                        </div>
+                    @else
+                        <input type="text" name="umpire_name" placeholder="Enter umpire name (Optional)"
+                               class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    @endif
                 </div>
 
                 <!-- Toss Details -->

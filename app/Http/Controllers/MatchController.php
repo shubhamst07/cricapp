@@ -164,7 +164,9 @@ class MatchController extends Controller
     public function create(): View
     {
         $teams = Team::orderBy('name')->get();
-        return view('matches.create', compact('teams'));
+        $umpires = \App\Models\UmpireProfile::where('status', '!=', 'inactive')->orderBy('name')->get();
+        $grounds = \App\Models\Ground::where('status', '!=', 'maintenance')->orderBy('name')->get();
+        return view('matches.create', compact('teams', 'umpires', 'grounds'));
     }
 
     /**
@@ -179,7 +181,10 @@ class MatchController extends Controller
             'match_type' => 'nullable|string|max:50',
             'total_overs' => 'nullable|integer|min:1|max:100',
             'ball_type' => 'nullable|string|max:50',
+            'ground_id' => 'nullable|exists:grounds,id',
             'venue' => 'nullable|string|max:255',
+            'umpire_id' => 'nullable|exists:umpire_profiles,id',
+            'umpire_name' => 'nullable|string|max:255',
             'match_date' => 'required|date',
             'status' => 'required|in:scheduled,live,completed,abandoned',
             'toss_decision' => 'nullable|string|max:255',
@@ -199,6 +204,19 @@ class MatchController extends Controller
             abort(401);
         }
 
+        if ($request->filled('ground_id') && empty($validated['venue'])) {
+            $gr = \App\Models\Ground::find($request->input('ground_id'));
+            if ($gr) {
+                $validated['venue'] = $gr->name . ($gr->city ? (', ' . $gr->city) : '');
+            }
+        }
+        if ($request->filled('umpire_id') && empty($validated['umpire_name'])) {
+            $ump = \App\Models\UmpireProfile::find($request->input('umpire_id'));
+            if ($ump) {
+                $validated['umpire_name'] = $ump->name;
+            }
+        }
+
         $match = CricketMatch::create([
             'user_id' => $userId,
             'team1_name' => $validated['team1_name'],
@@ -207,7 +225,10 @@ class MatchController extends Controller
             'match_type' => $validated['match_type'] ?? 'T20',
             'total_overs' => $validated['total_overs'] ?? 20,
             'ball_type' => $validated['ball_type'] ?? 'Tennis Ball',
+            'ground_id' => $validated['ground_id'] ?? null,
             'venue' => $validated['venue'] ?? 'Local Ground',
+            'umpire_id' => $validated['umpire_id'] ?? null,
+            'umpire_name' => $validated['umpire_name'] ?? null,
             'match_date' => $validated['match_date'],
             'status' => $validated['status'],
             'toss_decision' => $validated['toss_decision'] ?? null,
@@ -301,6 +322,10 @@ class MatchController extends Controller
             }
         }
 
+        if ($match->status === 'completed') {
+            $match->syncOfficialsAndGroundStats();
+        }
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'status' => 'success',
@@ -317,7 +342,7 @@ class MatchController extends Controller
      */
     public function show(CricketMatch $match): View
     {
-        $match->load(['scores', 'players.user']);
+        $match->load(['scores', 'players.user', 'umpire', 'ground']);
         $teams = Team::orderBy('name')->get();
 
         $state = $match->live_state ?: [
@@ -382,7 +407,11 @@ class MatchController extends Controller
         $score2 = $match->getScoreForTeam($match->team2_name);
         $currentScoreObj = $activeInningNum == 1 ? $score1 : $score2;
 
-        return view('matches.broadcast', compact('match', 'state', 'striker', 'nonStriker', 'bowler', 'score1', 'score2', 'currentScoreObj', 'activeInningNum', 'isOwner'));
+        $agoraAppId = config('services.agora.app_id', env('AGORA_APP_ID', ''));
+        $agoraChannel = 'livecricket_match_' . $match->id;
+        $isCameraLive = !empty($state['is_camera_live']);
+
+        return view('matches.broadcast', compact('match', 'state', 'striker', 'nonStriker', 'bowler', 'score1', 'score2', 'currentScoreObj', 'activeInningNum', 'isOwner', 'agoraAppId', 'agoraChannel', 'isCameraLive'));
     }
 
     /**
@@ -417,6 +446,55 @@ class MatchController extends Controller
             'bowler' => $bowler,
             'this_over' => $state['this_over'] ?? [],
             'commentary' => array_slice($state['commentary'] ?? [], 0, 30),
+            'stream_url' => $match->stream_url,
+            'embed_stream_url' => $match->embed_stream_url,
+            'is_camera_live' => (bool) ($state['is_camera_live'] ?? false),
+            'agora_app_id' => config('services.agora.app_id', env('AGORA_APP_ID', '')),
+            'agora_channel' => 'livecricket_match_' . $match->id,
+            'webrtc_offer' => $state['webrtc_offer'] ?? null,
+            'webrtc_answer' => $state['webrtc_answer'] ?? null,
+        ]);
+    }
+
+    /**
+     * Update Live Stream Signal (In-App Camera WebRTC / Agora sync).
+     */
+    public function updateStreamSignal(Request $request, CricketMatch $match): JsonResponse
+    {
+        $userId = Auth::id();
+        $isOwner = $userId && ($match->user_id === $userId);
+
+        $state = $match->live_state ?: [];
+
+        // Broadcaster / Match Owner updates
+        if ($request->has('is_camera_live') || $request->filled('stream_url') || $request->filled('webrtc_offer')) {
+            if (!$isOwner) {
+                return response()->json(['status' => 'error', 'message' => 'Unauthorized: Only match owner can start/stop live stream.'], 403);
+            }
+            if ($request->has('is_camera_live')) {
+                $state['is_camera_live'] = (bool) $request->boolean('is_camera_live');
+            }
+            if ($request->filled('stream_url')) {
+                $match->stream_url = $request->input('stream_url');
+                $match->save();
+            }
+            if ($request->filled('webrtc_offer')) {
+                $state['webrtc_offer'] = $request->input('webrtc_offer');
+            }
+        }
+
+        // Audience answer for P2P connection
+        if ($request->filled('webrtc_answer')) {
+            $state['webrtc_answer'] = $request->input('webrtc_answer');
+        }
+
+        $match->update(['live_state' => $state]);
+
+        return response()->json([
+            'status' => 'success',
+            'is_camera_live' => (bool) ($state['is_camera_live'] ?? false),
+            'stream_url' => $match->stream_url,
+            'embed_stream_url' => $match->embed_stream_url,
         ]);
     }
 
@@ -426,9 +504,11 @@ class MatchController extends Controller
     public function edit(CricketMatch $match): View
     {
         $this->authorizeMatch($match);
-        $match->load(['players.user']);
+        $match->load(['players.user', 'umpire', 'ground']);
         $teams = Team::orderBy('name')->get();
-        return view('matches.edit', compact('match', 'teams'));
+        $umpires = \App\Models\UmpireProfile::where('status', '!=', 'inactive')->orderBy('name')->get();
+        $grounds = \App\Models\Ground::where('status', '!=', 'maintenance')->orderBy('name')->get();
+        return view('matches.edit', compact('match', 'teams', 'umpires', 'grounds'));
     }
 
     /**
@@ -445,7 +525,10 @@ class MatchController extends Controller
             'match_type' => 'nullable|string|max:50',
             'total_overs' => 'nullable|integer|min:1|max:100',
             'ball_type' => 'nullable|string|max:50',
+            'ground_id' => 'nullable|exists:grounds,id',
             'venue' => 'nullable|string|max:255',
+            'umpire_id' => 'nullable|exists:umpire_profiles,id',
+            'umpire_name' => 'nullable|string|max:255',
             'match_date' => 'required|date',
             'status' => 'required|in:scheduled,live,completed,abandoned',
             'toss_decision' => 'nullable|string|max:255',
@@ -454,7 +537,24 @@ class MatchController extends Controller
             'stream_url' => 'nullable|string|max:500',
         ]);
 
+        if ($request->filled('ground_id') && empty($validated['venue'])) {
+            $gr = \App\Models\Ground::find($request->input('ground_id'));
+            if ($gr) {
+                $validated['venue'] = $gr->name . ($gr->city ? (', ' . $gr->city) : '');
+            }
+        }
+        if ($request->filled('umpire_id') && empty($validated['umpire_name'])) {
+            $ump = \App\Models\UmpireProfile::find($request->input('umpire_id'));
+            if ($ump) {
+                $validated['umpire_name'] = $ump->name;
+            }
+        }
+
         $match->update($validated);
+
+        if ($match->status === 'completed') {
+            $match->syncOfficialsAndGroundStats();
+        }
 
         // Sync Team 1 Players if sent
         if ($request->filled('team1_players')) {
@@ -567,6 +667,10 @@ class MatchController extends Controller
             $match->match_result = $validated['match_result'];
         }
         $match->save();
+
+        if ($match->status === 'completed') {
+            $match->syncOfficialsAndGroundStats();
+        }
 
         return response()->json([
             'status' => 'success',
@@ -1119,6 +1223,7 @@ class MatchController extends Controller
                 $match->status = 'completed';
                 $match->match_result = $matchResultText;
                 $match->save();
+                $match->syncOfficialsAndGroundStats();
             }
         }
 
@@ -1630,6 +1735,36 @@ class MatchController extends Controller
         }
 
         return redirect()->route('matches.show', $newMatch)->with('status', 'Rematch created! Both squads copied successfully 🏏');
+    }
+
+    /**
+     * Rate official umpire for this match (1-5 stars).
+     */
+    public function rateUmpire(Request $request, CricketMatch $match): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'rating' => 'required|numeric|min:1|max:5',
+        ]);
+
+        if (!$match->umpire_id) {
+            return back()->with('error', 'No official umpire is assigned to this match.');
+        }
+
+        $match->update(['umpire_rating' => $validated['rating']]);
+        if ($match->umpire) {
+            $match->umpire->recalculateStats();
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Umpire rating submitted successfully! ⭐',
+                'umpire_rating' => (float) $validated['rating'],
+                'new_overall_rating' => (float) $match->umpire?->fresh()->rating,
+            ]);
+        }
+
+        return back()->with('status', 'Umpire rating submitted successfully! ⭐');
     }
 
     /**

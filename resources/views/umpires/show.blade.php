@@ -154,6 +154,44 @@
                     </p>
                 </div>
 
+                <!-- Officiated Matches Record -->
+                <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-base font-black text-white flex items-center gap-2">
+                            <span>⚖️</span>
+                            <span>Officiated Matches & History</span>
+                        </h3>
+                        <span class="text-xs text-indigo-400 font-bold">{{ $umpire->matches_umpired }} Total Matches</span>
+                    </div>
+
+                    @if(isset($officiatedMatches) && $officiatedMatches->isNotEmpty())
+                        <div class="space-y-2.5">
+                            @foreach($officiatedMatches as $m)
+                                <a href="{{ route('matches.show', $m) }}"
+                                   class="block p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition group">
+                                    <div class="flex items-center justify-between text-xs mb-1">
+                                        <span class="font-extrabold text-white group-hover:text-indigo-400 transition">{{ $m->team1_name }} vs {{ $m->team2_name }}</span>
+                                        <span class="text-[10px] text-slate-400">{{ $m->match_date?->format('M d, Y') }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[11px] text-slate-400">
+                                        <span>📍 {{ $m->venue ?? 'Ground' }} • {{ $m->tournament_name ?? 'Club Match' }}</span>
+                                        <span class="font-bold {{ $m->status === 'completed' ? 'text-emerald-400' : 'text-amber-400' }}">
+                                            {{ ucfirst($m->status) }}
+                                            @if($m->umpire_rating)
+                                                <span class="ml-1 text-amber-300">⭐ {{ $m->umpire_rating }}</span>
+                                            @endif
+                                        </span>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="text-center py-6 text-xs text-slate-400">
+                            <span>No matches officiated on LiveCricket recorded yet.</span>
+                        </div>
+                    @endif
+                </div>
+
             </div>
 
             <!-- Right Column: Direct Contact & Booking Widget -->

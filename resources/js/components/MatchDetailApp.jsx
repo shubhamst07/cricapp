@@ -2007,26 +2007,6 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             {/* ==================== TAB: BALL-BY-BALL COMMENTARY ==================== */}
             {activeTab === 'commentary' && (
                 <div className="space-y-6">
-                    {/* Commentary Hero Header */}
-                    <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-indigo-700 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
-                        <div className="relative z-10 space-y-2 max-w-2xl">
-                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-bold text-white uppercase tracking-wider">
-                                <Radio className="w-3.5 h-3.5 animate-pulse text-amber-300" />
-                                CricApp Live Engine
-                            </div>
-                            <h2 className="text-2xl md:text-3xl font-black tracking-tight">
-                                Ball-by-Ball Live Commentary
-                            </h2>
-                            <p className="text-xs md:text-sm text-amber-100 leading-relaxed">
-                                Real-time match progression, big boundary highlights, milestone alerts & live community blogging for {match.name || 'this match'}.
-                            </p>
-                        </div>
-                        {/* Background watermark */}
-                        <div className="absolute -bottom-6 -right-6 text-white/10 font-black text-9xl select-none pointer-events-none">
-                            🎙️
-                        </div>
-                    </div>
-
                     {/* Live Commentary Broadcast Box - ONLY shown to Admin */}
                     {isAdmin && (
                         <div className="bg-[#131b2e] border border-amber-500/30 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">

@@ -202,10 +202,15 @@ class GroundController extends Controller
      */
     public function show(Ground $ground): View
     {
-        $ground->load(['user', 'bookings' => fn($q) => $q->where('booking_date', '>=', now()->toDateString())]);
+        $ground->load([
+            'user',
+            'bookings' => fn($q) => $q->where('booking_date', '>=', now()->toDateString()),
+            'matches' => fn($q) => $q->with('scores')->latest('match_date')->take(10),
+        ]);
+        $hostedMatches = $ground->matches;
         $isOwner = Auth::check() && Auth::id() === $ground->user_id;
 
-        return view('grounds.show', compact('ground', 'isOwner'));
+        return view('grounds.show', compact('ground', 'isOwner', 'hostedMatches'));
     }
 
     /**
@@ -271,6 +276,10 @@ class GroundController extends Controller
         }
 
         $booking->update(['status' => $validated['status']]);
+
+        if ($validated['status'] === 'completed') {
+            $booking->ground?->recalculateStats();
+        }
 
         return back()->with('status', "Booking status updated to {$validated['status']}!");
     }

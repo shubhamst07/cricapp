@@ -506,9 +506,31 @@
                         @endif
                     </span>
                 </div>
-                <div class="text-slate-400 flex items-center gap-1.5">
-                    <span>📍</span>
-                    <span>{{ $match->venue ?? 'Ground Venue' }}</span>
+                <div class="text-slate-400 flex flex-wrap items-center gap-y-1 gap-x-2">
+                    <span class="flex items-center gap-1">
+                        <span>📍</span>
+                        @if($match->ground_id)
+                            <a href="{{ route('grounds.show', $match->ground_id) }}" class="text-emerald-400 hover:text-emerald-300 font-bold hover:underline transition">
+                                {{ $match->venue ?? 'Ground Venue' }} 🏟️
+                            </a>
+                        @else
+                            <span>{{ $match->venue ?? 'Ground Venue' }}</span>
+                        @endif
+                    </span>
+
+                    @if($match->umpire_id && $match->umpire)
+                        <span class="text-white/20">•</span>
+                        <span class="flex items-center gap-1">
+                            <span>⚖️ Umpire:</span>
+                            <a href="{{ route('umpires.show', $match->umpire_id) }}" class="text-indigo-400 hover:text-indigo-300 font-bold hover:underline transition inline-flex items-center gap-1">
+                                <span>{{ $match->umpire->name }}</span>
+                                <span class="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px]">⭐ {{ number_format($match->umpire->rating, 1) }}</span>
+                            </a>
+                        </span>
+                    @elseif(!empty($match->umpire_name))
+                        <span class="text-white/20">•</span>
+                        <span>⚖️ Umpire: <strong>{{ $match->umpire_name }}</strong></span>
+                    @endif
                 </div>
             </div>
 
@@ -518,10 +540,62 @@
                     <span>{{ $match->player_of_match }}</span>
                 </div>
             @endif
+
+            @if($match->umpire_id && $match->umpire && $match->status === 'completed')
+                <div class="mt-3 p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                     x-data="{
+                        currentRating: {{ (float) ($match->umpire_rating ?: 0) }},
+                        hoverRating: 0,
+                        saving: false,
+                        rated: {{ $match->umpire_rating ? 'true' : 'false' }},
+                        async submitRating(val) {
+                            this.saving = true;
+                            try {
+                                const res = await fetch('{{ route('matches.rate-umpire', $match) }}', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                        'Accept': 'application/json'
+                                    },
+                                    body: JSON.stringify({ rating: val })
+                                });
+                                const data = await res.json();
+                                if (data.status === 'success') {
+                                    this.currentRating = val;
+                                    this.rated = true;
+                                }
+                            } catch(e) {}
+                            this.saving = false;
+                        }
+                     }">
+                    <div class="flex items-center gap-2">
+                        <span class="p-1.5 rounded-lg bg-indigo-600/30 text-indigo-300">⚖️</span>
+                        <div>
+                            <span class="font-bold text-white block">Official Umpire: {{ $match->umpire->name }}</span>
+                            <span class="text-[11px] text-slate-400" x-text="rated ? 'Thanks! You gave a ' + currentRating + '★ rating.' : 'Rate this match\'s umpiring performance'"></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <template x-for="star in [1, 2, 3, 4, 5]" :key="star">
+                            <button type="button"
+                                    @mouseenter="hoverRating = star"
+                                    @mouseleave="hoverRating = 0"
+                                    @click="submitRating(star)"
+                                    :disabled="saving"
+                                    class="text-lg transition transform hover:scale-125 focus:outline-none"
+                                    :class="(hoverRating || currentRating) >= star ? 'text-amber-400' : 'text-slate-600'">
+                                ★
+                            </button>
+                        </template>
+                        <span class="ml-1 text-[11px] font-bold text-amber-300" x-show="currentRating > 0" x-text="currentRating + ' / 5'"></span>
+                    </div>
+                </div>
+            @endif
         </div>
 
         <!-- ============================================== -->
-        <!-- LIVE STREAM BROADCAST (YOUTUBE / FACEBOOK) -->
+        <!-- LIVE STREAM BROADCAST (PHONE CAMERA / YOUTUBE) -->
         <!-- ============================================== -->
         @if($match->stream_url)
             <div class="bg-[#131b2e] border border-red-500/30 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden" x-data="{ streamOpen: true }">
@@ -529,7 +603,7 @@
                     <div class="flex items-center gap-2.5">
                         <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
                         <span class="font-black text-red-500 uppercase tracking-wider">LIVE STREAM BROADCAST</span>
-                        <span class="text-slate-400">• YouTube / Facebook</span>
+                        <span class="text-slate-400">• Video Stream with TV Overlay</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <a href="{{ route('matches.broadcast', $match) }}" 
@@ -566,6 +640,28 @@
                         </div>
                     @endif
                 </div>
+            </div>
+        @elseif($match->status === 'live' || (Auth::check() && Auth::id() === $match->user_id))
+            <div class="bg-gradient-to-r from-slate-900 via-[#131b2e] to-red-950/40 border border-red-500/20 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-2xl shrink-0">
+                        📹
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-black text-white">Live Broadcast & Ground Camera Studio</h3>
+                            <span class="px-2 py-0.5 rounded-md bg-red-600/20 text-red-400 text-[10px] font-black uppercase">Live Ready</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            {{ $isOwner ? 'Go live directly from your phone camera with TV graphics scoreboard overlay.' : 'Watch real-time live ground video stream with synchronized TV scoreboard.' }}
+                        </p>
+                    </div>
+                </div>
+                <a href="{{ route('matches.broadcast', $match) }}"
+                   class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-extrabold text-xs transition flex items-center gap-2 shadow-lg shadow-red-600/30 shrink-0">
+                    <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                    <span>{{ $isOwner ? '🔴 Open Broadcast Studio' : '📺 Watch Live Stream' }}</span>
+                </a>
             </div>
         @endif
 
@@ -1413,14 +1509,10 @@
         <div x-show="activeMainTab === 'commentary'" x-cloak class="space-y-6">
             <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
                 <!-- Header with Filters -->
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
-                            <span class="text-[10px] font-black uppercase text-red-500 tracking-wider">LIVE COMMENTARY</span>
-                        </div>
-                        <h3 class="font-black text-xl text-white mt-0.5">Ball-by-Ball Live Commentary</h3>
-                        <p class="text-slate-400 text-xs">Real-time ball description, shot breakdown, and match commentary.</p>
+                <div class="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                        <span class="text-xs font-black uppercase text-red-500 tracking-wider">LIVE COMMENTARY</span>
                     </div>
 
                     <!-- Commentary Outcome Filter Buttons -->

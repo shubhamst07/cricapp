@@ -28,17 +28,31 @@
 @endsection
 
 @section('content')
+<!-- Agora WebRTC Live Streaming SDK for Real-time In-App Phone Camera Broadcast -->
+<script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
+
 <div class="py-4 sm:py-6 bg-slate-950 min-h-screen text-slate-100 font-sans select-none" x-data="{
     // Broadcast Source ('camera' or 'youtube')
     streamSource: '{{ !empty($match->embed_stream_url) ? 'youtube' : 'camera' }}',
     streamUrlInput: '{{ addslashes($match->stream_url ?? '') }}',
     embedStreamUrl: '{{ addslashes($match->embed_stream_url ?? '') }}',
     editStreamModal: false,
+    activeStreamTab: 'camera',
 
-    // Camera Stream States
-    streamActive: false,
+    // In-App WebRTC Camera Broadcast States
+    agoraAppId: '{{ $agoraAppId }}',
+    agoraChannel: '{{ $agoraChannel }}',
+    isCameraLive: {{ $isCameraLive ? 'true' : 'false' }},
+    agoraClient: null,
+    localAudioTrack: null,
+    localVideoTrack: null,
+    hasAgoraStream: false,
+    viewerConnected: false,
+    streamActive: {{ $isCameraLive ? 'true' : 'false' }},
+    isBroadcasting: false,
+
     facingMode: 'environment', // 'environment' for rear cricket ground camera, 'user' for selfie
-    micMuted: true,
+    micMuted: false,
     isBroadcaster: {{ $isOwner ? 'true' : 'false' }},
     showKeypadDrawer: false,
     eventBannerText: '',
@@ -69,7 +83,7 @@
     toastMsg: '',
     showToast(msg) {
         this.toastMsg = msg;
-        setTimeout(() => { this.toastMsg = ''; }, 3000);
+        setTimeout(() => { this.toastMsg = ''; }, 3200);
     },
 
     triggerBanner(type, text) {
@@ -137,62 +151,182 @@
         }
     },
 
-    // Camera Broadcaster Engine
+    // Camera Broadcaster Engine (In-App Real-time Live Stream)
     async startCamera() {
         try {
-            if (window.localMediaStream) {
-                window.localMediaStream.getTracks().forEach(track => track.stop());
+            if (this.isBroadcasting) return;
+
+            // 1. Try Agora WebRTC Live Broadcast
+            if (typeof AgoraRTC !== 'undefined' && this.agoraAppId) {
+                try {
+                    this.agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+                    await this.agoraClient.setClientRole('host');
+                    await this.agoraClient.join(this.agoraAppId, this.agoraChannel, null, null);
+
+                    const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
+                        { AEC: true, ANS: true },
+                        { facingMode: this.facingMode, encoderConfig: '720p_1' }
+                    );
+                    this.localAudioTrack = audioTrack;
+                    this.localVideoTrack = videoTrack;
+
+                    await this.agoraClient.publish([audioTrack, videoTrack]);
+
+                    const previewDiv = document.getElementById('broadcasterAgoraPreview');
+                    if (previewDiv) {
+                        videoTrack.play(previewDiv);
+                    }
+                    this.hasAgoraStream = true;
+                } catch(agoraErr) {
+                    console.warn('Agora WebRTC connect failed, starting local camera preview:', agoraErr);
+                }
             }
 
-            const constraints = {
-                video: {
-                    facingMode: { ideal: this.facingMode },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                },
-                audio: !this.micMuted
-            };
-
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            window.localMediaStream = stream;
-            const videoElem = document.getElementById('broadcastVideo');
-            if (videoElem) {
-                videoElem.srcObject = stream;
-                videoElem.play();
+            // Fallback / Local camera stream
+            if (!this.hasAgoraStream) {
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: this.facingMode },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: !this.micMuted
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                window.localMediaStream = stream;
+                const videoElem = document.getElementById('broadcastVideo');
+                if (videoElem) {
+                    videoElem.srcObject = stream;
+                    videoElem.play();
+                }
             }
+
             this.streamActive = true;
-            this.showToast('🔴 Camera Live! Ground streaming active.');
+            this.isBroadcasting = true;
+            this.isCameraLive = true;
+
+            // Notify backend that Broadcaster is live with camera
+            await fetch('{{ route('matches.stream-signal', $match) }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ is_camera_live: true })
+            });
+
+            this.showToast('🔴 YOU ARE LIVE! Phone camera is streaming to all viewers.');
         } catch(err) {
             console.error('Camera access error:', err);
             this.showToast('⚠️ Camera permission denied or device not found.');
         }
     },
 
-    stopCamera() {
-        if (window.localMediaStream) {
-            window.localMediaStream.getTracks().forEach(track => track.stop());
-            window.localMediaStream = null;
+    async stopCamera() {
+        try {
+            if (this.localAudioTrack) {
+                this.localAudioTrack.stop();
+                this.localAudioTrack.close();
+                this.localAudioTrack = null;
+            }
+            if (this.localVideoTrack) {
+                this.localVideoTrack.stop();
+                this.localVideoTrack.close();
+                this.localVideoTrack = null;
+            }
+            if (this.agoraClient) {
+                await this.agoraClient.leave();
+                this.agoraClient = null;
+            }
+            if (window.localMediaStream) {
+                window.localMediaStream.getTracks().forEach(track => track.stop());
+                window.localMediaStream = null;
+            }
+            const videoElem = document.getElementById('broadcastVideo');
+            if (videoElem) videoElem.srcObject = null;
+
+            this.streamActive = false;
+            this.isBroadcasting = false;
+            this.isCameraLive = false;
+            this.hasAgoraStream = false;
+
+            // Notify backend that stream ended
+            await fetch('{{ route('matches.stream-signal', $match) }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ is_camera_live: false })
+            });
+
+            this.showToast('⏹️ Broadcast stopped.');
+        } catch(e) {
+            console.error(e);
         }
-        const videoElem = document.getElementById('broadcastVideo');
-        if (videoElem) videoElem.srcObject = null;
-        this.streamActive = false;
-        this.showToast('⏹️ Broadcast stopped.');
     },
 
     async toggleCameraFlip() {
         this.facingMode = (this.facingMode === 'environment') ? 'user' : 'environment';
         if (this.streamActive) {
+            await this.stopCamera();
             await this.startCamera();
         }
     },
 
     toggleMic() {
         this.micMuted = !this.micMuted;
+        if (this.localAudioTrack) {
+            this.localAudioTrack.setEnabled(!this.micMuted);
+        }
         if (window.localMediaStream) {
             const audioTracks = window.localMediaStream.getAudioTracks();
             audioTracks.forEach(t => t.enabled = !this.micMuted);
         }
         this.showToast(this.micMuted ? '🔇 Microphone muted' : '🎙️ Microphone on');
+    },
+
+    // Audience In-App Live Stream Subscriber
+    async connectAudienceStream(data) {
+        if (this.viewerConnected || this.isBroadcaster) return;
+
+        const appId = data.agora_app_id || this.agoraAppId;
+        const channel = data.agora_channel || this.agoraChannel;
+
+        if (typeof AgoraRTC !== 'undefined' && appId && channel) {
+            try {
+                this.agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+                await this.agoraClient.setClientRole('audience');
+
+                this.agoraClient.on('user-published', async (user, mediaType) => {
+                    await this.agoraClient.subscribe(user, mediaType);
+                    if (mediaType === 'video') {
+                        const container = document.getElementById('audienceAgoraVideo');
+                        if (container) {
+                            user.videoTrack.play(container);
+                            this.hasAgoraStream = true;
+                        }
+                    }
+                    if (mediaType === 'audio') {
+                        user.audioTrack.play();
+                    }
+                });
+
+                this.agoraClient.on('user-unpublished', (user, mediaType) => {
+                    if (mediaType === 'video') {
+                        this.hasAgoraStream = false;
+                    }
+                });
+
+                await this.agoraClient.join(appId, channel, null, null);
+                this.viewerConnected = true;
+                this.isCameraLive = true;
+            } catch(e) {
+                console.warn('Audience Agora stream connect error:', e);
+            }
+        }
     },
 
     toggleFullscreen() {
@@ -262,7 +396,7 @@
         }
     },
 
-    // Background State Poller (Auto-syncs overlay with scorer)
+    // Background State Poller (Auto-syncs overlay & live stream with broadcaster)
     startPolling() {
         setInterval(async () => {
             try {
@@ -282,6 +416,28 @@
                     if (data.commentary) this.commentaryList = data.commentary;
                     this.matchStatus = data.match_status;
                     this.matchResult = data.match_result;
+
+                    // Sync In-App Phone Camera Live Stream State
+                    if (data.is_camera_live) {
+                        this.isCameraLive = true;
+                        if (!this.isBroadcaster && !this.viewerConnected) {
+                            this.connectAudienceStream(data);
+                        }
+                    } else {
+                        if (!this.isBroadcaster && this.isCameraLive) {
+                            this.isCameraLive = false;
+                            this.viewerConnected = false;
+                            this.hasAgoraStream = false;
+                            if (this.agoraClient) {
+                                try { this.agoraClient.leave(); } catch(e) {}
+                                this.agoraClient = null;
+                            }
+                        }
+                    }
+
+                    if (data.embed_stream_url && data.embed_stream_url !== this.embedStreamUrl) {
+                        this.embedStreamUrl = data.embed_stream_url;
+                    }
 
                     // Trigger banner if remote score updated to 4, 6 or Wicket
                     if (this.scoreWickets > prevWickets && prevWickets !== 0) {
@@ -306,7 +462,7 @@
         <span x-text="toastMsg"></span>
     </div>
 
-    <!-- Modal: Edit / Add YouTube / Facebook Live Stream URL (Broadcaster Only) -->
+    <!-- Modal: Broadcast Settings & Stream Options (Broadcaster Only) -->
     @if($isOwner)
     <div x-cloak x-show="editStreamModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
          x-transition:enter="transition ease-out duration-200"
@@ -315,15 +471,66 @@
         <div class="bg-[#131b2e] border border-white/15 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
             <div class="flex items-center justify-between pb-3 border-b border-white/10">
                 <div class="flex items-center gap-2 font-black text-white text-base">
-                    <span class="text-xl">📺</span>
-                    <span>Set YouTube / Facebook Live Stream</span>
+                    <span class="text-xl">📡</span>
+                    <span>Live Broadcast Studio Settings</span>
                 </div>
                 <button type="button" @click="editStreamModal = false" class="text-slate-400 hover:text-white font-bold text-sm">✕</button>
             </div>
 
-            <div class="space-y-3 text-xs">
-                <p class="text-slate-300">
-                    Paste YouTube Live or Facebook Live URL here. The live video will play for all audience members worldwide with the TV scoreboard overlay updating in real-time!
+            <!-- Tabs: Phone Camera vs External Stream -->
+            <div class="grid grid-cols-2 gap-2 p-1 bg-black/40 rounded-2xl border border-white/10 text-xs font-bold">
+                <button type="button" @click="activeStreamTab = 'camera'"
+                        :class="activeStreamTab === 'camera' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+                        class="py-2 rounded-xl transition flex items-center justify-center gap-1.5">
+                    <span>📱 In-App Phone Camera</span>
+                </button>
+                <button type="button" @click="activeStreamTab = 'youtube'"
+                        :class="activeStreamTab === 'youtube' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+                        class="py-2 rounded-xl transition flex items-center justify-center gap-1.5">
+                    <span>🔴 YouTube / FB Live</span>
+                </button>
+            </div>
+
+            <!-- Tab 1: In-App Camera Details -->
+            <div x-show="activeStreamTab === 'camera'" class="space-y-3 text-xs">
+                <div class="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 space-y-1">
+                    <span class="font-extrabold flex items-center gap-1.5">
+                        <span>✓</span>
+                        <span>Zero External App Needed!</span>
+                    </span>
+                    <p class="text-[11px] text-slate-300">
+                        Organizers can broadcast live directly from their mobile phone camera (rear ground view or selfie). All users watching will see the real-time video with the TV scoreboard overlay on top.
+                    </p>
+                </div>
+
+                <div class="p-3 rounded-xl bg-white/5 border border-white/5 text-[11px] space-y-1">
+                    <span class="text-slate-400 font-bold uppercase block">Agora WebRTC Cloud Relay:</span>
+                    <div class="flex items-center justify-between text-slate-300">
+                        <span>Channel Name:</span>
+                        <code class="font-mono text-amber-300 font-bold" x-text="agoraChannel"></code>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-300">
+                        <span>Status:</span>
+                        <span class="text-emerald-400 font-bold flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            <span>Ultra-Low Latency Ready (0.3s)</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button type="button" @click="editStreamModal = false; streamSource = 'camera'; if(!streamActive) startCamera();"
+                            class="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 transition flex items-center justify-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                        <span x-text="streamActive ? 'Return to Camera Broadcast ➔' : 'Start Phone Camera Live Now 🔴'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab 2: External Stream (YouTube / Facebook / Twitch) -->
+            <div x-show="activeStreamTab === 'youtube'" class="space-y-3 text-xs">
+                <p class="text-slate-300 leading-relaxed">
+                    If you are already streaming on YouTube Live or Facebook Live, paste the video URL below to embed it with the real-time TV scorecard overlay.
                 </p>
                 <div>
                     <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1">Live Stream URL</label>
@@ -337,15 +544,14 @@
                     <div>• <b>Facebook Live:</b> Video page link (`facebook.com/.../videos/...`)</div>
                     <div>• <b>Twitch:</b> Channel link (`twitch.tv/...`)</div>
                 </div>
-            </div>
-
-            <div class="flex items-center justify-end gap-2 pt-2">
-                <button type="button" @click="editStreamModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-white font-bold text-xs">
-                    Cancel
-                </button>
-                <button type="button" @click="saveStreamUrl()" class="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md">
-                    Save & Load Stream ➔
-                </button>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" @click="editStreamModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-white font-bold text-xs">
+                        Cancel
+                    </button>
+                    <button type="button" @click="saveStreamUrl()" class="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md">
+                        Save & Load Stream ➔
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -359,14 +565,20 @@
         <div id="broadcastArenaContainer" 
              class="relative w-full aspect-video sm:rounded-3xl overflow-hidden bg-black shadow-2xl border border-white/10 flex flex-col justify-between">
 
-            <!-- 1. LIVE VIDEO CAMERA STREAM (Broadcaster Device Preview) -->
+            <!-- 1. BROADCASTER DEVICE LIVE CAMERA PREVIEW -->
             @if($isOwner)
-                <video x-show="streamSource === 'camera'" id="broadcastVideo" autoplay playsinline muted 
+                <div id="broadcasterAgoraPreview" x-show="streamSource === 'camera' && hasAgoraStream" class="absolute inset-0 w-full h-full object-cover z-0"></div>
+                <video x-show="streamSource === 'camera' && !hasAgoraStream && streamActive" id="broadcastVideo" autoplay playsinline muted 
                        class="absolute inset-0 w-full h-full object-cover z-0"></video>
             @endif
 
-            <!-- 2. EMBEDDED YOUTUBE / FACEBOOK LIVE STREAM (Shown to Audience & Broadcaster) -->
-            <template x-if="embedStreamUrl && (streamSource === 'youtube' || !{{ $isOwner ? 'true' : 'false' }})">
+            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (Real-time Video from Organizer's Phone Camera) -->
+            @if(!$isOwner)
+                <div x-show="isCameraLive" id="audienceAgoraVideo" class="absolute inset-0 w-full h-full object-cover z-0 overflow-hidden bg-black"></div>
+            @endif
+
+            <!-- 3. EMBEDDED YOUTUBE / FACEBOOK LIVE STREAM (Shown when YouTube/FB link is set) -->
+            <template x-if="embedStreamUrl && (streamSource === 'youtube' || (!isCameraLive && !{{ $isOwner ? 'true' : 'false' }}))">
                 <iframe :src="embedStreamUrl" 
                         class="absolute inset-0 w-full h-full z-0 border-0 pointer-events-auto" 
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
@@ -382,17 +594,17 @@
                     </div>
                     <h3 class="text-xl sm:text-2xl font-black text-white">Live Camera Broadcast Studio</h3>
                     <p class="text-slate-400 text-xs sm:text-sm max-w-md mt-1">
-                        Start device camera or connect a <b class="text-white">YouTube / Facebook Live stream</b> so audience worldwide can watch this match live.
+                        Go live directly using your <b class="text-white">Phone Camera</b> so all audience members can watch this match in real-time, or connect a YouTube / Facebook stream.
                     </p>
                     <div class="flex flex-wrap items-center justify-center gap-3 mt-4">
                         <button type="button" @click="startCamera()" 
                                 class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-red-600/30 transition flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                            <span>Start Camera Preview 🔴</span>
+                            <span>🔴 Go Live (Phone Camera)</span>
                         </button>
                         <button type="button" @click="editStreamModal = true" 
                                 class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black text-xs uppercase tracking-wider transition flex items-center gap-2">
-                            <span>🔗 Add YouTube / FB Stream</span>
+                            <span>⚙️ Stream Settings / YouTube</span>
                         </button>
                     </div>
                 </div>
@@ -411,8 +623,8 @@
                     </button>
                 </div>
             @else
-                <!-- AUDIENCE / VIEWER WAITING SCREEN (When stream_url is not added yet) -->
-                <div x-show="!embedStreamUrl" 
+                <!-- AUDIENCE / VIEWER WAITING SCREEN (When neither in-app camera nor YouTube is active) -->
+                <div x-show="!isCameraLive && !embedStreamUrl" 
                      class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
                     <div class="w-16 h-16 rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-3xl mb-3 shadow-inner">
                         📺
@@ -423,7 +635,7 @@
                     </div>
                     <h3 class="text-xl sm:text-2xl font-black text-white">Live Video Stream Has Not Started Yet</h3>
                     <p class="text-slate-400 text-xs sm:text-sm max-w-md mt-1 leading-relaxed">
-                        The match organizer has not connected a live video broadcast yet. You can follow live scores and ball-by-ball commentary below in real-time.
+                        The match organizer has not started the live video broadcast yet. As soon as they go live with their phone camera or stream link, the live video will appear here automatically with real-time TV scoreboard!
                     </p>
                     <div class="flex items-center gap-3 mt-4">
                         <a href="{{ route('matches.show', $match) }}" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs transition">

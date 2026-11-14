@@ -129,7 +129,7 @@
                 <p><strong>Platform:</strong> LiveCricket App</p>
                 <p><strong>Data Officer & Founder:</strong> Shubham Thakur</p>
                 <p><strong>Email:</strong> <a href="mailto:shubhamthakurst007@gmail.com" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">shubhamthakurst007@gmail.com</a></p>
-                <p><strong>Phone:</strong> <a href="tel:+919876543210" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">+91 98765 43210</a></p>
+                <p><strong>Phone:</strong> <a href="tel:+918219795479" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">+91 82197 95479</a></p>
                 <p><strong>Headquarters:</strong> Delhi NCR / India</p>
             </div>
         </section>

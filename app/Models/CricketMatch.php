@@ -21,6 +21,10 @@ class CricketMatch extends Model
         'team2_name',
         'match_date',
         'venue',
+        'ground_id',
+        'umpire_id',
+        'umpire_name',
+        'umpire_rating',
         'status', // scheduled, live, completed, abandoned
         'external_match_id',
         'tournament_name',
@@ -70,6 +74,16 @@ class CricketMatch extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function umpire(): BelongsTo
+    {
+        return $this->belongsTo(UmpireProfile::class, 'umpire_id');
+    }
+
+    public function ground(): BelongsTo
+    {
+        return $this->belongsTo(Ground::class, 'ground_id');
     }
 
     public function team1(): BelongsTo
@@ -139,6 +153,41 @@ class CricketMatch extends Model
 
         $oversStr = $score->overs ? "({$score->overs} ov)" : '';
         return "{$score->runs}/{$score->wickets} {$oversStr}";
+    }
+
+    /**
+     * Automatically synchronize stats for linked Umpire, Ground, and local Players when match concludes.
+     */
+    public function syncOfficialsAndGroundStats(): void
+    {
+        try {
+            if ($this->umpire_id && $this->umpire) {
+                $this->umpire->recalculateStats();
+            }
+
+            if ($this->ground_id && $this->ground) {
+                $this->ground->recalculateStats();
+            }
+
+            // Sync all registered players career stats
+            $this->loadMissing('players.user');
+            foreach ($this->players as $mp) {
+                if ($mp->user) {
+                    $mp->user->recalculateCricketStats();
+                } elseif (!empty($mp->player_phone)) {
+                    $clean = preg_replace('/[^0-9]/', '', $mp->player_phone);
+                    if (strlen($clean) >= 6) {
+                        $user = User::whereRaw("REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ?", ["%{$clean}%"])->first();
+                        if ($user) {
+                            $mp->update(['user_id' => $user->id]);
+                            $user->recalculateCricketStats();
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Error syncing officials/ground stats: ' . $e->getMessage());
+        }
     }
 
     /**

@@ -826,7 +826,7 @@
                         <!-- WhatsApp Phone Number -->
                         <div>
                             <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">WhatsApp / Phone Number</label>
-                            <input type="text" name="phone" value="{{ old('phone', $user->phone) }}" placeholder="+91 98765 43210"
+                            <input type="text" name="phone" value="{{ old('phone', $user->phone) }}" placeholder="+91 82197 95479"
                                    class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
                             <p class="text-[10px] text-slate-400 mt-1">Scorers can find you and fetch your career records using this WhatsApp number!</p>
                         </div>

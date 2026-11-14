@@ -96,6 +96,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/matches/{match}/scores/{score}', [MatchController::class, 'updateScore'])->name('matches.scores.update');
     Route::delete('/matches/{match}/scores/{score}', [MatchController::class, 'destroyScore'])->name('matches.scores.destroy');
     Route::post('/matches/{match}/rematch', [MatchController::class, 'rematch'])->name('matches.rematch');
+    Route::post('/matches/{match}/rate-umpire', [MatchController::class, 'rateUmpire'])->name('matches.rate-umpire');
 
     // Grounds Management & Booking
     Route::get('/grounds/create', [GroundController::class, 'create'])->name('grounds.create');
@@ -118,5 +119,6 @@ Route::get('/umpires/{umpire}', [UmpireController::class, 'show'])->name('umpire
 Route::get('/matches/{match}', [MatchController::class, 'show'])->name('matches.show');
 Route::get('/matches/{match}/broadcast', [MatchController::class, 'broadcast'])->name('matches.broadcast');
 Route::get('/matches/{match}/broadcast/state', [MatchController::class, 'broadcastState'])->name('matches.broadcast.state');
+Route::post('/matches/{match}/stream-signal', [MatchController::class, 'updateStreamSignal'])->name('matches.stream-signal');
 
 require __DIR__.'/auth.php';
