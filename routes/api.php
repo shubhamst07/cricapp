@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/matches/summary', [MatchesController::class, 'summary'])->name('api.matches.summary');
 Route::get('/matches/current', [MatchesController::class, 'current'])->name('api.matches.current');
+Route::match(['get', 'post'], '/cron/sync-live-matches', [MatchesController::class, 'syncLiveMatches'])->name('api.cron.sync-live-matches');
 Route::get('/matches/{matchId}', [MatchesController::class, 'show'])->name('api.matches.show');
 Route::get('/matches/{matchId}/scorecard', [MatchesController::class, 'scorecard'])->name('api.matches.scorecard');
 Route::get('/matches/{matchId}/commentary', [MatchesController::class, 'commentary'])->name('api.matches.commentary');

@@ -554,4 +554,29 @@ class MatchesController extends Controller
             'message' => 'Player removed from squad.',
         ]);
     }
+
+    /**
+     * Web Cron Endpoint: Triggered by cron services (e.g. cron-job.org / UptimeRobot / Laravel Scheduler)
+     * Keeps Render alive and continuously persists live scorecards, commentary, and ball-by-ball overs into the database.
+     */
+    public function syncLiveMatches(CricketDataService $cricket, Request $request): JsonResponse
+    {
+        $cronSecret = config('services.cron.secret') ?? env('CRON_SECRET');
+        if (!empty($cronSecret)) {
+            $token = $request->header('X-Cron-Secret') ?? $request->query('token');
+            if ($token !== $cronSecret) {
+                return response()->json(['status' => 'error', 'message' => 'Unauthorized cron token.'], 401);
+            }
+        }
+
+        $command = new \App\Console\Commands\SyncLiveCommentaryCommand();
+        $syncedCount = $command->syncActiveMatches($cricket);
+
+        return response()->json([
+            'status' => 'success',
+            'timestamp' => now()->toIso8601String(),
+            'synced_matches_count' => $syncedCount,
+            'message' => "Successfully synced {$syncedCount} live matches to persistent storage.",
+        ]);
+    }
 }

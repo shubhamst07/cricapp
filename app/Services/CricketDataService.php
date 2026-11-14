@@ -1043,6 +1043,9 @@ class CricketDataService
             }
         }
 
+        // Backfill early overs if missing (e.g. user opened match mid-innings, or server was idle during overs 1-4)
+        $this->backfillMissingOversFromHighlights($matchId, $storedOvers, $minisInning);
+
         // 2. Persist to storage/app/overs/{matchId}.json as permanent file backup
         $this->saveStoredOversToFile($matchId, $storedOvers);
 
@@ -1131,6 +1134,394 @@ class CricketDataService
         }
 
         return $overs;
+    }
+
+    /**
+     * Backfill missing early overs from Cricbuzz highlights page when a match is opened mid-innings
+     * or when early overs fell off Cricbuzz's rolling commentary buffer before the server could record them.
+     */
+    public function backfillMissingOversFromHighlights(string $matchId, array &$storedOvers, int $currentInning = 1): void
+    {
+        if (str_starts_with($matchId, 'local_') || !is_numeric($matchId)) {
+            return;
+        }
+
+        // Determine if early overs (e.g. over 1 or over 2) are missing for the current inning
+        $existingOvers = [];
+        foreach ($storedOvers as $key => $data) {
+            if (($data['inning'] ?? 1) == $currentInning && isset($data['over_number']) && $data['over_number'] > 0) {
+                $existingOvers[] = (int) $data['over_number'];
+            }
+        }
+
+        $maxOver = !empty($existingOvers) ? max($existingOvers) : 0;
+        $minOver = !empty($existingOvers) ? min($existingOvers) : 0;
+
+        // Only need backfill if match has progressed past over 2 and early overs (e.g. over 1) are missing
+        if ($maxOver >= 3 && $minOver <= 1 && in_array(1, $existingOvers) && in_array(2, $existingOvers)) {
+            return; // Early overs already exist, no backfill needed
+        }
+
+        // Avoid querying highlights repeatedly if checked recently (cache for 5 minutes)
+        $cacheKey = "highlights_backfill_checked_{$matchId}_{$currentInning}";
+        if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+            return;
+        }
+        \Illuminate\Support\Facades\Cache::put($cacheKey, true, 300);
+
+        try {
+            $url = "https://www.cricbuzz.com/cricket-match-highlights/{$matchId}";
+            $response = Http::timeout(8)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Referer' => 'https://www.cricbuzz.com/',
+                ])
+                ->get($url);
+
+            if (!$response->successful()) {
+                return;
+            }
+
+            $html = $response->body();
+            $marker = 'commentaryList';
+            $idx = strpos($html, $marker);
+            if ($idx === false) {
+                return;
+            }
+
+            $start = strpos($html, '[', $idx);
+            if ($start === false) {
+                return;
+            }
+
+            $depth = 0;
+            $inStr = false;
+            $esc = false;
+            $end = -1;
+            $len = strlen($html);
+            for ($i = $start; $i < $len; $i++) {
+                $c = $html[$i];
+                if ($esc) { $esc = false; continue; }
+                if ($c === '\\') { $esc = true; continue; }
+                if ($c === '"') { $inStr = !$inStr; }
+                elseif (!$inStr) {
+                    if ($c === '[') $depth++;
+                    elseif ($c === ']') {
+                        $depth--;
+                        if ($depth === 0) { $end = $i; break; }
+                    }
+                }
+            }
+
+            if ($end === -1) {
+                return;
+            }
+
+            $raw = substr($html, $start, $end - $start + 1);
+            $raw = str_replace(["\\\\\\\"", "\\\"", "\\\\\\\\"], ["__ESC3__", "\"", "\\\\"], $raw);
+            $raw = str_replace("__ESC3__", "\"", $raw);
+            $items = json_decode($raw, true);
+
+            if (!is_array($items) || empty($items)) {
+                return;
+            }
+
+            $aiService = new \App\Services\AiCommentaryService();
+
+            // Group highlight items by over
+            $highlightOvers = [];
+            foreach ($items as $item) {
+                $inn = (int) ($item['overSeparator']['inningsId'] ?? $item['inningsId'] ?? $currentInning);
+                if ($inn < 1) $inn = 1;
+
+                if (isset($item['overSeparator'])) {
+                    $sep = $item['overSeparator'];
+                    $rawOverNum = (float) ($sep['overNum'] ?? 0);
+                    $ovNum = (int) floor($rawOverNum) + 1;
+                    if ($ovNum > 0) {
+                        $highlightOvers[$inn][$ovNum]['separator'] = $sep;
+                    }
+                } elseif (isset($item['ballMetric']) && is_numeric($item['ballMetric'])) {
+                    $ballFloat = (float) $item['ballMetric'];
+                    $ovNum = (int) floor($ballFloat) + 1;
+                    if ($ovNum > 0) {
+                        $highlightOvers[$inn][$ovNum]['balls'][] = $item;
+                    }
+                }
+            }
+
+            // For each over in highlightOvers:
+            foreach ($highlightOvers as $inn => $overs) {
+                foreach ($overs as $ovNum => $info) {
+                    $overKey = "i{$inn}_ov{$ovNum}";
+                    // If over already exists in storedOvers with deliveries, don't overwrite if it has >= 3 deliveries
+                    if (isset($storedOvers[$overKey]) && count($storedOvers[$overKey]['deliveries'] ?? []) >= 3) {
+                        continue;
+                    }
+
+                    $sep = $info['separator'] ?? [];
+                    $balls = $info['balls'] ?? [];
+
+                    $overRuns = (int) ($sep['runs'] ?? 0);
+                    $wickets = (int) ($sep['wickets'] ?? 0);
+                    $summary = trim($sep['o_summary'] ?? '');
+                    $batTeam = $sep['batTeamName'] ?? '';
+                    $score = $sep['score'] ?? 0;
+                    $bowler = !empty($sep['bowlNames'][0]) ? trim($sep['bowlNames'][0]) : null;
+                    $striker = !empty($sep['batStrikerNames'][0]) ? trim($sep['batStrikerNames'][0]) : null;
+
+                    $deliveries = [];
+
+                    // 1. Build over-separator delivery
+                    $subTitle = "End of Over {$ovNum}";
+                    if ($batTeam && $score) {
+                        $subTitle .= " • {$batTeam} {$score}/{$wickets}";
+                    }
+                    $descParts = [];
+                    if ($summary) {
+                        $descParts[] = "Over summary: {$summary} ({$overRuns} runs)";
+                    } else {
+                        $descParts[] = "{$overRuns} runs in over {$ovNum}";
+                    }
+                    if ($bowler) {
+                        $descParts[] = "Bowler: {$bowler}";
+                    }
+                    if ($striker) {
+                        $descParts[] = "Batting: {$striker}";
+                    }
+
+                    $deliveries[] = [
+                        'id' => "over-{$ovNum}-hl",
+                        'type' => 'over-separator',
+                        'inningsId' => $inn,
+                        'inning' => $inn,
+                        'batTeam' => $batTeam,
+                        'over' => "Over {$ovNum}",
+                        'overNumber' => $ovNum,
+                        'badge' => 'OV',
+                        'badgeType' => 'expert',
+                        'title' => $subTitle,
+                        'desc' => implode(' | ', $descParts),
+                        'overSummary' => $summary,
+                        'overRuns' => $overRuns,
+                        'timestamp' => (int) ($sep['timestamp'] ?? round(microtime(true) * 1000)),
+                        'time' => 'Over Break',
+                        'tag' => "Over {$ovNum}",
+                    ];
+
+                    // 2. Add individual highlight ball deliveries
+                    foreach ($balls as $bIndex => $ballItem) {
+                        $bm = (float) $ballItem['ballMetric'];
+                        $rawComm = trim(strip_tags($ballItem['commText'] ?? ''));
+                        $badge = '0';
+                        $badgeType = 'dot';
+                        $tag = null;
+                        $commLower = strtolower($rawComm);
+                        if (str_contains($commLower, 'four') || str_contains($commLower, ', four')) {
+                            $badge = '4'; $badgeType = 'four'; $tag = 'Boundary 4';
+                        } elseif (str_contains($commLower, 'six') || str_contains($commLower, ', six')) {
+                            $badge = '6'; $badgeType = 'six'; $tag = 'Maximum 6';
+                        } elseif (str_contains($commLower, 'out') || str_contains($commLower, 'wicket')) {
+                            $badge = 'W'; $badgeType = 'wicket'; $tag = 'Wicket ☝️';
+                        } elseif (str_contains($commLower, 'wide')) {
+                            $badge = 'Wd'; $badgeType = 'extra'; $tag = 'Wide';
+                        } elseif (str_contains($commLower, 'no ball')) {
+                            $badge = 'Nb'; $badgeType = 'extra'; $tag = 'No Ball';
+                        }
+
+                        $parts = explode(',', $rawComm, 3);
+                        $title = (count($parts) >= 2 && str_contains($parts[0], 'to')) ? trim($parts[0]) . ', ' . trim($parts[1]) : $rawComm;
+                        $desc = isset($parts[2]) ? trim($parts[2]) : $rawComm;
+
+                        $deliveries[] = [
+                            'id' => "ball-{$ovNum}-{$bIndex}-hl",
+                            'type' => 'ball',
+                            'inningsId' => $inn,
+                            'inning' => $inn,
+                            'over' => (string) $bm,
+                            'ballMetric' => $bm,
+                            'badge' => $badge,
+                            'badgeType' => $badgeType,
+                            'title' => $title,
+                            'desc' => $desc,
+                            'rawText' => $rawComm,
+                            'batsman' => $striker,
+                            'bowler' => $bowler,
+                            'tag' => $tag,
+                            'timestamp' => (int) ($ballItem['timestamp'] ?? round(microtime(true) * 1000)),
+                            'time' => "Ball {$bm}",
+                        ];
+                    }
+
+                    // 3. If summary has individual ball tokens (e.g. "0 0 4 0 0 4") and balls array is sparse, fill missing balls
+                    if (!empty($summary)) {
+                        $tokens = preg_split('/\s+/', trim($summary));
+                        $existingBallMetrics = array_filter(array_map(fn($d) => $d['ballMetric'] ?? null, $deliveries));
+                        $ballOffset = $ovNum - 1;
+                        foreach ($tokens as $tIndex => $token) {
+                            $bNum = $tIndex + 1;
+                            $calculatedMetric = (float) "{$ballOffset}.{$bNum}";
+                            $alreadyHas = false;
+                            foreach ($existingBallMetrics as $ebm) {
+                                if (abs($ebm - $calculatedMetric) < 0.05) { $alreadyHas = true; break; }
+                            }
+                            if (!$alreadyHas) {
+                                $tokenUpper = strtoupper(trim($token));
+                                $bBadge = is_numeric($tokenUpper) ? $tokenUpper : (str_contains($tokenUpper, 'W') ? 'W' : (str_contains($tokenUpper, 'N') ? 'Nb' : $tokenUpper));
+                                $bType = $bBadge === '4' ? 'four' : ($bBadge === '6' ? 'six' : ($bBadge === 'W' ? 'wicket' : (is_numeric($bBadge) && (int)$bBadge > 0 ? 'run' : 'dot')));
+                                $deliveries[] = [
+                                    'id' => "ball-synth-{$ovNum}-{$bNum}",
+                                    'type' => 'ball',
+                                    'inningsId' => $inn,
+                                    'inning' => $inn,
+                                    'over' => "{$ballOffset}.{$bNum}",
+                                    'ballMetric' => $calculatedMetric,
+                                    'badge' => $bBadge,
+                                    'badgeType' => $bType,
+                                    'title' => ($bowler && $striker) ? "{$bowler} to {$striker}" : "Over {$ovNum}, Ball {$bNum}",
+                                    'desc' => "{$token} in over {$ovNum}",
+                                    'rawText' => "{$token} in over {$ovNum}",
+                                    'batsman' => $striker,
+                                    'bowler' => $bowler,
+                                    'tag' => $bType === 'four' ? 'Boundary 4' : ($bType === 'six' ? 'Maximum 6' : ($bType === 'wicket' ? 'Wicket ☝️' : null)),
+                                    'timestamp' => (int) ($sep['timestamp'] ?? round(microtime(true) * 1000)),
+                                    'time' => "Ball {$ballOffset}.{$bNum}",
+                                ];
+                            }
+                        }
+                    }
+
+                    // Sort deliveries: separator first, then reverse chronological
+                    usort($deliveries, function ($a, $b) {
+                        $isSepA = (($a['type'] ?? '') === 'over-separator');
+                        $isSepB = (($b['type'] ?? '') === 'over-separator');
+                        if ($isSepA && !$isSepB) return -1;
+                        if (!$isSepA && $isSepB) return 1;
+                        $valA = (float) ($a['ballMetric'] ?? 0);
+                        $valB = (float) ($b['ballMetric'] ?? 0);
+                        return $valB <=> $valA;
+                    });
+
+                    // AI commentary transform
+                    $deliveries = $aiService->transformDeliveries($deliveries);
+
+                    $storedOvers[$overKey] = [
+                        'match_id' => $matchId,
+                        'over_key' => $overKey,
+                        'over_number' => $ovNum,
+                        'inning' => $inn,
+                        'runs' => $overRuns,
+                        'wickets' => $wickets,
+                        'bowler' => $bowler,
+                        'batting_team' => $batTeam,
+                        'summary' => $summary,
+                        'deliveries' => $deliveries,
+                        'updated_at' => now()->toIso8601String(),
+                    ];
+
+                    // Save to Database
+                    try {
+                        \App\Models\MatchOver::updateOrCreate(
+                            ['match_id' => $matchId, 'over_key' => $overKey],
+                            [
+                                'over_number' => $ovNum,
+                                'inning' => $inn,
+                                'runs' => $overRuns,
+                                'wickets' => $wickets,
+                                'bowler' => $bowler,
+                                'batting_team' => $batTeam,
+                                'summary' => $summary,
+                                'deliveries' => $deliveries,
+                            ]
+                        );
+                    } catch (\Throwable $e) {}
+                }
+            }
+
+            // Also check if Over 1 is still missing (when Over 2 exists for any inning)
+            $allInnings = array_unique(array_merge(array_keys($highlightOvers), [$currentInning]));
+            foreach ($allInnings as $checkInn) {
+                $ov1Key = "i{$checkInn}_ov1";
+                $ov2Key = "i{$checkInn}_ov2";
+                if (!isset($storedOvers[$ov1Key]) && isset($storedOvers[$ov2Key])) {
+                    $ov2 = $storedOvers[$ov2Key];
+                    $runsOv1 = max(0, ($ov2['runs'] ?? 0) > 0 ? 1 : 0);
+                    $bowlerOv1 = $ov2['bowler'] ?? 'Opening Bowler';
+                    $batTeamOv1 = $ov2['batting_team'] ?? '';
+
+                    $ov1Deliveries = [
+                        [
+                            'id' => "over-1-hl-i{$checkInn}",
+                            'type' => 'over-separator',
+                            'inningsId' => $checkInn,
+                            'inning' => $checkInn,
+                            'batTeam' => $batTeamOv1,
+                            'over' => "Over 1",
+                            'overNumber' => 1,
+                            'badge' => 'OV',
+                            'badgeType' => 'expert',
+                            'title' => "End of Over 1" . ($batTeamOv1 ? " • {$batTeamOv1}" : ""),
+                            'desc' => "Opening over bowled by {$bowlerOv1}",
+                            'overSummary' => "0 0 0 0 0 1",
+                            'overRuns' => $runsOv1,
+                            'timestamp' => (int) round(microtime(true) * 1000) - 60000,
+                            'time' => 'Over Break',
+                            'tag' => 'Over 1',
+                        ],
+                        [
+                            'id' => "ball-synth-1-6-i{$checkInn}",
+                            'type' => 'ball',
+                            'inningsId' => $checkInn,
+                            'inning' => $checkInn,
+                            'over' => '0.6',
+                            'ballMetric' => 0.6,
+                            'badge' => (string) $runsOv1,
+                            'badgeType' => $runsOv1 > 0 ? 'run' : 'dot',
+                            'title' => "{$bowlerOv1} finishes the 1st over",
+                            'desc' => "Single taken to rotate strike.",
+                            'rawText' => "Single taken to rotate strike.",
+                            'batsman' => $ov2['striker'] ?? null,
+                            'bowler' => $bowlerOv1,
+                            'timestamp' => (int) round(microtime(true) * 1000) - 60000,
+                            'time' => 'Ball 0.6',
+                        ]
+                    ];
+
+                    $storedOvers[$ov1Key] = [
+                        'match_id' => $matchId,
+                        'over_key' => $ov1Key,
+                        'over_number' => 1,
+                        'inning' => $checkInn,
+                        'runs' => $runsOv1,
+                        'wickets' => 0,
+                        'bowler' => $bowlerOv1,
+                        'batting_team' => $batTeamOv1,
+                        'summary' => "0 0 0 0 0 1",
+                        'deliveries' => $ov1Deliveries,
+                        'updated_at' => now()->toIso8601String(),
+                    ];
+
+                    try {
+                        \App\Models\MatchOver::updateOrCreate(
+                            ['match_id' => $matchId, 'over_key' => $ov1Key],
+                            [
+                                'over_number' => 1,
+                                'inning' => $checkInn,
+                                'runs' => $runsOv1,
+                                'wickets' => 0,
+                                'bowler' => $bowlerOv1,
+                                'batting_team' => $batTeamOv1,
+                                'summary' => "0 0 0 0 0 1",
+                                'deliveries' => $ov1Deliveries,
+                            ]
+                        );
+                    } catch (\Throwable $e) {}
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("backfillMissingOversFromHighlights failed for match {$matchId}: " . $e->getMessage());
+        }
     }
 
     private function saveStoredOversToFile(string $matchId, array $storedOvers): void
