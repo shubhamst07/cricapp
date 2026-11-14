@@ -404,12 +404,22 @@ class ScoreService:
             hdr = card.find_previous(class_=lambda cls: cls and "bg-cbGrpHdrBkg" in cls)
             series_name = hdr.get_text(" ", strip=True) if hdr else ""
             series_name = " ".join(series_name.split()).strip()
-            if not series_name:
-                series_name = "Other Matches"
 
             children = [c for c in card.children if hasattr(c, "find_all")]
-
             meta_info = children[0].get_text(" ", strip=True) if len(children) > 0 else ""
+
+            if not series_name or series_name == "Other Matches":
+                if meta_info:
+                    parts = [p.strip() for p in meta_info.split('•') if p.strip()]
+                    for p in parts:
+                        p_lower = p.lower()
+                        if any(w in p_lower for w in ['trophy', 'cup', 'league', 'series', 'championship', 'tour of', 'group', 't20', 'odi', 'test', 'challenge', 'shield', 'division']):
+                            if not re.match(r"^\d+(st|nd|rd|th)?\s+match", p_lower) and not re.match(r"^(final|semi-final|quarter-final)", p_lower):
+                                series_name = p
+                                break
+
+            if not series_name:
+                series_name = "Other Matches"
             status_text = ""
             for el in card.find_all(["div", "span", "p"]):
                 el_cls = " ".join(el.get("class", []))

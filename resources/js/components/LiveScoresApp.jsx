@@ -941,16 +941,18 @@ export default function LiveScoresApp({
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => openPointsTableModal(seriesName, matches[0])}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition"
-                                            title="View Series Points Table"
-                                        >
-                                            <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                                            <span className="hidden sm:inline">Points Table</span>
-                                            <span className="sm:hidden">Table</span>
-                                        </button>
+                                        {isTournamentWithPointsTable(seriesName) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openPointsTableModal(seriesName, matches[0])}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition"
+                                                title="View Series Points Table"
+                                            >
+                                                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                                                <span className="hidden sm:inline">Points Table</span>
+                                                <span className="sm:hidden">Table</span>
+                                            </button>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={() => setSelectedSeries(seriesName)}
@@ -1921,15 +1923,62 @@ function getScoresForTeams(match, team1, team2, isFinished) {
     };
 }
 
+// Check if a match or series is an actual tournament with a valid points table
+function isTournamentWithPointsTable(seriesTitle) {
+    if (!seriesTitle) return false;
+    const clean = seriesTitle.trim();
+    const lower = clean.toLowerCase();
+
+    // Never show points table for generic or miscellaneous buckets
+    if (
+        lower === 'other matches' ||
+        lower === 'other match' ||
+        lower === 'international matches' ||
+        lower === 'local matches' ||
+        lower === 'friendly matches' ||
+        lower === 'practice matches' ||
+        lower === 'warm-up matches' ||
+        lower === 'uncategorized'
+    ) {
+        return false;
+    }
+
+    // Bilateral tours (e.g. "Sri Lanka tour of Pakistan", "India tour of Australia") do NOT have points tables
+    if (
+        lower.includes(' tour of ') ||
+        lower.includes(' in ') ||
+        lower.includes(' vs ') ||
+        lower.includes(' v ')
+    ) {
+        // Unless it explicitly contains a tournament word like trophy / cup / championship / league
+        const hasTourneyWord = ['trophy', 'cup', 'league', 'championship', 'tournament', 'wtc'].some(w => lower.includes(w));
+        if (!hasTourneyWord) return false;
+    }
+
+    // Tournament keywords that actually have standings
+    const tournamentIndicators = [
+        'trophy', 'cup', 'league', 'championship', 'tournament', 'ipl', 'bbl', 'psl', 'cpl', 'bpl', 'hundred',
+        'group', 'division', 'shield', 'wtc', 'world cup', 'asia cup', 'tri-series', 'quadrangular', 'challenge',
+        'super smash', 'blast', 'premier', 't20 league', 't10', 'ranji', 'syed mushtaq', 'vijay hazare', 'deodhar'
+    ];
+
+    return tournamentIndicators.some(w => lower.includes(w));
+}
+
 // Compute points table for any series dynamically from all matches
 function computeSeriesPointsTable(seriesName, allMatches) {
     if (!seriesName) return null;
+    const cleanSeries = seriesName.trim();
+    if (!isTournamentWithPointsTable(cleanSeries)) return null;
 
-    const normSeries = seriesName.trim().toLowerCase();
+    const normSeries = cleanSeries.toLowerCase();
     const seriesMatches = (allMatches || []).filter(m => {
         const s = (m.series || m.series_name || '').trim().toLowerCase();
-        return s === normSeries || (s && normSeries && (s.includes(normSeries) || normSeries.includes(s)));
+        if (!s || s === 'other matches' || s === 'international matches') return false;
+        return s === normSeries;
     });
+
+    if (seriesMatches.length === 0) return null;
 
     const teamsMap = {};
 
@@ -2322,7 +2371,7 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
                 </a>
 
                 <div className="flex items-center gap-3">
-                    {seriesTitle && (
+                    {isTournamentWithPointsTable(seriesTitle) && (
                         <button
                             type="button"
                             onClick={(e) => {
