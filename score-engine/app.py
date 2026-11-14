@@ -276,11 +276,110 @@ class ScoreService:
             raise APIError(500, "failed to process score data")
 
     @classmethod
+    @classmethod
     def parse_rsc_matches(cls, html_text: str) -> List[Dict[str, Any]]:
-        marker = 'matchesList'
-        pos = 0
         results = []
         seen = set()
+
+        # 1. Parse typeMatches (contains all international, league, domestic, and women matches with series & full scores)
+        p = html_text.find("typeMatches")
+        if p != -1:
+            arr_start = html_text.find("[", p)
+            if arr_start != -1:
+                depth = 0
+                arr_end = -1
+                for i in range(arr_start, min(len(html_text), arr_start + 450000)):
+                    if html_text[i] == "[":
+                        depth += 1
+                    elif html_text[i] == "]":
+                        depth -= 1
+                        if depth == 0:
+                            arr_end = i
+                            break
+                if arr_end != -1:
+                    raw_json = html_text[arr_start:arr_end + 1]
+                    cleaned = raw_json.replace('\\\\\\"', '"').replace('\\\"', '"').replace('\\\\\\\\', '\\')
+                    try:
+                        types_list = json.loads(cleaned)
+                        if isinstance(types_list, list):
+                            for type_obj in types_list:
+                                for sm in type_obj.get("seriesMatches", []):
+                                    wrapper = sm.get("seriesAdWrapper") or sm
+                                    s_id = str(wrapper.get("seriesId", ""))
+                                    s_name = wrapper.get("seriesName", "")
+                                    for m in wrapper.get("matches", []):
+                                        info = m.get("matchInfo", {})
+                                        m_id = str(info.get("matchId", ""))
+                                        if not m_id or m_id in seen:
+                                            continue
+                                        seen.add(m_id)
+                                        t1 = info.get("team1", {}).get("teamName", "Team 1")
+                                        t2 = info.get("team2", {}).get("teamName", "Team 2")
+                                        m_score = m.get("matchScore")
+                                        scores = []
+                                        if m_score:
+                                            for team_key, team_name in [("team1Score", t1), ("team2Score", t2)]:
+                                                t_data = m_score.get(team_key)
+                                                if not t_data:
+                                                    continue
+                                                for inngs_key in ["inngs1", "inngs2"]:
+                                                    inn = t_data.get(inngs_key)
+                                                    if not inn:
+                                                        continue
+                                                    runs = inn.get("runs", 0)
+                                                    raw_w = inn.get("wickets")
+                                                    is_all_out = bool(inn.get("isAllOut"))
+                                                    wickets = 10 if is_all_out else (int(raw_w) if raw_w is not None else 0)
+                                                    overs = str(inn.get("overs", "0"))
+                                                    scores.append({
+                                                        "inning": f"{team_name} Innings" if inngs_key == "inngs1" else f"{team_name} 2nd Innings",
+                                                        "batting_team": team_name,
+                                                        "runs": runs,
+                                                        "r": runs,
+                                                        "wickets": wickets,
+                                                        "w": wickets,
+                                                        "overs": overs,
+                                                        "o": overs,
+                                                        "display_score": f"{runs}/{wickets}" if (wickets is not None and wickets > 0) else str(runs)
+                                                    })
+
+                                        state = str(info.get("state", "")).lower()
+                                        status = info.get("status", "") or info.get("shortStatus", "") or info.get("stateTitle", "") or state
+                                        status_lower = status.lower()
+                                        is_completed = (state in ["complete", "result", "finished"]) or any(w in status_lower for w in ["won by", "won the match", "won the series", " beat ", "drawn", "tied", "abandon"])
+                                        is_active_live_text = not is_completed and any(w in status_lower for w in [
+                                            "innings break", "inn break", "break", "lunch", "tea", "dinner",
+                                            "strategic timeout", "drinks", "stump", "trail", "lead",
+                                            "need ", "require ", "target ", "in progress", "rain", "delay", "opt to", "elected to", "chose to"
+                                        ])
+
+                                        match_ended = is_completed
+                                        match_started = (state in ["in progress", "complete", "toss", "stumps"]) or bool(scores) or is_active_live_text
+                                        series_name = s_name or info.get("seriesName", "Other Matches")
+                                        match_desc = info.get("matchDesc", "Match")
+                                        resolved_series = cls.resolve_series_name(title=f"{t1} vs {t2}, {match_desc}", raw_header=series_name, teams=[t1, t2])
+
+                                        results.append({
+                                            "id": m_id,
+                                            "name": f"{t1} vs {t2}, {match_desc}",
+                                            "matchType": match_desc,
+                                            "venue": f"{info.get('venueInfo', {}).get('ground', '')}, {info.get('venueInfo', {}).get('city', '')}".strip(", "),
+                                            "status_text": status,
+                                            "series": resolved_series,
+                                            "series_name": resolved_series,
+                                            "series_id": s_id,
+                                            "teams": [t1, t2],
+                                            "score": scores if scores else None,
+                                            "matchStarted": match_started,
+                                            "matchEnded": match_ended,
+                                            "href": f"/live-cricket-scores/{m_id}"
+                                        })
+                    except Exception:
+                        pass
+
+        # 2. Also parse matchesList (carousel matches fallback)
+        marker = 'matchesList'
+        pos = 0
         while True:
             pos = html_text.find(marker, pos)
             if pos == -1:
@@ -378,7 +477,7 @@ class ScoreService:
                             })
                 except Exception as e:
                     pass
-            pos = arr_start + 1
+            pos = arr_start + len(marker)
         return results
 
     @classmethod

@@ -106,6 +106,15 @@ class LiveScoreController extends Controller
                 return $m;
             }
 
+            // 1.5 Upcoming / Starts at indicators: ALWAYS SCHEDULED, NEVER LIVE OR COMPLETED!
+            $isStartsAt = str_contains($statusLower, 'match starts at') || str_contains($statusLower, 'starts at') || str_contains($statusLower, 'upcoming') || $statusLower === 'preview';
+            if ($isStartsAt && empty($m['score'])) {
+                $m['status'] = 'scheduled';
+                $m['matchStarted'] = false;
+                $m['matchEnded'] = false;
+                return $m;
+            }
+
             // 2. Completed text detection (won by, beat, tied, drawn, etc.)
             $isCompletedText = str_contains($statusLower, 'won by') ||
                 str_contains($statusLower, 'won the match') ||
