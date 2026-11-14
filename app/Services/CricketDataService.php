@@ -284,21 +284,37 @@ class CricketDataService
     {
         if ($this->provider === 'local') {
             return Cache::remember($this->cacheKey("scorecard_{$matchId}"), $this->scorecardTtl, function () use ($matchId) {
-                try {
-                    $response = Http::timeout(15)->get("{$this->localUrl}/scorecard/{$matchId}");
-                    if ($response->successful()) {
-                        $json = $response->json();
-                        if (!empty($json) && ($json['status'] ?? '') === 'success' && (!empty($json['data']['innings']) || !empty($json['data']['batting']))) {
-                            return $json;
-                        }
+                $targetId = $matchId;
+                if (!is_numeric($targetId)) {
+                    $cricbuzzId = $this->resolveCricbuzzIdForMatch($matchId);
+                    if ($cricbuzzId) {
+                        $targetId = $cricbuzzId;
                     }
-                } catch (\Throwable $e) {
-                    // ignore
                 }
 
-                $direct = $this->scrapeCricbuzzScorecardDirectly($matchId);
-                if (!empty($direct)) {
-                    return ['status' => 'success', 'data' => $direct];
+                if (is_numeric($targetId)) {
+                    try {
+                        $response = Http::timeout(10)->get("{$this->localUrl}/scorecard/{$targetId}");
+                        if ($response->successful()) {
+                            $json = $response->json();
+                            if (!empty($json) && ($json['status'] ?? '') === 'success' && (!empty($json['data']['innings']) || !empty($json['data']['batting']))) {
+                                return $json;
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        // ignore
+                    }
+
+                    $direct = $this->scrapeCricbuzzScorecardDirectly($targetId);
+                    if (!empty($direct) && (!empty($direct['innings']) || !empty($direct['batting']))) {
+                        return ['status' => 'success', 'data' => $direct];
+                    }
+                }
+
+                // Fallback: If match has live score in current matches list, synthesize full innings
+                $synth = $this->synthesizeScorecardFromMatch($matchId);
+                if (!empty($synth) && !empty($synth['innings'])) {
+                    return ['status' => 'success', 'data' => $synth];
                 }
 
                 return ['status' => 'error', 'data' => ['batting' => [], 'bowling' => [], 'innings' => []]];
@@ -306,7 +322,138 @@ class CricketDataService
         }
 
         $raw = $this->get('match_scorecard', ['id' => $matchId], $this->scorecardTtl, $this->cacheKey("scorecard_{$matchId}"));
-        return $raw;
+        if (!empty($raw) && ($raw['status'] ?? '') === 'success' && !empty($raw['data']) && (!empty($raw['data']['innings']) || !empty($raw['data']['batting']))) {
+            return $raw;
+        }
+
+        $synth = $this->synthesizeScorecardFromMatch($matchId);
+        if (!empty($synth) && !empty($synth['innings'])) {
+            return ['status' => 'success', 'data' => $synth];
+        }
+
+        return $raw ?: ['status' => 'error', 'data' => ['batting' => [], 'bowling' => [], 'innings' => []]];
+    }
+
+    /**
+     * Resolve a Cricbuzz numeric match ID for a match with UUID/slug by matching its team names.
+     */
+    public function resolveCricbuzzIdForMatch(string $matchId): ?string
+    {
+        $cachedList = $this->getCachedMatches();
+        $match = !empty($cachedList) ? $this->findMatchById($cachedList, $matchId) : null;
+        if (!$match) {
+            $match = $this->findMatchById($this->getCurrentMatches(), $matchId);
+        }
+        if (!$match) {
+            try {
+                $detail = $this->getMatchDetails($matchId);
+                if (!empty($detail) && !empty($detail['score'])) {
+                    $match = $detail;
+                }
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+        if (empty($match) || empty($match['teams']) || !is_array($match['teams']) || count($match['teams']) < 2) {
+            return null;
+        }
+
+        $t1 = strtolower(trim($match['teams'][0]));
+        $t2 = strtolower(trim($match['teams'][1]));
+
+        try {
+            $resp = Http::timeout(5)->get("{$this->localUrl}/matches");
+            if ($resp->successful()) {
+                $data = $resp->json();
+                $cricbuzzMatches = $data['data'] ?? [];
+                foreach ($cricbuzzMatches as $cm) {
+                    $cmId = (string) ($cm['id'] ?? '');
+                    if (!is_numeric($cmId)) continue;
+                    $cmTeams = array_map('strtolower', (array) ($cm['teams'] ?? []));
+                    $cmName = strtolower($cm['name'] ?? '');
+                    $w1 = substr($t1, 0, 4);
+                    $w2 = substr($t2, 0, 4);
+                    if (
+                        (in_array($t1, $cmTeams) && in_array($t2, $cmTeams)) ||
+                        (str_contains($cmName, $w1) && str_contains($cmName, $w2))
+                    ) {
+                        return $cmId;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        return null;
+    }
+
+    /**
+     * Synthesize clean innings objects from a match's live score array when external scorecard is pending.
+     */
+    public function synthesizeScorecardFromMatch(string $matchId): array
+    {
+        $cachedList = $this->getCachedMatches();
+        $match = !empty($cachedList) ? $this->findMatchById($cachedList, $matchId) : null;
+        if (!$match) {
+            $match = $this->findMatchById($this->getCurrentMatches(), $matchId);
+        }
+        if (!$match) {
+            try {
+                $detail = $this->getMatchDetails($matchId);
+                if (!empty($detail) && !empty($detail['score'])) {
+                    $match = $detail;
+                }
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        if (empty($match) || empty($match['score']) || !is_array($match['score'])) {
+            return [];
+        }
+
+        $innings = [];
+        $scoresCount = count($match['score']);
+        foreach ($match['score'] as $idx => $s) {
+            $rawTeam = $s['batting_team'] ?? $s['inning'] ?? "Innings " . ($idx + 1);
+            if (str_contains($rawTeam, ',')) {
+                $rawTeam = explode(',', $rawTeam)[0];
+            }
+            $cleanTeam = trim(preg_replace('/\s*inning\s*\d*/i', '', $rawTeam));
+            if (empty($cleanTeam) && !empty($match['teams'][$idx])) {
+                $cleanTeam = $match['teams'][$idx];
+            }
+
+            $runs = (int) ($s['r'] ?? $s['runs'] ?? 0);
+            $wickets = (int) ($s['w'] ?? $s['wickets'] ?? 0);
+            $overs = (string) ($s['o'] ?? $s['overs'] ?? '0');
+            $ovFloat = (float) $overs;
+            $rr = $ovFloat > 0 ? number_format($runs / $ovFloat, 2) : 'N/A';
+            $displayScore = $s['display_score'] ?? "{$runs}/{$wickets}";
+
+            $isCurrentBatting = ($idx === $scoresCount - 1) && in_array(($match['status'] ?? ''), ['live', 'in progress']);
+
+            $innings[] = [
+                'team' => $cleanTeam ?: "Team " . ($idx + 1),
+                'short_name' => $cleanTeam ?: "Team",
+                'score' => $displayScore,
+                'runs' => $runs,
+                'wickets' => $wickets,
+                'overs' => $overs,
+                'run_rate' => $rr,
+                'is_batting' => $isCurrentBatting,
+                'batting' => [],
+                'bowling' => [],
+                'fall_of_wickets' => []
+            ];
+        }
+
+        return [
+            'innings' => $innings,
+            'batting' => [],
+            'bowling' => []
+        ];
     }
 
     public function getMatchCommentary(string $matchId): array

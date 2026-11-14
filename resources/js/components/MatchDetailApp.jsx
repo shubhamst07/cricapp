@@ -541,8 +541,48 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
     const currentBowling = scData.bowling || [];
     const pom = match.player_of_the_match || scData.player_of_the_match;
 
+    // Resolved innings: merges scorecard innings or synthesizes from match.score
+    const displayInnings = useMemo(() => {
+        if (innings && innings.length > 0) {
+            return innings;
+        }
+        if (Array.isArray(match.score) && match.score.length > 0) {
+            return match.score.map((s, idx) => {
+                const rawName = s.batting_team || s.inning || `Innings ${idx + 1}`;
+                let cleanTeam = rawName;
+                if (cleanTeam.includes(',')) {
+                    cleanTeam = cleanTeam.split(',')[0].trim();
+                }
+                cleanTeam = cleanTeam.replace(/\s*inning\s*\d*/gi, '').trim();
+                if (!cleanTeam && Array.isArray(match.teams)) {
+                    cleanTeam = match.teams[idx] || `Team ${idx + 1}`;
+                }
+
+                const r = s.r ?? s.runs ?? 0;
+                const w = s.w ?? s.wickets ?? 0;
+                const o = s.o ?? s.overs ?? '';
+                const ovNum = parseFloat(o);
+                const rr = (ovNum > 0) ? (r / ovNum).toFixed(2) : 'N/A';
+
+                return {
+                    team: cleanTeam || `Innings ${idx + 1}`,
+                    short_name: cleanTeam || `Innings ${idx + 1}`,
+                    score: s.display_score || `${r}/${w}`,
+                    runs: r,
+                    wickets: w,
+                    overs: o,
+                    run_rate: rr,
+                    batting: [],
+                    bowling: [],
+                    fall_of_wickets: []
+                };
+            });
+        }
+        return [];
+    }, [innings, match.score, match.teams]);
+
     // Current selected inning data (for Scorecard tab)
-    const activeInning = innings[selectedInningIdx] || (innings.length > 0 ? innings[0] : null);
+    const activeInning = displayInnings[selectedInningIdx] || (displayInnings.length > 0 ? displayInnings[0] : null);
 
     // Auto-detect if match has live scores or scorecard data
     const hasActiveScorecard = (innings && innings.length > 0) ||
@@ -1411,61 +1451,67 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     </div>
                 )}
 
-                {/* Always-Visible Live Scorecard Summary Card */}
-                {((innings && innings.length > 0) || (match.score && match.score.length > 0)) && (
+                {/* Always-Visible Live Scorecard Summary Card (Clickable to switch innings scorecard) */}
+                {displayInnings.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                        {innings && innings.length > 0 ? (
-                            innings.map((inn, idx) => {
-                                const isCurrentlyBatting = inn.is_batting || (idx === 0 && effectiveStatus === 'live');
-                                return (
-                                    <div key={idx} className="p-4 rounded-2xl bg-[#0b101e]/90 border border-white/10 flex items-center justify-between shadow-lg">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white font-black text-sm flex items-center justify-center shadow-md shrink-0">
-                                                {String(inn.team || 'T').substring(0, 2).toUpperCase()}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <h3 className="font-black text-white text-base truncate flex items-center gap-2">
-                                                    <span>{inn.team || `Innings ${idx + 1}`}</span>
-                                                    {isCurrentlyBatting && (
-                                                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                                    )}
-                                                </h3>
-                                                <p className="text-xs text-slate-400 font-mono mt-0.5">
-                                                    RR: <span className="text-slate-300 font-bold">{inn.run_rate || 'N/A'}</span>
-                                                    {inn.overs ? ` • ${inn.overs} Overs` : ''}
-                                                </p>
-                                            </div>
+                        {displayInnings.map((inn, idx) => {
+                            const isCurrentlyBatting = inn.is_batting || (idx === displayInnings.length - 1 && effectiveStatus === 'live');
+                            const isSelected = selectedInningIdx === idx && activeTab === 'scorecard';
+                            const rawTeam = inn.team || `Innings ${idx + 1}`;
+                            const cleanTeam = (rawTeam.includes(',') ? rawTeam.split(',')[0] : rawTeam).replace(/\s*inning\s*\d*/gi, '').trim() || rawTeam;
+
+                            return (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedInningIdx(idx);
+                                        setActiveTab('scorecard');
+                                        const el = document.getElementById('scorecard-section');
+                                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    className={`p-4 rounded-2xl border flex items-center justify-between shadow-lg text-left transition-all duration-200 cursor-pointer ${
+                                        isSelected
+                                            ? 'bg-gradient-to-r from-indigo-950/80 via-slate-900 to-indigo-950/80 border-indigo-500 shadow-indigo-500/20 ring-2 ring-indigo-500/50'
+                                            : 'bg-[#0b101e]/90 border-white/10 hover:border-indigo-500/50 hover:bg-[#11182c]'
+                                    }`}
+                                    title={`Click to view ${cleanTeam} scorecard`}
+                                >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className={`w-10 h-10 rounded-xl font-black text-sm flex items-center justify-center shadow-md shrink-0 ${
+                                            isSelected ? 'bg-gradient-to-tr from-indigo-500 to-blue-500 text-white' : 'bg-slate-800 text-slate-300'
+                                        }`}>
+                                            {cleanTeam.substring(0, 2).toUpperCase()}
                                         </div>
-                                        <div className="text-right shrink-0">
-                                            <span className="text-2xl font-black font-mono text-amber-300 tracking-tight">
-                                                {inn.score || '0/0'}
+                                        <div className="min-w-0">
+                                            <h3 className="font-black text-white text-base truncate flex items-center gap-2">
+                                                <span>{cleanTeam}</span>
+                                                {isCurrentlyBatting && (
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" title="Batting Now"></span>
+                                                )}
+                                            </h3>
+                                            <p className="text-xs text-slate-400 font-mono mt-0.5">
+                                                {inn.run_rate && inn.run_rate !== 'N/A' ? (
+                                                    <span>RR: <span className="text-slate-300 font-bold">{inn.run_rate}</span></span>
+                                                ) : null}
+                                                {inn.overs ? ` • ${inn.overs} Overs` : ''}
+                                                <span className="ml-2 text-[10px] text-indigo-400 font-semibold">View Scorecard ›</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <span className="text-2xl font-black font-mono text-amber-300 tracking-tight">
+                                            {inn.score || '0/0'}
+                                        </span>
+                                        {inn.overs && (
+                                            <span className="block text-xs font-mono text-slate-400">
+                                                ({inn.overs} ov)
                                             </span>
-                                            {inn.overs && (
-                                                <span className="block text-xs font-mono text-slate-400">
-                                                    ({inn.overs} ov)
-                                                </span>
-                                            )}
-                                        </div>
+                                        )}
                                     </div>
-                                );
-                            })
-                        ) : (
-                            match.score?.map((s, idx) => {
-                                const sRuns = s.r || s.runs || 0;
-                                let sWickets = s.w ?? s.wickets ?? 0;
-                                const isMatchFinished = effectiveStatus === 'completed' || (match.matchEnded ?? false) || (match.status_text || '').toLowerCase().includes('won by');
-                                if (isMatchFinished && idx === 1 && sWickets === 0 && (match.status_text || '').toLowerCase().includes('won by') && (match.status_text || '').toLowerCase().includes('run')) {
-                                    sWickets = 10;
-                                }
-                                const sDisplay = (s.display_score && s.display_score !== `${sRuns}/0`) ? s.display_score : (sWickets === 10 ? `${sRuns}/10` : `${sRuns}/${sWickets}`);
-                                return (
-                                    <div key={idx} className="p-4 rounded-2xl bg-[#0b101e]/90 border border-white/10 flex items-center justify-between shadow-lg">
-                                        <span className="font-black text-white text-base">{s.batting_team || s.inning || `Innings ${idx + 1}`}</span>
-                                        <span className="text-2xl font-black font-mono text-amber-300">{sDisplay}</span>
-                                    </div>
-                                );
-                            })
-                        )}
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
 
@@ -1594,191 +1640,255 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
             {/* ==================== TAB 1: FULL SCORECARD (Cricbuzz Style) ==================== */}
             {activeTab === 'scorecard' && (
-                <div className="space-y-6">
+                <div id="scorecard-section" className="space-y-6">
                     {/* Innings Selector Pills */}
-                    {innings.length > 0 ? (
+                    {displayInnings.length > 0 ? (
                         <div>
                             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
-                                {innings.map((inn, idx) => (
-                                    <button
-                                        key={idx}
-                                        type="button"
-                                        onClick={() => setSelectedInningIdx(idx)}
-                                        className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-black text-xs transition flex items-center gap-2 border shrink-0 ${
-                                            selectedInningIdx === idx
-                                                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-transparent shadow-lg shadow-indigo-600/30'
-                                                : 'bg-[#131b2e] text-slate-300 hover:bg-white/10 hover:text-white border-white/10'
-                                        }`}
-                                    >
-                                        <span>{inn.team || `Innings ${idx + 1}`}</span>
-                                        <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-black ${
-                                            selectedInningIdx === idx ? 'bg-black/30 text-white' : 'bg-white/10 text-slate-300'
-                                        }`}>
-                                            {inn.score} ({inn.overs} ov)
-                                        </span>
-                                    </button>
-                                ))}
+                                {displayInnings.map((inn, idx) => {
+                                    const innTeam = (inn.team || `Innings ${idx + 1}`).replace(/\s*inning\s*\d*/gi, '').trim() || inn.team;
+                                    return (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => setSelectedInningIdx(idx)}
+                                            className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-black text-xs transition flex items-center gap-2 border shrink-0 ${
+                                                selectedInningIdx === idx
+                                                    ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-transparent shadow-lg shadow-indigo-600/30'
+                                                    : 'bg-[#131b2e] text-slate-300 hover:bg-white/10 hover:text-white border-white/10'
+                                            }`}
+                                        >
+                                            <span>{innTeam}</span>
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-black ${
+                                                selectedInningIdx === idx ? 'bg-black/30 text-white' : 'bg-white/10 text-slate-300'
+                                            }`}>
+                                                {inn.score} {inn.overs ? `(${inn.overs} ov)` : ''}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
                             </div>
 
-                            {/* Active Inning Detailed Tables */}
+                            {/* Active Inning Detailed Tables or Summary Card */}
                             {activeInning && (
                                 <div className="space-y-4 sm:space-y-6 mt-3 sm:mt-4">
-                                    {/* Batting Table */}
-                                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/70 flex flex-wrap justify-between items-center gap-2">
-                                            <h2 className="text-sm sm:text-base font-bold text-gray-900">
-                                                {activeInning.team} Batting
-                                            </h2>
-                                            <span className="text-xs sm:text-sm font-black text-indigo-900 bg-indigo-50 px-2.5 sm:px-3 py-1 rounded-lg">
-                                                {activeInning.score} ({activeInning.overs} Ov, RR: {activeInning.run_rate || 'N/A'})
-                                            </span>
-                                        </div>
-                                        <div className="overflow-x-auto scrollbar-none">
-                                            <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
-                                                <thead className="bg-gray-50 font-semibold text-gray-600 text-[11px] sm:text-xs uppercase tracking-wider">
-                                                    <tr>
-                                                        <th className="px-3 sm:px-6 py-2.5 sm:py-3.5 text-left">Batter</th>
-                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">R</th>
-                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">B</th>
-                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">4s</th>
-                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">6s</th>
-                                                        <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">SR</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100 bg-white">
-                                                    {activeInning.batting?.map((player, idx) => (
-                                                        <tr key={idx} className="hover:bg-gray-50/80 transition">
-                                                            <td className="px-3 sm:px-6 py-2 sm:py-3.5">
+                                    {activeInning.batting && activeInning.batting.length > 0 ? (
+                                        <>
+                                            {/* Batting Table */}
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/70 flex flex-wrap justify-between items-center gap-2">
+                                                    <h2 className="text-sm sm:text-base font-bold text-gray-900">
+                                                        {(activeInning.team || '').replace(/\s*inning\s*\d*/gi, '').trim() || activeInning.team} Batting
+                                                    </h2>
+                                                    <span className="text-xs sm:text-sm font-black text-indigo-900 bg-indigo-50 px-2.5 sm:px-3 py-1 rounded-lg">
+                                                        {activeInning.score} ({activeInning.overs} Ov, RR: {activeInning.run_rate || 'N/A'})
+                                                    </span>
+                                                </div>
+                                                <div className="overflow-x-auto scrollbar-none">
+                                                    <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                                                        <thead className="bg-gray-50 font-semibold text-gray-600 text-[11px] sm:text-xs uppercase tracking-wider">
+                                                            <tr>
+                                                                <th className="px-3 sm:px-6 py-2.5 sm:py-3.5 text-left">Batter</th>
+                                                                <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">R</th>
+                                                                <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">B</th>
+                                                                <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">4s</th>
+                                                                <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">6s</th>
+                                                                <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">SR</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100 bg-white">
+                                                            {activeInning.batting.map((player, idx) => (
+                                                                <tr key={idx} className="hover:bg-gray-50/80 transition">
+                                                                    <td className="px-3 sm:px-6 py-2 sm:py-3.5">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handlePlayerClick(player.id, player.name)}
+                                                                            className="font-bold text-gray-900 hover:text-indigo-600 transition text-left flex items-center gap-1.5 group cursor-pointer"
+                                                                            title="Click to view career record"
+                                                                        >
+                                                                            <span className="group-hover:underline underline-offset-2">{player.name}</span>
+                                                                            {player.out === 'batting' && (
+                                                                                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" title="On Crease"></span>
+                                                                            )}
+                                                                        </button>
+                                                                        <div className={`text-[10px] sm:text-xs mt-0.5 ${
+                                                                            player.out === 'batting' || player.out === 'not out'
+                                                                                ? 'text-emerald-600 font-semibold'
+                                                                                : 'text-gray-400'
+                                                                        }`}>
+                                                                            {player.out}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right font-black text-gray-900 text-sm sm:text-base">{player.runs ?? 0}</td>
+                                                                    <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 font-medium text-xs sm:text-sm">{player.balls ?? 0}</td>
+                                                                    <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 text-xs sm:text-sm">{player.fours ?? 0}</td>
+                                                                    <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 text-xs sm:text-sm">{player.sixes ?? 0}</td>
+                                                                    <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-semibold text-xs sm:text-sm">{player.strikeRate ?? 0}</td>
+                                                                </tr>
+                                                            ))}
+
+                                                            {/* Extras Row */}
+                                                            {activeInning.extras && (
+                                                                <tr className="bg-gray-50/50 text-[11px] sm:text-xs text-gray-600 font-medium">
+                                                                    <td className="px-3 sm:px-6 py-2.5 sm:py-3 font-semibold text-gray-700">Extras</td>
+                                                                    <td colSpan={5} className="px-2 sm:px-4 py-2.5 sm:py-3 text-right">
+                                                                        <span className="font-bold text-gray-900 mr-2">{activeInning.extras.total ?? 0}</span>
+                                                                        <span className="text-gray-500 text-[10px] sm:text-xs">
+                                                                            (b {activeInning.extras.byes ?? 0}, lb {activeInning.extras.legByes ?? 0}, w {activeInning.extras.wides ?? 0}, nb {activeInning.extras.noBalls ?? 0}, p {activeInning.extras.penalty ?? 0})
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+
+                                                            {/* Total Row */}
+                                                            <tr className="bg-indigo-50/40 text-xs sm:text-sm font-bold text-gray-900 border-t border-gray-200">
+                                                                <td className="px-3 sm:px-6 py-2.5 sm:py-3.5">Total</td>
+                                                                <td colSpan={5} className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">
+                                                                    <span className="text-sm sm:text-base font-black text-indigo-900">{activeInning.score}</span>
+                                                                    <span className="text-[10px] sm:text-xs text-gray-500 ml-1.5 font-normal">({activeInning.overs} Overs, RR: {activeInning.run_rate || 'N/A'})</span>
+                                                                </td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                {/* Did Not Bat */}
+                                                {activeInning.did_not_bat && activeInning.did_not_bat.length > 0 && (
+                                                    <div className="px-4 sm:px-6 py-3 border-t border-gray-100 bg-gray-50/30 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
+                                                        <span className="font-bold text-gray-700">Yet to Bat:</span>
+                                                        {activeInning.did_not_bat.map((p, i) => {
+                                                            const pName = typeof p === 'string' ? p : (p.name || 'Player');
+                                                            const pId = typeof p === 'string' ? null : p.id;
+                                                            return (
                                                                 <button
+                                                                    key={i}
                                                                     type="button"
-                                                                    onClick={() => handlePlayerClick(player.id, player.name)}
-                                                                    className="font-bold text-gray-900 hover:text-indigo-600 transition text-left flex items-center gap-1.5 group cursor-pointer"
+                                                                    onClick={() => handlePlayerClick(pId, pName)}
+                                                                    className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-white border border-gray-200 hover:border-indigo-400 hover:text-indigo-600 rounded-lg text-gray-700 font-medium shadow-xs transition cursor-pointer text-xs"
                                                                     title="Click to view career record"
                                                                 >
-                                                                    <span className="group-hover:underline underline-offset-2">{player.name}</span>
-                                                                    {player.out === 'batting' && (
-                                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" title="On Crease"></span>
-                                                                    )}
+                                                                    {pName}
                                                                 </button>
-                                                                <div className={`text-[10px] sm:text-xs mt-0.5 ${
-                                                                    player.out === 'batting' || player.out === 'not out'
-                                                                        ? 'text-emerald-600 font-semibold'
-                                                                        : 'text-gray-400'
-                                                                }`}>
-                                                                    {player.out}
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right font-black text-gray-900 text-sm sm:text-base">{player.runs ?? 0}</td>
-                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 font-medium text-xs sm:text-sm">{player.balls ?? 0}</td>
-                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 text-xs sm:text-sm">{player.fours ?? 0}</td>
-                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500 text-xs sm:text-sm">{player.sixes ?? 0}</td>
-                                                            <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-semibold text-xs sm:text-sm">{player.strikeRate ?? 0}</td>
-                                                        </tr>
-                                                    ))}
-
-                                                    {/* Extras Row */}
-                                                    {activeInning.extras && (
-                                                        <tr className="bg-gray-50/50 text-[11px] sm:text-xs text-gray-600 font-medium">
-                                                            <td className="px-3 sm:px-6 py-2.5 sm:py-3 font-semibold text-gray-700">Extras</td>
-                                                            <td colSpan={5} className="px-2 sm:px-4 py-2.5 sm:py-3 text-right">
-                                                                <span className="font-bold text-gray-900 mr-2">{activeInning.extras.total ?? 0}</span>
-                                                                <span className="text-gray-500 text-[10px] sm:text-xs">
-                                                                    (b {activeInning.extras.byes ?? 0}, lb {activeInning.extras.legByes ?? 0}, w {activeInning.extras.wides ?? 0}, nb {activeInning.extras.noBalls ?? 0}, p {activeInning.extras.penalty ?? 0})
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-
-                                                    {/* Total Row */}
-                                                    <tr className="bg-indigo-50/40 text-xs sm:text-sm font-bold text-gray-900 border-t border-gray-200">
-                                                        <td className="px-3 sm:px-6 py-2.5 sm:py-3.5">Total</td>
-                                                        <td colSpan={5} className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">
-                                                            <span className="text-sm sm:text-base font-black text-indigo-900">{activeInning.score}</span>
-                                                            <span className="text-[10px] sm:text-xs text-gray-500 ml-1.5 font-normal">({activeInning.overs} Overs, RR: {activeInning.run_rate || 'N/A'})</span>
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-
-                                        {/* Did Not Bat */}
-                                        {activeInning.did_not_bat && activeInning.did_not_bat.length > 0 && (
-                                            <div className="px-4 sm:px-6 py-3 border-t border-gray-100 bg-gray-50/30 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
-                                                <span className="font-bold text-gray-700">Yet to Bat:</span>
-                                                {activeInning.did_not_bat.map((p, i) => {
-                                                    const pName = typeof p === 'string' ? p : (p.name || 'Player');
-                                                    const pId = typeof p === 'string' ? null : p.id;
-                                                    return (
-                                                        <button
-                                                            key={i}
-                                                            type="button"
-                                                            onClick={() => handlePlayerClick(pId, pName)}
-                                                            className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-white border border-gray-200 hover:border-indigo-400 hover:text-indigo-600 rounded-lg text-gray-700 font-medium shadow-xs transition cursor-pointer text-xs"
-                                                            title="Click to view career record"
-                                                        >
-                                                            {pName}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Fall of Wickets */}
-                                    {activeInning.fall_of_wickets && activeInning.fall_of_wickets.length > 0 && (
-                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
-                                            <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2.5 sm:mb-3">Fall of Wickets</h3>
-                                            <div className="flex flex-wrap gap-1.5 sm:gap-2 text-xs">
-                                                {activeInning.fall_of_wickets.map((f, idx) => (
-                                                    <div key={idx} className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-1.5 text-[11px] sm:text-xs">
-                                                        <span className="font-black text-rose-600">{f.score}-{f.wkt_nbr}</span>
-                                                        <span className="text-gray-700 font-semibold">({f.batsman}, {f.over} ov)</span>
+                                                            );
+                                                        })}
                                                     </div>
-                                                ))}
+                                                )}
                                             </div>
-                                        </div>
-                                    )}
 
-                                    {/* Bowling Table */}
-                                    {activeInning.bowling && activeInning.bowling.length > 0 && (
-                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/70">
-                                                <h2 className="text-sm sm:text-base font-bold text-gray-900">Bowling</h2>
-                                            </div>
-                                            <div className="overflow-x-auto scrollbar-none">
-                                                <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
-                                                    <thead className="bg-gray-50 font-semibold text-gray-600 text-[11px] sm:text-xs uppercase tracking-wider">
-                                                        <tr>
-                                                            <th className="px-3 sm:px-6 py-2.5 sm:py-3.5 text-left">Bowler</th>
-                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">O</th>
-                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">M</th>
-                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">R</th>
-                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">W</th>
-                                                            <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">Econ</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-100 bg-white">
-                                                        {activeInning.bowling.map((bowler, idx) => (
-                                                            <tr key={idx} className="hover:bg-gray-50/80 transition">
-                                                                <td className="px-3 sm:px-6 py-2 sm:py-3.5">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handlePlayerClick(bowler.id, bowler.name || bowler.bowler)}
-                                                                        className="font-bold text-gray-900 hover:text-indigo-600 hover:underline underline-offset-2 transition text-left cursor-pointer"
-                                                                        title="Click to view career record"
-                                                                    >
-                                                                        {bowler.name || bowler.bowler}
-                                                                    </button>
-                                                                </td>
-                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{bowler.overs ?? 0}</td>
-                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500">{bowler.maidens ?? 0}</td>
-                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{bowler.runs ?? 0}</td>
-                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right font-black text-indigo-700 text-sm sm:text-base">{bowler.wickets ?? 0}</td>
-                                                                <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-600 font-semibold text-xs sm:text-sm">{bowler.economy ?? 0}</td>
-                                                            </tr>
+                                            {/* Fall of Wickets */}
+                                            {activeInning.fall_of_wickets && activeInning.fall_of_wickets.length > 0 && (
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+                                                    <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2.5 sm:mb-3">Fall of Wickets</h3>
+                                                    <div className="flex flex-wrap gap-1.5 sm:gap-2 text-xs">
+                                                        {activeInning.fall_of_wickets.map((f, idx) => (
+                                                            <div key={idx} className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-1.5 text-[11px] sm:text-xs">
+                                                                <span className="font-black text-rose-600">{f.score}-{f.wkt_nbr}</span>
+                                                                <span className="text-gray-700 font-semibold">({f.batsman}, {f.over} ov)</span>
+                                                            </div>
                                                         ))}
-                                                    </tbody>
-                                                </table>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Bowling Table */}
+                                            {activeInning.bowling && activeInning.bowling.length > 0 && (
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/70">
+                                                        <h2 className="text-sm sm:text-base font-bold text-gray-900">Bowling</h2>
+                                                    </div>
+                                                    <div className="overflow-x-auto scrollbar-none">
+                                                        <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                                                            <thead className="bg-gray-50 font-semibold text-gray-600 text-[11px] sm:text-xs uppercase tracking-wider">
+                                                                <tr>
+                                                                    <th className="px-3 sm:px-6 py-2.5 sm:py-3.5 text-left">Bowler</th>
+                                                                    <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">O</th>
+                                                                    <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">M</th>
+                                                                    <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">R</th>
+                                                                    <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">W</th>
+                                                                    <th className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">Econ</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-100 bg-white">
+                                                                {activeInning.bowling.map((bowler, idx) => (
+                                                                    <tr key={idx} className="hover:bg-gray-50/80 transition">
+                                                                        <td className="px-3 sm:px-6 py-2 sm:py-3.5">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handlePlayerClick(bowler.id, bowler.name || bowler.bowler)}
+                                                                                className="font-bold text-gray-900 hover:text-indigo-600 hover:underline underline-offset-2 transition text-left cursor-pointer"
+                                                                                title="Click to view career record"
+                                                                            >
+                                                                                {bowler.name || bowler.bowler}
+                                                                            </button>
+                                                                        </td>
+                                                                        <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{bowler.overs ?? 0}</td>
+                                                                        <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500">{bowler.maidens ?? 0}</td>
+                                                                        <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{bowler.runs ?? 0}</td>
+                                                                        <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right font-black text-indigo-700 text-sm sm:text-base">{bowler.wickets ?? 0}</td>
+                                                                        <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-600 font-semibold text-xs sm:text-sm">{bowler.economy ?? 0}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        /* Inning Summary Card when player rows are pending/syncing */
+                                        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 space-y-6">
+                                            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                                                <div>
+                                                    <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Innings Scorecard</span>
+                                                    <h2 className="text-xl sm:text-2xl font-black text-gray-900 mt-0.5">
+                                                        {(activeInning.team || '').replace(/\s*inning\s*\d*/gi, '').trim() || activeInning.team}
+                                                    </h2>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-3xl font-black font-mono text-indigo-700">
+                                                        {activeInning.score}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 font-medium mt-0.5">
+                                                        {activeInning.overs ? `${activeInning.overs} Overs` : ''}
+                                                        {activeInning.run_rate && activeInning.run_rate !== 'N/A' ? ` • RR: ${activeInning.run_rate}` : ''}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Current Live Crease Batter/Bowler if available for this inning */}
+                                            {currentBatting.length > 0 && (
+                                                <div className="bg-gray-50/70 rounded-2xl p-4 border border-gray-100">
+                                                    <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Live at Crease</h3>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        {currentBatting.map((player, idx) => (
+                                                            <div key={idx} className="bg-white p-3 rounded-xl border border-gray-200 flex items-center justify-between">
+                                                                <div>
+                                                                    <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                                                                        <span>{player.name}</span>
+                                                                        {player.out === 'batting' && (
+                                                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className="text-xs text-gray-400">{player.out || 'not out'}</span>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <span className="text-base font-black text-gray-900">{player.runs ?? 0}</span>
+                                                                    <span className="text-xs text-gray-500 font-medium ml-1">({player.balls ?? 0}b, {player.fours ?? 0}x4, {player.sixes ?? 0}x6)</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 flex items-start gap-3">
+                                                <Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                                                <div className="text-xs text-indigo-950 space-y-1">
+                                                    <p className="font-bold">Ball-by-ball player figures syncing from official ground feeds</p>
+                                                    <p className="text-indigo-800/80 leading-relaxed">
+                                                        The verified team total for {(activeInning.team || '').replace(/\s*inning\s*\d*/gi, '').trim() || activeInning.team} is <strong className="text-indigo-950 font-black">{activeInning.score}</strong> ({activeInning.overs} ov). Detailed player records will populate as soon as the official match score sheet publishes.
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
