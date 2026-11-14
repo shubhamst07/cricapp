@@ -418,7 +418,7 @@ export default function LiveScoresApp({
     const seriesStats = useMemo(() => {
         const map = {};
         currentList.forEach(match => {
-            const s = (match.series || match.series_name || 'Other Matches').trim();
+            const s = resolveSeriesName(match);
             map[s] = (map[s] || 0) + 1;
         });
         return Object.entries(map)
@@ -458,9 +458,10 @@ export default function LiveScoresApp({
         const mappedTeam = playerTeamMap[q] || (playerCountries.length > 0 ? playerCountries[0] : null);
 
         return currentList.filter(match => {
+            const resolvedSeries = resolveSeriesName(match);
             const nameMatch = (match.name || '').toLowerCase().includes(q);
             const venueMatch = (match.venue || '').toLowerCase().includes(q);
-            const seriesMatch = (match.series || match.series_name || '').toLowerCase().includes(q);
+            const seriesMatch = (match.series || match.series_name || '').toLowerCase().includes(q) || resolvedSeries.toLowerCase().includes(q);
             const statusMatch = (match.status_text || '').toLowerCase().includes(q);
             const teamsMatch = Array.isArray(match.teams)
                 ? match.teams.some(t => (t || '').toLowerCase().includes(q))
@@ -476,6 +477,7 @@ export default function LiveScoresApp({
             const teamPlayerMatch = mappedTeam && (
                 (match.name || '').toLowerCase().includes(mappedTeam) ||
                 (match.series || match.series_name || '').toLowerCase().includes(mappedTeam) ||
+                resolvedSeries.toLowerCase().includes(mappedTeam) ||
                 (Array.isArray(match.teams) && match.teams.some(t => (t || '').toLowerCase().includes(mappedTeam)))
             );
 
@@ -488,7 +490,7 @@ export default function LiveScoresApp({
             }
 
             if (selectedSeries !== 'all') {
-                const matchSeries = (match.series || match.series_name || 'Other Matches').trim().toLowerCase();
+                const matchSeries = resolvedSeries.trim().toLowerCase();
                 if (matchSeries !== selectedSeries.toLowerCase()) return false;
             }
 
@@ -500,7 +502,7 @@ export default function LiveScoresApp({
     const matchesGroupedBySeries = useMemo(() => {
         const groups = {};
         filteredMatches.forEach(match => {
-            const series = (match.series || match.series_name || 'Other Matches').trim();
+            const series = resolveSeriesName(match);
             if (!groups[series]) {
                 groups[series] = [];
             }
@@ -524,13 +526,14 @@ export default function LiveScoresApp({
     }, [pointsTableModal, allKnownMatches]);
 
     const openPointsTableModal = (seriesName, match) => {
-        setPointsTableModal({ seriesName, match });
+        const resolved = (match ? resolveSeriesName(match) : null) || seriesName;
+        setPointsTableModal({ seriesName: resolved, match });
         setSelectedGroupTab(0);
         setFetchedPointsTable(null);
         setLoadingPointsTable(true);
 
         const sId = match?.series_id || '';
-        fetch(`/api/points-table?series_name=${encodeURIComponent(seriesName || '')}&series_id=${encodeURIComponent(sId)}`)
+        fetch(`/api/points-table?series_name=${encodeURIComponent(resolved || '')}&series_id=${encodeURIComponent(sId)}`)
             .then(res => res.json())
             .then(data => {
                 if (data && data.groups && data.groups.length > 0) {
@@ -1582,7 +1585,7 @@ export default function LiveScoresApp({
             )}
 
             {/* Cricbuzz-Style Points Table Modal */}
-            {pointsTableModal && (fetchedPointsTable?.groups?.length > 0 || activePointsTable) && (() => {
+            {pointsTableModal && (() => {
                 const isLiveFeed = fetchedPointsTable?.groups && fetchedPointsTable.groups.length > 0;
                 const currentGroup = isLiveFeed ? (fetchedPointsTable.groups[selectedGroupTab] || fetchedPointsTable.groups[0]) : null;
                 const standings = isLiveFeed ? (currentGroup?.teams || []) : (activePointsTable?.standings || []);
@@ -1608,8 +1611,9 @@ export default function LiveScoresApp({
                                                     Live Feed
                                                 </span>
                                             ) : loadingPointsTable ? (
-                                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                                                    Syncing...
+                                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                                                    Fetching Live...
                                                 </span>
                                             ) : null}
                                         </div>
@@ -1630,112 +1634,134 @@ export default function LiveScoresApp({
 
                             {/* Modal Body */}
                             <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
-                                {/* Group Tabs if multiple groups exist (e.g. Group A, Group B, Group D) */}
-                                {isLiveFeed && fetchedPointsTable.groups.length > 1 && (
-                                    <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
-                                        {fetchedPointsTable.groups.map((grp, gIdx) => (
-                                            <button
-                                                key={gIdx}
-                                                type="button"
-                                                onClick={() => setSelectedGroupTab(gIdx)}
-                                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap border shrink-0 ${
-                                                    selectedGroupTab === gIdx
-                                                        ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
-                                                        : 'bg-white/5 text-slate-400 hover:text-white border-white/10'
-                                                }`}
-                                            >
-                                                {grp.groupName}
-                                            </button>
-                                        ))}
+                                {loadingPointsTable && !isLiveFeed && (!standings || standings.length === 0) ? (
+                                    <div className="py-16 text-center space-y-4">
+                                        <div className="w-10 h-10 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                        <div>
+                                            <p className="text-sm font-bold text-white">Fetching Live Points Table</p>
+                                            <p className="text-xs text-slate-400 mt-1">Connecting to official tournament standings for {titleText}...</p>
+                                        </div>
                                     </div>
-                                )}
+                                ) : (!standings || standings.length === 0) ? (
+                                    <div className="py-12 text-center space-y-3 px-4 bg-slate-900/50 rounded-2xl border border-white/5">
+                                        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto border border-amber-500/20">
+                                            <Trophy className="w-6 h-6" />
+                                        </div>
+                                        <h4 className="text-base font-extrabold text-white">Points Table in Progress</h4>
+                                        <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                                            Standings for {titleText} are being compiled as matches conclude. You can filter and view all matches in this series below.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Group Tabs if multiple groups exist (e.g. Group A, Group B, Group D) */}
+                                        {isLiveFeed && fetchedPointsTable.groups.length > 1 && (
+                                            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                                                {fetchedPointsTable.groups.map((grp, gIdx) => (
+                                                    <button
+                                                        key={gIdx}
+                                                        type="button"
+                                                        onClick={() => setSelectedGroupTab(gIdx)}
+                                                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap border shrink-0 ${
+                                                            selectedGroupTab === gIdx
+                                                                ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
+                                                                : 'bg-white/5 text-slate-400 hover:text-white border-white/10'
+                                                        }`}
+                                                    >
+                                                        {grp.groupName}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
 
-                                {/* Standings Table */}
-                                <div className="bg-slate-950/80 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
-                                    <div className="overflow-x-auto scrollbar-thin">
-                                        <table className="w-full text-left border-collapse min-w-[560px]">
-                                            <thead>
-                                                <tr className="border-b border-white/10 bg-slate-900/90 text-[11px] font-black uppercase tracking-wider text-slate-400">
-                                                    <th className="py-3 px-3 text-center w-12">Pos</th>
-                                                    <th className="py-3 px-3">Team</th>
-                                                    <th className="py-3 px-2 text-center w-12" title="Matches Played">P</th>
-                                                    <th className="py-3 px-2 text-center w-12" title="Won">W</th>
-                                                    <th className="py-3 px-2 text-center w-12" title="Lost">L</th>
-                                                    <th className="py-3 px-2 text-center w-14" title="Tied / No Result">NR</th>
-                                                    <th className="py-3 px-3 text-center w-16 text-white" title="Points">PTS</th>
-                                                    <th className="py-3 px-3 text-center w-20" title="Net Run Rate">NRR</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-white/5 text-xs">
-                                                {standings.map((team, idx) => {
-                                                    const isQualifiedSpot = idx < 2;
-                                                    const posNum = team.pos || (idx + 1);
-                                                    const nrrStr = String(team.nrr ?? '0.000');
-                                                    const isPositiveNRR = nrrStr.startsWith('+') || parseFloat(nrrStr) > 0;
-                                                    const isNegativeNRR = nrrStr.startsWith('-') || parseFloat(nrrStr) < 0;
-                                                    const teamName = team.team || team.name || 'Team';
-                                                    const teamCode = getTeamCode(teamName);
-
-                                                    return (
-                                                        <tr
-                                                            key={team.team || team.code || idx}
-                                                            className={`hover:bg-white/5 transition-colors ${
-                                                                isQualifiedSpot ? 'bg-indigo-950/15' : ''
-                                                            }`}
-                                                        >
-                                                            <td className="py-3.5 px-3 text-center">
-                                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-black ${
-                                                                    idx === 0
-                                                                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                                                                        : isQualifiedSpot
-                                                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                                                            : 'text-slate-400 bg-white/5'
-                                                                }`}>
-                                                                    {posNum}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-3.5 px-3">
-                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                    <div className="w-7 h-7 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center shrink-0 shadow-xs">
-                                                                        <span className="text-[10px] font-black text-indigo-300 uppercase leading-none">
-                                                                            {teamCode.slice(0, 3)}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <span className="font-extrabold text-white text-sm block truncate" title={teamName}>
-                                                                            {teamName}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3.5 px-2 text-center font-bold text-slate-200">{team.p ?? team.played ?? 0}</td>
-                                                            <td className="py-3.5 px-2 text-center font-bold text-emerald-400">{team.w ?? team.won ?? 0}</td>
-                                                            <td className="py-3.5 px-2 text-center font-bold text-rose-400">{team.l ?? team.lost ?? 0}</td>
-                                                            <td className="py-3.5 px-2 text-center font-medium text-slate-400">{team.nr ?? (team.tied + team.nr) ?? 0}</td>
-                                                            <td className="py-3.5 px-3 text-center">
-                                                                <span className="inline-block px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-white font-black font-mono text-sm shadow-xs">
-                                                                    {team.pts ?? team.points ?? 0}
-                                                                </span>
-                                                            </td>
-                                                            <td className={`py-3.5 px-3 text-center font-mono font-bold text-xs ${
-                                                                isPositiveNRR ? 'text-emerald-400' : isNegativeNRR ? 'text-rose-400' : 'text-slate-400'
-                                                            }`}>
-                                                                {nrrStr}
-                                                            </td>
+                                        {/* Standings Table */}
+                                        <div className="bg-slate-950/80 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
+                                            <div className="overflow-x-auto scrollbar-thin">
+                                                <table className="w-full text-left border-collapse min-w-[560px]">
+                                                    <thead>
+                                                        <tr className="border-b border-white/10 bg-slate-900/90 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                                                            <th className="py-3 px-3 text-center w-12">Pos</th>
+                                                            <th className="py-3 px-3">Team</th>
+                                                            <th className="py-3 px-2 text-center w-12" title="Matches Played">P</th>
+                                                            <th className="py-3 px-2 text-center w-12" title="Won">W</th>
+                                                            <th className="py-3 px-2 text-center w-12" title="Lost">L</th>
+                                                            <th className="py-3 px-2 text-center w-14" title="Tied / No Result">NR</th>
+                                                            <th className="py-3 px-3 text-center w-16 text-white" title="Points">PTS</th>
+                                                            <th className="py-3 px-3 text-center w-20" title="Net Run Rate">NRR</th>
                                                         </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <div className="p-3 bg-slate-900/60 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
-                                        <span className="flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-400"></span>
-                                            Top 2 Qualification Zone
-                                        </span>
-                                        <span>Win = 2 pts, NR/Tie = 1 pt</span>
-                                    </div>
-                                </div>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-white/5 text-xs">
+                                                        {standings.map((team, idx) => {
+                                                            const isQualifiedSpot = idx < 2;
+                                                            const posNum = team.pos || (idx + 1);
+                                                            const nrrStr = String(team.nrr ?? '0.000');
+                                                            const isPositiveNRR = nrrStr.startsWith('+') || parseFloat(nrrStr) > 0;
+                                                            const isNegativeNRR = nrrStr.startsWith('-') || parseFloat(nrrStr) < 0;
+                                                            const teamName = team.team || team.name || 'Team';
+                                                            const teamCode = getTeamCode(teamName);
+
+                                                            return (
+                                                                <tr
+                                                                    key={team.team || team.code || idx}
+                                                                    className={`hover:bg-white/5 transition-colors ${
+                                                                        isQualifiedSpot ? 'bg-indigo-950/15' : ''
+                                                                    }`}
+                                                                >
+                                                                    <td className="py-3.5 px-3 text-center">
+                                                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-black ${
+                                                                            idx === 0
+                                                                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                                                                : isQualifiedSpot
+                                                                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                                                                    : 'text-slate-400 bg-white/5'
+                                                                        }`}>
+                                                                            {posNum}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="py-3.5 px-3">
+                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                            <div className="w-7 h-7 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center shrink-0 shadow-xs">
+                                                                                <span className="text-[10px] font-black text-indigo-300 uppercase leading-none">
+                                                                                    {teamCode.slice(0, 3)}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="min-w-0">
+                                                                                <span className="font-extrabold text-white text-sm block truncate" title={teamName}>
+                                                                                    {teamName}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="py-3.5 px-2 text-center font-bold text-slate-200">{team.p ?? team.played ?? 0}</td>
+                                                                    <td className="py-3.5 px-2 text-center font-bold text-emerald-400">{team.w ?? team.won ?? 0}</td>
+                                                                    <td className="py-3.5 px-2 text-center font-bold text-rose-400">{team.l ?? team.lost ?? 0}</td>
+                                                                    <td className="py-3.5 px-2 text-center font-medium text-slate-400">{team.nr ?? (team.tied + team.nr) ?? 0}</td>
+                                                                    <td className="py-3.5 px-3 text-center">
+                                                                        <span className="inline-block px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-white font-black font-mono text-sm shadow-xs">
+                                                                            {team.pts ?? team.points ?? 0}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className={`py-3.5 px-3 text-center font-mono font-bold text-xs ${
+                                                                        isPositiveNRR ? 'text-emerald-400' : isNegativeNRR ? 'text-rose-400' : 'text-slate-400'
+                                                                    }`}>
+                                                                        {nrrStr}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div className="p-3 bg-slate-900/60 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+                                                <span className="flex items-center gap-1.5">
+                                                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-400"></span>
+                                                    Top 2 Qualification Zone
+                                                </span>
+                                                <span>Win = 2 pts, NR/Tie = 1 pt</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Modal Footer */}
@@ -1880,6 +1906,85 @@ function getScoresForTeams(match, team1, team2, isFinished) {
     };
 }
 
+// Resolve true tournament/series name from match metadata, slug, or participating teams
+export function resolveSeriesName(match) {
+    if (!match) return 'Other Matches';
+    const rawSeries = (match.series || match.series_name || '').trim();
+    const rawLower = rawSeries.toLowerCase();
+    const isGeneric = !rawSeries || [
+        'other matches', 'other match', 'other series', 'other', 'domestic', 'domestic matches',
+        'international', 'international matches', 'league', 'league matches',
+        'women', "women's matches", 't20', 'odi', 'test', 'uncategorized'
+    ].includes(rawLower);
+
+    if (!isGeneric) {
+        return rawSeries;
+    }
+
+    // 1. Try extracting from match title or name
+    const title = match.title || match.name || '';
+    if (title && (title.includes(' - ') || title.includes(', '))) {
+        const parts = title.split(/ - |, /).map(p => p.trim()).filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) {
+            const p = parts[i];
+            const pLower = p.toLowerCase();
+            if (['trophy', 'cup', 'league', 'tour of', 'championship', 'shield', 'series', 't10', 'blast', 'bash', 'wtc', 'challenge'].some(w => pLower.includes(w))) {
+                if (!/^\d+(?:st|nd|rd|th)?\s+match/i.test(pLower) && !/^(?:final|semi-final|quarter-final)/i.test(pLower)) {
+                    return p;
+                }
+            }
+        }
+    }
+
+    // 2. Try extracting from slug if present in href or match_url
+    const href = match.href || match.match_url || '';
+    if (href) {
+        const vsMatch = href.match(/-vs-[a-z0-9]+-(.+)$/i);
+        if (vsMatch && vsMatch[1]) {
+            let rest = vsMatch[1]
+                .replace(/^\d+(?:st|nd|rd|th)-match-/i, '')
+                .replace(/^(?:plate|group-[a-z0-9]+|super-four|final|semi-final)-/i, '');
+            const restLower = rest.toLowerCase();
+            if (['trophy', 'cup', 'league', 'tour-of', 'championship', 'shield', 'series', 't10', 'blast', 'bash', 'wtc'].some(w => restLower.includes(w))) {
+                let clean = rest.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                clean = clean.replace(/\bU19\b/gi, 'U19').replace(/\bT20\b/gi, 'T20').replace(/\bT10\b/gi, 'T10').replace(/\bOdi\b/g, 'ODI');
+                return clean;
+            }
+        }
+    }
+
+    // 3. Team-based tournament resolution
+    const [t1, t2] = parseMatchTeams(match);
+    const teamStr = `${t1} ${t2} ${(match.teams || []).join(' ')}`.toUpperCase();
+
+    const wbblTeams = ['HHW', 'BHW', 'MRW', 'MSW', 'ASW', 'SSW', 'PSW', 'STW', 'HOBART HURRICANES', 'BRISBANE HEAT', 'MELBOURNE RENEGADES', 'MELBOURNE STARS', 'ADELAIDE STRIKERS', 'SYDNEY SIXERS', 'PERTH SCORCHERS', 'SYDNEY THUNDER'];
+    if (wbblTeams.some(t => teamStr.includes(t))) {
+        return "Women's Big Bash League 2026";
+    }
+
+    const plateTeams = ['AP', 'MAN', 'NAG', 'MEG', 'MIZ', 'SIK', 'ARUNACHAL', 'MANIPUR', 'NAGALAND', 'MEGHALAYA', 'MIZORAM', 'SIKKIM'];
+    if (plateTeams.some(t => teamStr.includes(t))) {
+        return "Syed Mushtaq Ali Trophy Plate 2026";
+    }
+
+    const eliteTeams = ['HYD', 'MUM', 'DEL', 'TN', 'KAR', 'BEN', 'BRD', 'SAU', 'PUN', 'UP', 'MP', 'GUJ', 'KER', 'HYDERABAD', 'MUMBAI', 'DELHI', 'TAMIL NADU', 'KARNATAKA', 'BENGAL', 'BARODA', 'SAURASHTRA'];
+    if (eliteTeams.some(t => teamStr.includes(t))) {
+        return "Syed Mushtaq Ali Trophy 2026";
+    }
+
+    const u19Teams = ['PU', 'IU', 'PAKISTAN U19', 'INDIA U19', 'BANGLADESH U19', 'SRI LANKA U19', 'AFGHANISTAN U19', 'NEPAL U19'];
+    if (u19Teams.some(t => teamStr.includes(t))) {
+        return "ACC Men's U19 Asia Cup 2026";
+    }
+
+    const t10Teams = ['NW', 'DG', 'BT', 'CB', 'DB', 'MA', 'NY', 'MORRISVILLE', 'SAMP ARMY', 'ABU DHABI', 'DECCAN', 'DELHI BULLS', 'BANGLA TIGERS'];
+    if (t10Teams.some(t => teamStr.includes(t))) {
+        return "Abu Dhabi T10 League 2026";
+    }
+
+    return rawSeries || 'Other Matches';
+}
+
 // Check if a match or series is an actual tournament with a valid points table
 function isTournamentWithPointsTable(seriesTitle) {
     if (!seriesTitle) return false;
@@ -1890,6 +1995,8 @@ function isTournamentWithPointsTable(seriesTitle) {
     if (
         lower === 'other matches' ||
         lower === 'other match' ||
+        lower === 'other series' ||
+        lower === 'other' ||
         lower === 'international matches' ||
         lower === 'local matches' ||
         lower === 'friendly matches' ||
@@ -1903,9 +2010,7 @@ function isTournamentWithPointsTable(seriesTitle) {
     // Bilateral tours (e.g. "Sri Lanka tour of Pakistan", "India tour of Australia") do NOT have points tables
     if (
         lower.includes(' tour of ') ||
-        lower.includes(' in ') ||
-        lower.includes(' vs ') ||
-        lower.includes(' v ')
+        lower.includes(' in ')
     ) {
         // Unless it explicitly contains a tournament word like trophy / cup / championship / league
         const hasTourneyWord = ['trophy', 'cup', 'league', 'championship', 'tournament', 'wtc'].some(w => lower.includes(w));
@@ -1916,7 +2021,7 @@ function isTournamentWithPointsTable(seriesTitle) {
     const tournamentIndicators = [
         'trophy', 'cup', 'league', 'championship', 'tournament', 'ipl', 'bbl', 'psl', 'cpl', 'bpl', 'hundred',
         'group', 'division', 'shield', 'wtc', 'world cup', 'asia cup', 'tri-series', 'quadrangular', 'challenge',
-        'super smash', 'blast', 'premier', 't20 league', 't10', 'ranji', 'syed mushtaq', 'vijay hazare', 'deodhar'
+        'super smash', 'blast', 'premier', 't20 league', 't10', 'ranji', 'syed mushtaq', 'vijay hazare', 'deodhar', 'plate'
     ];
 
     return tournamentIndicators.some(w => lower.includes(w));
@@ -1930,7 +2035,7 @@ function computeSeriesPointsTable(seriesName, allMatches) {
 
     const normSeries = cleanSeries.toLowerCase();
     const seriesMatches = (allMatches || []).filter(m => {
-        const s = (m.series || m.series_name || '').trim().toLowerCase();
+        const s = resolveSeriesName(m).trim().toLowerCase();
         if (!s || s === 'other matches' || s === 'international matches') return false;
         return s === normSeries;
     });
@@ -2119,7 +2224,7 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
     const isDismissed = Boolean(match.is_dismissed || stLower === 'match dismissed');
     const isFinished = isRecent || isArchives || (match.matchEnded ?? false) || ['won by', ' won', 'beat', 'tied', 'drawn', 'complete', 'result'].some(w => stLower.includes(w));
 
-    const seriesTitle = match.series || match.series_name;
+    const seriesTitle = resolveSeriesName(match);
     const [team1Name, team2Name] = parseMatchTeams(match);
     const team1Code = getTeamCode(team1Name);
     const team2Code = getTeamCode(team2Name);
@@ -2328,23 +2433,21 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
                 </a>
 
                 <div className="flex items-center gap-3">
-                    {isTournamentWithPointsTable(seriesTitle) && (
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (onOpenPointsTable) {
-                                    onOpenPointsTable(seriesTitle, match);
-                                } else if (onSelectSeries) {
-                                    onSelectSeries(seriesTitle);
-                                }
-                            }}
-                            className="text-slate-400 hover:text-white transition-colors"
-                            title={`View Points Table for ${seriesTitle}`}
-                        >
-                            POINTS TABLE
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onOpenPointsTable) {
+                                onOpenPointsTable(seriesTitle, match);
+                            } else if (onSelectSeries) {
+                                onSelectSeries(seriesTitle);
+                            }
+                        }}
+                        className="text-slate-400 hover:text-white transition-colors"
+                        title={`View Points Table for ${seriesTitle}`}
+                    >
+                        POINTS TABLE
+                    </button>
 
                     <button
                         type="button"

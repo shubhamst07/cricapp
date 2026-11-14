@@ -360,6 +360,7 @@ class ScoreService:
                             match_started = state in ['in progress', 'complete', 'toss'] or bool(scores) or is_active_live_text
                             series_name = info.get('seriesName', 'Other Matches')
                             match_desc = info.get('matchDesc', 'Match')
+                            resolved_series = cls.resolve_series_name(title=f"{t1} vs {t2}, {match_desc}", raw_header=series_name, teams=[t1, t2])
 
                             results.append({
                                 'id': m_id,
@@ -367,8 +368,8 @@ class ScoreService:
                                 'matchType': match_desc,
                                 'venue': f"{info.get('venueInfo', {}).get('ground', '')}, {info.get('venueInfo', {}).get('city', '')}".strip(', '),
                                 'status_text': status,
-                                'series': series_name,
-                                'series_name': series_name,
+                                'series': resolved_series,
+                                'series_name': resolved_series,
                                 'teams': [t1, t2],
                                 'score': scores if scores else None,
                                 'matchStarted': match_started,
@@ -379,6 +380,79 @@ class ScoreService:
                     pass
             pos = arr_start + 1
         return results
+
+    @classmethod
+    def resolve_series_name(cls, title: str = "", slug: str = "", raw_header: str = "", meta_info: str = "", teams: List[str] = None) -> str:
+        raw_clean = " ".join((raw_header or "").split()).strip()
+        raw_lower = raw_clean.lower()
+        generic_categories = [
+            "other matches", "other series", "other", "domestic", "domestic matches",
+            "international", "international matches", "league", "league matches",
+            "women", "women's matches", "t20", "odi", "test", "uncategorized", ""
+        ]
+
+        # 1. Check title attribute of card (e.g. "Arunachal Pradesh vs Manipur, Plate - Syed Mushtaq Ali Trophy Plate 2026")
+        if title and (" - " in title or ", " in title):
+            parts = [p.strip() for p in re.split(r" - |, ", title) if p.strip()]
+            for p in reversed(parts):
+                p_lower = p.lower()
+                if any(w in p_lower for w in ["trophy", "cup", "league", "tour of", "championship", "shield", "series", "t10", "blast", "bash", "wtc", "challenge"]):
+                    if not re.match(r"^\d+(?:st|nd|rd|th)?\s+match", p_lower):
+                        return p
+
+        # 2. Check slug (e.g. "ap-vs-man-plate-syed-mushtaq-ali-trophy-plate-2026")
+        if slug:
+            vs_m = re.search(r"-vs-[a-z0-9]+-(.+)$", slug)
+            if vs_m:
+                rest = vs_m.group(1)
+                rest = re.sub(r"^\d+(?:st|nd|rd|th)-match-", "", rest)
+                rest = re.sub(r"^(?:plate|group-[a-z0-9]+|super-four|final|semi-final)-", "", rest)
+                rest_lower = rest.lower()
+                if any(w in rest_lower for w in ["trophy", "cup", "league", "tour-of", "championship", "shield", "series", "t10", "blast", "bash", "wtc"]):
+                    clean_slug_name = rest.replace("-", " ").title()
+                    clean_slug_name = re.sub(r"\bU19\b", "U19", clean_slug_name, flags=re.IGNORECASE)
+                    clean_slug_name = re.sub(r"\bT20\b", "T20", clean_slug_name, flags=re.IGNORECASE)
+                    clean_slug_name = re.sub(r"\bT10\b", "T10", clean_slug_name, flags=re.IGNORECASE)
+                    clean_slug_name = re.sub(r"\bOdi\b", "ODI", clean_slug_name)
+                    return clean_slug_name
+
+        # 3. Check meta_info (e.g. "Elite Group D • Syed Mushtaq Ali Trophy 2026 • T20")
+        if meta_info:
+            parts = [p.strip() for p in meta_info.split("•") if p.strip()]
+            for p in parts:
+                p_lower = p.lower()
+                if any(w in p_lower for w in ["trophy", "cup", "league", "championship", "tour of", "series", "wtc", "shield", "blast", "bash"]):
+                    if not re.match(r"^\d+(?:st|nd|rd|th)?\s+match", p_lower) and not re.match(r"^(final|semi-final|quarter-final)", p_lower):
+                        return p
+
+        # 4. Check if raw header is NOT generic
+        if raw_clean and raw_lower not in generic_categories:
+            return raw_clean
+
+        # 5. Team-based tournament resolution
+        if teams:
+            t_str = " ".join([t.upper().strip() for t in teams if t])
+            wbbl_teams = ["HHW", "BHW", "MRW", "MSW", "ASW", "SSW", "PSW", "STW", "HOBART HURRICANES", "BRISBANE HEAT", "MELBOURNE RENEGADES", "MELBOURNE STARS", "ADELAIDE STRIKERS", "SYDNEY SIXERS", "PERTH SCORCHERS", "SYDNEY THUNDER"]
+            if any(t in t_str for t in wbbl_teams):
+                return "Women's Big Bash League 2026"
+
+            plate_teams = ["AP", "MAN", "NAG", "MEG", "MIZ", "SIK", "ARUNACHAL", "MANIPUR", "NAGALAND", "MEGHALAYA", "MIZORAM", "SIKKIM"]
+            if any(t in t_str for t in plate_teams):
+                return "Syed Mushtaq Ali Trophy Plate 2026"
+
+            elite_teams = ["HYD", "MUM", "DEL", "TN", "KAR", "BEN", "BRD", "SAU", "PUN", "UP", "MP", "GUJ", "KER", "HYDERABAD", "MUMBAI", "DELHI", "TAMIL NADU", "KARNATAKA", "BENGAL", "BARODA", "SAURASHTRA"]
+            if any(t in t_str for t in elite_teams):
+                return "Syed Mushtaq Ali Trophy 2026"
+
+            u19_teams = ["PU", "IU", "PAKISTAN U19", "INDIA U19", "BANGLADESH U19", "SRI LANKA U19", "AFGHANISTAN U19", "NEPAL U19"]
+            if any(t in t_str for t in u19_teams):
+                return "ACC Men's U19 Asia Cup 2026"
+
+            t10_teams = ["NW", "DG", "BT", "CB", "DB", "MA", "NY", "MORRISVILLE", "SAMP ARMY", "ABU DHABI", "DECCAN", "DELHI BULLS", "BANGLA TIGERS"]
+            if any(t in t_str for t in t10_teams):
+                return "Abu Dhabi T10 League 2026"
+
+        return raw_clean if raw_clean else "Other Matches"
 
     @classmethod
     def parse_cards_from_html(cls, html_text: str) -> List[Dict[str, Any]]:
@@ -531,14 +605,16 @@ class ScoreService:
                 if not status_text or (teams and all(t.lower() in status_text.lower() for t in teams)):
                     status_text = "Match Scheduled"
 
+            resolved_series = cls.resolve_series_name(title=title, slug=slug, raw_header=series_name, meta_info=meta_info, teams=teams)
+
             parsed.append({
                 "id": m_id,
                 "name": title,
                 "matchType": match_type,
                 "venue": venue,
                 "status_text": status_text,
-                "series": series_name,
-                "series_name": series_name,
+                "series": resolved_series,
+                "series_name": resolved_series,
                 "teams": teams,
                 "score": scores if scores else None,
                 "matchStarted": match_started,
@@ -750,6 +826,8 @@ class ScoreService:
                                 t_parts = match_name.split(" vs ", 1)
                                 teams = [t_parts[0].strip(), t_parts[1].split(",")[0].strip()]
 
+                            resolved_series = cls.resolve_series_name(title=raw_title, slug=slug, raw_header=series_name, meta_info=meta, teams=teams)
+
                             status_text = status_from_title if status_from_title else "Scheduled"
                             is_in_progress = any(w in status_text.lower() for w in ["opt to", "elected to", "live", "session", "day "])
 
@@ -759,8 +837,8 @@ class ScoreService:
                                 "matchType": parts[0].strip() if parts[0] else "Match",
                                 "venue": parts[1].strip() if len(parts) > 1 else "",
                                 "status_text": status_text,
-                                "series": series_name,
-                                "series_name": series_name,
+                                "series": resolved_series,
+                                "series_name": resolved_series,
                                 "teams": teams,
                                 "score": None,
                                 "matchStarted": is_in_progress,
@@ -1460,29 +1538,38 @@ class ScoreService:
             target_url = f"https://www.cricbuzz.com/cricket-series/{series_id}/points-table"
 
         if not target_url and series_name:
-            try:
-                async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
-                    resp = await client.get(f"https://www.cricbuzz.com/cricket-match/live-scores?_={time.time_ns()}", headers=cls.HEADERS)
-                    if resp.status_code == 200:
-                        soup = BeautifulSoup(resp.text, "lxml")
-                        links = soup.find_all("a", href=re.compile(r"/cricket-series/(\d+)/"))
-                        clean_target = series_name.lower().replace("•", " ").strip()
-                        target_words = [w for w in clean_target.split() if len(w) > 2 and w not in ['elite', 'plate', 'group', 'the', 'and', '2026', '2025']]
+            s_low = series_name.lower()
+            if "syed mushtaq" in s_low or "smat" in s_low:
+                target_url = "https://www.cricbuzz.com/cricket-series/12420/points-table"
+            elif "big bash" in s_low or "wbbl" in s_low:
+                target_url = "https://www.cricbuzz.com/cricket-series/12214/points-table"
+            elif "t10" in s_low or "abu dhabi" in s_low:
+                target_url = "https://www.cricbuzz.com/cricket-series/13307/points-table"
 
-                        best_match_id = None
-                        for link in links:
-                            l_href = link.get("href", "")
-                            l_text = link.get_text(" ", strip=True).lower()
-                            m = re.search(r"/cricket-series/(\d+)/", l_href)
-                            if m:
-                                s_id = m.group(1)
-                                if any(w in l_text or w in l_href for w in target_words):
-                                    best_match_id = s_id
-                                    break
-                        if best_match_id:
-                            target_url = f"https://www.cricbuzz.com/cricket-series/{best_match_id}/points-table"
-            except Exception:
-                pass
+            if not target_url:
+                try:
+                    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+                        resp = await client.get(f"https://www.cricbuzz.com/cricket-match/live-scores?_={time.time_ns()}", headers=cls.HEADERS)
+                        if resp.status_code == 200:
+                            soup = BeautifulSoup(resp.text, "lxml")
+                            links = soup.find_all("a", href=re.compile(r"/cricket-series/(\d+)/"))
+                            clean_target = series_name.lower().replace("•", " ").strip()
+                            target_words = [w for w in clean_target.split() if len(w) > 2 and w not in ['elite', 'plate', 'group', 'the', 'and', '2026', '2025']]
+
+                            best_match_id = None
+                            for link in links:
+                                l_href = link.get("href", "")
+                                l_text = link.get_text(" ", strip=True).lower()
+                                m = re.search(r"/cricket-series/(\d+)/", l_href)
+                                if m:
+                                    s_id = m.group(1)
+                                    if any(w in l_text or w in l_href for w in target_words):
+                                        best_match_id = s_id
+                                        break
+                            if best_match_id:
+                                target_url = f"https://www.cricbuzz.com/cricket-series/{best_match_id}/points-table"
+                except Exception:
+                    pass
 
         if not target_url:
             return {"status": "error", "message": "Points table URL not found for series", "groups": []}
@@ -1605,6 +1692,11 @@ async def get_match_detail(match_id: str):
 
     series_name = (match_meta.get("series_name") or match_meta.get("series")) if match_meta else "Other Matches"
     teams = match_meta.get("teams", []) if match_meta else []
+    resolved_series = CricbuzzScraper.resolve_series_name(
+        title=(match_meta["name"] if match_meta else score_info.title),
+        raw_header=series_name,
+        teams=teams
+    )
 
     return {
         "status": "success",
@@ -1612,8 +1704,8 @@ async def get_match_detail(match_id: str):
             "id": match_id,
             "name": match_meta["name"] if match_meta else score_info.title,
             "title": score_info.title,
-            "series": series_name,
-            "series_name": series_name,
+            "series": resolved_series,
+            "series_name": resolved_series,
             "matchType": match_meta["matchType"] if match_meta else "Match",
             "venue": match_meta["venue"] if match_meta else "",
             "status_text": status_text,
