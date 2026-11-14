@@ -291,4 +291,12 @@ class LiveScoreController extends Controller
         $data = $cricket->getPointsTable($seriesId, $seriesName);
         return response()->json($data);
     }
+
+    public function seriesSchedule(Request $request, CricketDataService $cricket)
+    {
+        $seriesId = $request->query('series_id');
+        $seriesName = $request->query('series_name');
+        $data = $cricket->getSeriesSchedule($seriesId, $seriesName);
+        return response()->json($data);
+    }
 }

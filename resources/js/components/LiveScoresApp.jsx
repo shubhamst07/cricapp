@@ -170,6 +170,12 @@ export default function LiveScoresApp({
     const [loadingPointsTable, setLoadingPointsTable] = useState(false);
     const [selectedGroupTab, setSelectedGroupTab] = useState(0);
 
+    // Series Schedule & Upcoming Matches Modal state
+    const [scheduleModal, setScheduleModal] = useState(null); // { seriesName, match }
+    const [fetchedSchedule, setFetchedSchedule] = useState(null);
+    const [loadingSchedule, setLoadingSchedule] = useState(false);
+    const [scheduleTab, setScheduleTab] = useState('upcoming'); // 'upcoming' | 'live' | 'completed' | 'all'
+
     // Player Search & Career Profile Modal state
     const [playerResults, setPlayerResults] = useState([]);
     const [isSearchingPlayers, setIsSearchingPlayers] = useState(false);
@@ -561,6 +567,61 @@ export default function LiveScoresApp({
                 setLoadingPointsTable(false);
             });
     };
+
+    const openScheduleModal = (seriesName, match) => {
+        const resolved = (match ? resolveSeriesName(match) : null) || seriesName;
+        setScheduleModal({ seriesName: resolved, match });
+        setScheduleTab('upcoming');
+        setFetchedSchedule(null);
+        setLoadingSchedule(true);
+
+        const sId = match?.series_id || '';
+        fetch(`/api/series-schedule?series_name=${encodeURIComponent(resolved || '')}&series_id=${encodeURIComponent(sId)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.status === 'success' && data.matches && data.matches.length > 0) {
+                    setFetchedSchedule(data);
+                    if (data.upcoming && data.upcoming.length > 0) {
+                        setScheduleTab('upcoming');
+                    } else if (data.live && data.live.length > 0) {
+                        setScheduleTab('live');
+                    } else {
+                        setScheduleTab('all');
+                    }
+                }
+            })
+            .catch(() => {})
+            .finally(() => {
+                setLoadingSchedule(false);
+            });
+    };
+
+    // Derived active schedule fixtures (API data with seamless fallback to allKnownMatches)
+    const activeScheduleMatches = useMemo(() => {
+        if (!scheduleModal?.seriesName) return { all: [], upcoming: [], live: [], completed: [] };
+        if (fetchedSchedule?.matches && fetchedSchedule.matches.length > 0) {
+            return {
+                all: fetchedSchedule.matches,
+                upcoming: fetchedSchedule.upcoming || fetchedSchedule.matches.filter(m => m.status === 'scheduled'),
+                live: fetchedSchedule.live || fetchedSchedule.matches.filter(m => m.status === 'live'),
+                completed: fetchedSchedule.completed || fetchedSchedule.matches.filter(m => m.status === 'completed'),
+            };
+        }
+        // Fallback to allKnownMatches
+        const target = scheduleModal.seriesName.toLowerCase();
+        const targetId = scheduleModal.match?.series_id ? String(scheduleModal.match.series_id) : null;
+        const matched = allKnownMatches.filter(m => {
+            const sName = resolveSeriesName(m).toLowerCase();
+            const sId = m.series_id ? String(m.series_id) : null;
+            return (targetId && sId === targetId) || sName === target || sName.includes(target) || target.includes(sName);
+        });
+        return {
+            all: matched,
+            upcoming: matched.filter(m => m.status === 'scheduled'),
+            live: matched.filter(m => m.status === 'live'),
+            completed: matched.filter(m => m.status === 'completed'),
+        };
+    }, [scheduleModal, fetchedSchedule, allKnownMatches]);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -993,6 +1054,15 @@ export default function LiveScoresApp({
                                         )}
                                         <button
                                             type="button"
+                                            onClick={() => openScheduleModal(seriesName, matches[0])}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold transition"
+                                            title="View Series Schedule & Upcoming Matches"
+                                        >
+                                            <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                            <span className="hidden sm:inline">Schedule</span>
+                                        </button>
+                                        <button
+                                            type="button"
                                             onClick={() => setSelectedSeries(seriesName)}
                                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-xl text-xs font-bold transition"
                                         >
@@ -1011,6 +1081,7 @@ export default function LiveScoresApp({
                                             type={activeTab}
                                             onSelectSeries={setSelectedSeries}
                                             onOpenPointsTable={(series, m) => openPointsTableModal(series, m)}
+                                            onOpenSchedule={(series, m) => openScheduleModal(series, m)}
                                             onQuickScorecard={() => openScorecardModal(match)}
                                             highlightedPlayer={playerResults[0] || null}
                                         />
@@ -1029,6 +1100,7 @@ export default function LiveScoresApp({
                                 type={activeTab}
                                 onSelectSeries={setSelectedSeries}
                                 onOpenPointsTable={(series, m) => openPointsTableModal(series, m)}
+                                onOpenSchedule={(series, m) => openScheduleModal(series, m)}
                                 onQuickScorecard={() => openScorecardModal(match)}
                                 highlightedPlayer={playerResults[0] || null}
                             />
@@ -1815,6 +1887,285 @@ export default function LiveScoresApp({
                 );
             })()}
 
+            {/* Cricbuzz-Style Series Schedule & Upcoming Matches Modal */}
+            {scheduleModal && (() => {
+                const titleText = (fetchedSchedule?.title) || scheduleModal.seriesName || 'Series Schedule';
+                const currentTabMatches = scheduleTab === 'upcoming' 
+                    ? activeScheduleMatches.upcoming 
+                    : scheduleTab === 'live' 
+                        ? activeScheduleMatches.live 
+                        : scheduleTab === 'completed' 
+                            ? activeScheduleMatches.completed 
+                            : activeScheduleMatches.all;
+
+                return (
+                    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+                        <div className="bg-[#0f172a] border border-white/10 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                            {/* Modal Header */}
+                            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-slate-950/80">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0 shadow-xs">
+                                        <Calendar className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">
+                                                Series Schedule & Fixtures
+                                            </span>
+                                            {fetchedSchedule ? (
+                                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                                    Live Feed
+                                                </span>
+                                            ) : loadingSchedule ? (
+                                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                                                    Fetching Schedule...
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                        <h3 className="font-black text-white text-base sm:text-lg leading-tight mt-0.5 truncate" title={titleText}>
+                                            {titleText}
+                                        </h3>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduleModal(null)}
+                                    className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition"
+                                    title="Close"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Sub-Tabs: Upcoming, Live, Completed, All */}
+                            <div className="px-4 sm:px-6 pt-3 pb-2 border-b border-white/5 bg-slate-900/60 flex items-center gap-2 overflow-x-auto scrollbar-thin">
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduleTab('upcoming')}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition whitespace-nowrap border shrink-0 flex items-center gap-1.5 ${
+                                        scheduleTab === 'upcoming'
+                                            ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-md shadow-indigo-500/10'
+                                            : 'bg-white/5 text-slate-400 hover:text-white border-white/10'
+                                    }`}
+                                >
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>Upcoming</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white/10 text-slate-300 font-mono">
+                                        {activeScheduleMatches.upcoming.length}
+                                    </span>
+                                </button>
+
+                                {activeScheduleMatches.live.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setScheduleTab('live')}
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition whitespace-nowrap border shrink-0 flex items-center gap-1.5 ${
+                                            scheduleTab === 'live'
+                                                ? 'bg-rose-600/30 text-rose-300 border-rose-500/50 shadow-md shadow-rose-500/10'
+                                                : 'bg-white/5 text-slate-400 hover:text-white border-white/10'
+                                        }`}
+                                    >
+                                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                                        <span>Live Now</span>
+                                        <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-rose-500/20 text-rose-300 font-mono">
+                                            {activeScheduleMatches.live.length}
+                                        </span>
+                                    </button>
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduleTab('completed')}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition whitespace-nowrap border shrink-0 flex items-center gap-1.5 ${
+                                        scheduleTab === 'completed'
+                                            ? 'bg-emerald-600/30 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/10'
+                                            : 'bg-white/5 text-slate-400 hover:text-white border-white/10'
+                                    }`}
+                                >
+                                    <Trophy className="w-3.5 h-3.5" />
+                                    <span>Recent Results</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white/10 text-slate-300 font-mono">
+                                        {activeScheduleMatches.completed.length}
+                                    </span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduleTab('all')}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition whitespace-nowrap border shrink-0 flex items-center gap-1.5 ${
+                                        scheduleTab === 'all'
+                                            ? 'bg-white/20 text-white border-white/30 shadow-md'
+                                            : 'bg-white/5 text-slate-400 hover:text-white border-white/10'
+                                    }`}
+                                >
+                                    <span>All Matches</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white/10 text-slate-300 font-mono">
+                                        {activeScheduleMatches.all.length}
+                                    </span>
+                                </button>
+                            </div>
+
+                            {/* Modal Body: Fixtures List */}
+                            <div className="p-4 sm:p-6 overflow-y-auto space-y-3">
+                                {loadingSchedule && (!currentTabMatches || currentTabMatches.length === 0) ? (
+                                    <div className="py-16 text-center space-y-4">
+                                        <div className="w-10 h-10 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                        <div>
+                                            <p className="text-sm font-bold text-white">Fetching Tournament Schedule</p>
+                                            <p className="text-xs text-slate-400 mt-1">Retrieving official fixture calendar for {titleText}...</p>
+                                        </div>
+                                    </div>
+                                ) : (!currentTabMatches || currentTabMatches.length === 0) ? (
+                                    <div className="py-12 text-center space-y-3 px-4 bg-slate-900/50 rounded-2xl border border-white/5">
+                                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto border border-indigo-500/20">
+                                            <Calendar className="w-6 h-6" />
+                                        </div>
+                                        <h4 className="text-base font-extrabold text-white">No {scheduleTab === 'upcoming' ? 'Upcoming' : scheduleTab === 'live' ? 'Live' : 'Completed'} Fixtures Found</h4>
+                                        <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                                            No matches currently listed under this tab for {titleText}. Switch to another tab to view other fixtures.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    currentTabMatches.map((m, idx) => {
+                                        const teams = parseMatchTeams(m);
+                                        const t1 = m.team1?.name || teams[0];
+                                        const t2 = m.team2?.name || teams[1];
+                                        const t1Code = m.team1?.short_name || getTeamCode(t1);
+                                        const t2Code = m.team2?.short_name || getTeamCode(t2);
+                                        const isLive = m.status === 'live';
+                                        const isCompleted = m.status === 'completed';
+                                        const targetMatchUrl = m.is_local ? `/matches/${m.id}` : `/live-scores/${m.id}`;
+
+                                        return (
+                                            <div
+                                                key={m.id || idx}
+                                                className="bg-slate-900/70 hover:bg-slate-900 border border-white/5 hover:border-indigo-500/30 rounded-2xl p-4 sm:p-5 transition-all duration-150 space-y-3"
+                                            >
+                                                {/* Card Header: Date, Format, Status Badge */}
+                                                <div className="flex items-center justify-between text-xs text-slate-400 gap-2 flex-wrap">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="flex items-center gap-1 font-bold text-slate-300">
+                                                            <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                                            {formatScheduleDate(m)}
+                                                        </span>
+                                                        {(m.matchDesc || m.matchFormat) && (
+                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/5 text-slate-300 border border-white/10">
+                                                                {[m.matchDesc, m.matchFormat].filter(Boolean).join(' • ')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div>
+                                                        {isLive ? (
+                                                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping"></span>
+                                                                LIVE
+                                                            </span>
+                                                        ) : isCompleted ? (
+                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                                                COMPLETED
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                                                                UPCOMING
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Teams and Scores */}
+                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                                                    <div className="space-y-2 min-w-0">
+                                                        {/* Team 1 */}
+                                                        <div className="flex items-center gap-2.5">
+                                                            <span className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 font-black text-[11px] flex items-center justify-center shrink-0 border border-indigo-500/30">
+                                                                {t1Code.substring(0, 3)}
+                                                            </span>
+                                                            <span className="font-bold text-white text-sm truncate">{t1}</span>
+                                                            {m.score && m.score[0] && (
+                                                                <span className="font-mono font-black text-slate-200 text-xs ml-auto sm:ml-2">
+                                                                    {m.score[0].display_score || `${m.score[0].runs}/${m.score[0].wickets}`}
+                                                                    {m.score[0].overs && <span className="text-slate-400 text-[10px] ml-1">({m.score[0].overs} ov)</span>}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Team 2 */}
+                                                        <div className="flex items-center gap-2.5">
+                                                            <span className="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-300 font-black text-[11px] flex items-center justify-center shrink-0 border border-sky-500/30">
+                                                                {t2Code.substring(0, 3)}
+                                                            </span>
+                                                            <span className="font-bold text-white text-sm truncate">{t2}</span>
+                                                            {m.score && m.score[1] && (
+                                                                <span className="font-mono font-black text-slate-200 text-xs ml-auto sm:ml-2">
+                                                                    {m.score[1].display_score || `${m.score[1].runs}/${m.score[1].wickets}`}
+                                                                    {m.score[1].overs && <span className="text-slate-400 text-[10px] ml-1">({m.score[1].overs} ov)</span>}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Match Center / Scorecard Button */}
+                                                    <div className="sm:self-center shrink-0 pt-2 sm:pt-0">
+                                                        <a
+                                                            href={targetMatchUrl}
+                                                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition w-full sm:w-auto justify-center"
+                                                        >
+                                                            <span>{isCompleted ? 'Scorecard' : isLive ? 'Live Center' : 'Match Info'}</span>
+                                                            <ChevronRight className="w-3.5 h-3.5" />
+                                                        </a>
+                                                    </div>
+                                                </div>
+
+                                                {/* Status text & Venue */}
+                                                <div className="pt-2 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs gap-1.5">
+                                                    {m.status_text && (
+                                                        <span className="font-semibold text-amber-300/90 text-xs line-clamp-1">
+                                                            {m.status_text}
+                                                        </span>
+                                                    )}
+                                                    {m.venue && (
+                                                        <span className="flex items-center gap-1 text-slate-400 text-[11px] sm:ml-auto">
+                                                            <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                                                            <span className="truncate max-w-xs">{m.venue}</span>
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/80 flex items-center justify-between gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedSeries(scheduleModal.seriesName);
+                                        setScheduleModal(null);
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-extrabold transition"
+                                >
+                                    <Filter className="w-3.5 h-3.5" />
+                                    <span>Filter Main List by this Series</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduleModal(null)}
+                                    className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Mobile Sticky Bottom Sponsor Banner */}
             <AdSlot type="sticky-bottom" slotId="livescores-sticky" />
         </div>
@@ -2276,7 +2627,7 @@ function computeSeriesPointsTable(seriesName, allMatches) {
 }
 
 // ==================== CRICBUZZ-STYLE MATCH CARD COMPONENT ====================
-function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPointsTable, highlightedPlayer = null }) {
+function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPointsTable, onOpenSchedule, highlightedPlayer = null }) {
     const stLower = (match.status_text || '').toLowerCase();
     const isInningsBreak = ['innings break', 'inn break', 'break', 'lunch', 'tea', 'dinner', 'strategic timeout', 'drinks'].some(w => stLower.includes(w));
     const hasLiveScore = Array.isArray(match.score) && match.score.length > 0;
@@ -2516,14 +2867,40 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
                         type="button"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onQuickScorecard && onQuickScorecard();
+                            if (onOpenSchedule) {
+                                onOpenSchedule(seriesTitle, match);
+                            } else if (onSelectSeries) {
+                                onSelectSeries(seriesTitle);
+                            }
                         }}
                         className="text-slate-400 hover:text-white transition-colors"
+                        title={`View Upcoming Matches & Schedule for ${seriesTitle}`}
                     >
-                        QUICK VIEW
+                        SCHEDULE
                     </button>
                 </div>
             </div>
         </div>
     );
+}
+
+function formatScheduleDate(match) {
+    if (match.dateStr && match.timeStr) {
+        return `${match.dateStr} • ${match.timeStr}`;
+    }
+    const val = match.startDateMs || match.dateTimeGMT || match.match_date;
+    if (!val) return 'Date TBA';
+    try {
+        const d = new Date(typeof val === 'number' ? val : (isNaN(val) ? val : Number(val)));
+        if (isNaN(d.getTime())) return match.status_text || 'Date TBA';
+        return d.toLocaleDateString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return match.status_text || 'Date TBA';
+    }
 }

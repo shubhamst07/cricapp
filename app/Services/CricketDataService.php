@@ -318,6 +318,234 @@ class CricketDataService
         }
     }
 
+    public function getSeriesSchedule(?string $seriesId = null, ?string $seriesName = null): array
+    {
+        $cacheKey = $this->cacheKey('series_schedule_' . md5(($seriesId ?? '') . '_' . ($seriesName ?? '')));
+        return Cache::remember($cacheKey, 120, function () use ($seriesId, $seriesName) {
+            // 0. If seriesId is missing, resolve it from current matches
+            if (!$seriesId && $seriesName) {
+                $norm = strtolower(trim($seriesName));
+                foreach ($this->getCurrentMatches() as $m) {
+                    $s1 = strtolower(trim($m['series'] ?? ''));
+                    $s2 = strtolower(trim($m['series_name'] ?? ''));
+                    if (!empty($m['series_id']) && ($s1 === $norm || $s2 === $norm || str_contains($s1, $norm) || str_contains($norm, $s1))) {
+                        $seriesId = (string) $m['series_id'];
+                        break;
+                    }
+                }
+            }
+
+            // 1. Direct high-speed Cricbuzz series scraper
+            if ($seriesId && is_numeric($seriesId)) {
+                $scraped = $this->scrapeCricbuzzSeriesMatchesDirectly($seriesId, $seriesName);
+                if (!empty($scraped) && !empty($scraped['matches'])) {
+                    return $scraped;
+                }
+            }
+
+            // 2. Fallback: filter matches from getCurrentMatches()
+            $matches = [];
+            $norm = strtolower(trim($seriesName ?? ''));
+            foreach ($this->getCurrentMatches() as $m) {
+                $s1 = strtolower(trim($m['series'] ?? ''));
+                $s2 = strtolower(trim($m['series_name'] ?? ''));
+                $sId = (string) ($m['series_id'] ?? '');
+                if (($seriesId && $sId === (string) $seriesId) || ($norm && ($s1 === $norm || $s2 === $norm || str_contains($s1, $norm) || str_contains($norm, $s1)))) {
+                    $matches[] = [
+                        'id' => (string) ($m['id'] ?? ''),
+                        'name' => (string) ($m['name'] ?? ''),
+                        'matchDesc' => (string) ($m['match_desc'] ?? $m['matchType'] ?? ''),
+                        'matchFormat' => (string) ($m['matchType'] ?? 'T20'),
+                        'status' => (string) ($m['status'] ?? 'scheduled'),
+                        'status_text' => (string) ($m['status_text'] ?? ''),
+                        'venue' => (string) ($m['venue'] ?? ''),
+                        'dateTimeGMT' => (string) ($m['dateTimeGMT'] ?? ''),
+                        'teams' => $m['teams'] ?? [],
+                        'team1' => ['name' => $m['teams'][0] ?? 'Team 1', 'short_name' => $m['team1_short'] ?? 'T1'],
+                        'team2' => ['name' => $m['teams'][1] ?? 'Team 2', 'short_name' => $m['team2_short'] ?? 'T2'],
+                        'score' => $m['score'] ?? [],
+                        'series_id' => $sId,
+                        'series_name' => $m['series_name'] ?? $m['series'] ?? $seriesName,
+                    ];
+                }
+            }
+
+            $upcoming = array_values(array_filter($matches, fn($m) => $m['status'] === 'scheduled'));
+            $live = array_values(array_filter($matches, fn($m) => $m['status'] === 'live'));
+            $completed = array_values(array_filter($matches, fn($m) => $m['status'] === 'completed'));
+
+            return [
+                'status' => 'success',
+                'title' => $seriesName ?? 'Series Schedule',
+                'series_id' => $seriesId,
+                'matches' => $matches,
+                'upcoming' => $upcoming,
+                'live' => $live,
+                'completed' => $completed,
+            ];
+        });
+    }
+
+    /**
+     * Scrape Cricbuzz series fixtures/matches directly.
+     */
+    public function scrapeCricbuzzSeriesMatchesDirectly(string $seriesId, ?string $seriesName = null): ?array
+    {
+        try {
+            $headers = [
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language' => 'en-US,en;q=0.9',
+            ];
+
+            $url = "https://www.cricbuzz.com/cricket-series/{$seriesId}/series/matches";
+            $resp = Http::withHeaders($headers)->timeout(8)->get($url);
+            if (!$resp->successful()) return null;
+            $html = $resp->body();
+
+            $p = strpos($html, 'typeMatches');
+            if ($p === false) return null;
+
+            $arrStart = strpos($html, '[', $p);
+            if ($arrStart === false) return null;
+
+            $depth = 0; $arrEnd = -1; $len = strlen($html);
+            for ($i = $arrStart; $i < min($len, $arrStart + 400000); $i++) {
+                if ($html[$i] === '[') $depth++;
+                elseif ($html[$i] === ']') { $depth--; if ($depth === 0) { $arrEnd = $i; break; } }
+            }
+            if ($arrEnd === -1) return null;
+
+            $raw = substr($html, $arrStart, $arrEnd - $arrStart + 1);
+            $data = json_decode(stripslashes($raw), true);
+            if (!is_array($data)) return null;
+
+            $resolvedTitle = $seriesName;
+            $targetMatches = [];
+            $allOtherMatches = [];
+
+            foreach ($data as $g) {
+                foreach ($g['seriesMatches'] ?? [] as $sm) {
+                    $w = $sm['seriesAdWrapper'] ?? $sm;
+                    $sId = (string)($w['seriesId'] ?? '');
+                    $sName = (string)($w['seriesName'] ?? '');
+                    $isTarget = ($sId === (string)$seriesId) || ($seriesName && (
+                        strcasecmp($sName, $seriesName) === 0 ||
+                        str_contains(strtolower($sName), strtolower($seriesName)) ||
+                        str_contains(strtolower($seriesName), strtolower($sName))
+                    ));
+
+                    if ($isTarget && !$resolvedTitle) {
+                        $resolvedTitle = $sName;
+                    }
+
+                    foreach ($w['matches'] ?? [] as $m) {
+                        $info = $m['matchInfo'] ?? [];
+                        $mId = (string)($info['matchId'] ?? '');
+                        if (!$mId) continue;
+
+                        $t1 = $info['team1']['teamName'] ?? 'Team 1';
+                        $t2 = $info['team2']['teamName'] ?? 'Team 2';
+                        $t1Short = $info['team1']['teamSName'] ?? $t1;
+                        $t2Short = $info['team2']['teamSName'] ?? $t2;
+                        $mDesc = $info['matchDesc'] ?? '';
+                        $mFormat = strtoupper($info['matchFormat'] ?? 'T20');
+                        $state = (string)($info['state'] ?? '');
+                        $statusText = (string)($info['status'] ?? $state);
+                        $venueGround = $info['venueInfo']['ground'] ?? '';
+                        $venueCity = $info['venueInfo']['city'] ?? '';
+                        $venue = trim("{$venueGround}, {$venueCity}", ', ');
+
+                        $startDateMs = isset($info['startDate']) ? (int)$info['startDate'] : null;
+                        $dateTimeGMT = $startDateMs ? date('Y-m-d\TH:i:s\Z', (int)($startDateMs / 1000)) : '';
+                        $dateStr = $startDateMs ? date('M d, Y', (int)($startDateMs / 1000)) : '';
+                        $timeStr = $startDateMs ? date('h:i A', (int)($startDateMs / 1000)) : '';
+
+                        $stLower = strtolower($statusText);
+                        $stateLower = strtolower($state);
+                        $isCompleted = $stateLower === 'complete' || str_contains($stLower, 'won by') || str_contains($stLower, 'beat') || str_contains($stLower, 'won ') || str_contains($stLower, 'tied') || str_contains($stLower, 'drawn');
+                        $isUpcoming = in_array($stateLower, ['preview', 'upcoming', 'scheduled']) || str_contains($stLower, 'starts at');
+                        $isLive = !$isCompleted && !$isUpcoming;
+
+                        $status = $isCompleted ? 'completed' : ($isLive ? 'live' : 'scheduled');
+
+                        $scores = [];
+                        $mScore = $m['matchScore'] ?? null;
+                        if ($mScore && is_array($mScore)) {
+                            foreach ([['team1Score', $t1], ['team2Score', $t2]] as $tp) {
+                                $tKey = $tp[0]; $tName = $tp[1];
+                                $tData = $mScore[$tKey] ?? null;
+                                if (!$tData || !is_array($tData)) continue;
+                                foreach (['inngs1', 'inngs2'] as $inngKey) {
+                                    $inn = $tData[$inngKey] ?? null;
+                                    if (!$inn || !is_array($inn)) continue;
+                                    $r = (int)($inn['runs'] ?? 0);
+                                    $w = !empty($inn['isAllOut']) ? 10 : (int)($inn['wickets'] ?? 0);
+                                    $o = (string)($inn['overs'] ?? '0');
+                                    $scores[] = [
+                                        'inning' => ($inngKey === 'inngs1') ? "{$tName} Inning 1" : "{$tName} Inning 2",
+                                        'batting_team' => $tName,
+                                        'runs' => $r, 'r' => $r, 'wickets' => $w, 'w' => $w, 'overs' => $o, 'o' => $o,
+                                        'display_score' => "{$r}/{$w}"
+                                    ];
+                                }
+                            }
+                        }
+
+                        $item = [
+                            'id' => $mId,
+                            'name' => "{$t1} vs {$t2}",
+                            'matchDesc' => $mDesc,
+                            'matchFormat' => $mFormat,
+                            'status' => $status,
+                            'status_text' => $statusText,
+                            'venue' => $venue,
+                            'startDateMs' => $startDateMs,
+                            'dateTimeGMT' => $dateTimeGMT,
+                            'dateStr' => $dateStr,
+                            'timeStr' => $timeStr,
+                            'teams' => [$t1, $t2],
+                            'team1' => ['name' => $t1, 'short_name' => $t1Short],
+                            'team2' => ['name' => $t2, 'short_name' => $t2Short],
+                            'score' => $scores,
+                            'series_id' => $sId,
+                            'series_name' => $sName,
+                        ];
+
+                        if ($isTarget) {
+                            $targetMatches[] = $item;
+                        } else {
+                            $allOtherMatches[] = $item;
+                        }
+                    }
+                }
+            }
+
+            $chosenMatches = !empty($targetMatches) ? $targetMatches : $allOtherMatches;
+            if (empty($chosenMatches)) return null;
+
+            // Sort matches chronologically
+            usort($chosenMatches, fn($a, $b) => ($a['startDateMs'] ?? 0) <=> ($b['startDateMs'] ?? 0));
+
+            $upcoming = array_values(array_filter($chosenMatches, fn($m) => $m['status'] === 'scheduled'));
+            $live = array_values(array_filter($chosenMatches, fn($m) => $m['status'] === 'live'));
+            $completed = array_values(array_filter($chosenMatches, fn($m) => $m['status'] === 'completed'));
+
+            return [
+                'status' => 'success',
+                'title' => $resolvedTitle ?? $seriesName ?? 'Series Schedule',
+                'series_id' => $seriesId,
+                'matches' => $chosenMatches,
+                'upcoming' => $upcoming,
+                'live' => $live,
+                'completed' => $completed,
+            ];
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('scrapeCricbuzzSeriesMatchesDirectly error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     public function getCricketNews(): array
     {
         if ($this->provider === 'local') {
