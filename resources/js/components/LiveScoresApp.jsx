@@ -1526,7 +1526,116 @@ export default function LiveScoresApp({
     );
 }
 
-// ==================== PREMIUM MATCH CARD COMPONENT ====================
+// ==================== CRICBUZZ-STYLE MATCH CARD HELPERS ====================
+function parseMatchTeams(match) {
+    let t1 = '';
+    let t2 = '';
+    if (Array.isArray(match.teams) && match.teams.length >= 2) {
+        t1 = String(match.teams[0] || '').trim();
+        t2 = String(match.teams[1] || '').trim();
+    }
+    if (!t1 || !t2) {
+        const rawName = (match.name || '').split(',')[0];
+        const parts = rawName.split(/\s+(?:vs\.?|v\.?)\s+/i);
+        if (parts.length >= 2) {
+            t1 = t1 || parts[0].trim();
+            t2 = t2 || parts[1].trim();
+        }
+    }
+    return [t1 || 'Team 1', t2 || 'Team 2'];
+}
+
+function getTeamCode(teamName) {
+    if (!teamName) return 'TBA';
+    const cleaned = teamName.replace(/\b(cricket|team|club|eleven|xi)\b/gi, '').trim();
+    const known = {
+        'hyderabad': 'HYD', 'mumbai': 'MUM', 'delhi': 'DEL', 'karnataka': 'KAR',
+        'tamil nadu': 'TN', 'bengal': 'BEN', 'punjab': 'PUN', 'baroda': 'BDA',
+        'vidarbha': 'VID', 'saurashtra': 'SAU', 'uttar pradesh': 'UP', 'rajasthan': 'RAJ',
+        'gujarat': 'GUJ', 'madhya pradesh': 'MP', 'andhra': 'AND', 'kerala': 'KER',
+        'india': 'IND', 'australia': 'AUS', 'england': 'ENG', 'pakistan': 'PAK',
+        'south africa': 'SA', 'new zealand': 'NZ', 'sri lanka': 'SL', 'west indies': 'WI',
+        'bangladesh': 'BAN', 'afghanistan': 'AFG', 'ireland': 'IRE', 'zimbabwe': 'ZIM',
+        'mumbai indians': 'MI', 'chennai super kings': 'CSK', 'royal challengers bangalore': 'RCB',
+        'royal challengers bengaluru': 'RCB', 'kolkata knight riders': 'KKR', 'delhi capitals': 'DC',
+        'punjab kings': 'PBKS', 'rajasthan royals': 'RR', 'sunrisers hyderabad': 'SRH',
+        'lucknow super giants': 'LSG', 'gujarat titans': 'GT'
+    };
+    const lower = cleaned.toLowerCase();
+    if (known[lower]) return known[lower];
+
+    const words = cleaned.split(/[\s-]+/).filter(Boolean);
+    if (words.length >= 2 && words.length <= 4) {
+        return words.map(w => w[0]).join('').toUpperCase();
+    }
+    if (cleaned.length <= 4) return cleaned.toUpperCase();
+    return cleaned.slice(0, 3).toUpperCase();
+}
+
+function getScoresForTeams(match, team1, team2, isFinished) {
+    const scores = Array.isArray(match.score) ? match.score : [];
+    if (scores.length === 0) return { team1Score: null, team2Score: null };
+
+    const t1Clean = (team1 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const t2Clean = (team2 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const t1Code = getTeamCode(team1).toLowerCase();
+    const t2Code = getTeamCode(team2).toLowerCase();
+
+    const t1Innings = [];
+    const t2Innings = [];
+
+    scores.forEach((inn, idx) => {
+        const rawBat = (inn.batting_team || inn.inning || inn.team || '').toLowerCase();
+        const cleanBat = rawBat.replace(/innings?\s*\d*/gi, '').replace(/[^a-z0-9]/g, '');
+
+        let assigned = 0;
+        if (cleanBat) {
+            if (t1Clean && (cleanBat.includes(t1Clean) || t1Clean.includes(cleanBat))) assigned = 1;
+            else if (t2Clean && (cleanBat.includes(t2Clean) || t2Clean.includes(cleanBat))) assigned = 2;
+            else if (cleanBat.includes(t1Code)) assigned = 1;
+            else if (cleanBat.includes(t2Code)) assigned = 2;
+        }
+
+        if (!assigned) {
+            assigned = (idx % 2 === 0) ? 1 : 2;
+        }
+
+        if (assigned === 1) t1Innings.push(inn);
+        else t2Innings.push(inn);
+    });
+
+    const formatInnings = (inns) => {
+        if (!inns || inns.length === 0) return null;
+        return inns.map((inn, idx) => {
+            const runs = inn.runs ?? inn.r ?? 0;
+            let wickets = inn.wickets ?? inn.w ?? 0;
+            const overs = inn.overs ?? inn.o;
+            const hasOvers = overs !== undefined && overs !== null && overs !== '' && overs !== 0 && overs !== '0' && overs !== '0.0';
+
+            if (isFinished && wickets === 0 && (inn.display_score || '').includes('/10')) {
+                wickets = 10;
+            }
+
+            let scStr = `${runs}-${wickets}`;
+            if (inn.display_score) {
+                scStr = inn.display_score.replace(/\//g, '-').replace(/\s*\([\d.]+\s*ov\)/gi, '').trim();
+            }
+
+            const isLast = idx === inns.length - 1;
+            if (isLast && hasOvers) {
+                return `${scStr} (${overs})`;
+            }
+            return scStr;
+        }).join(' & ');
+    };
+
+    return {
+        team1Score: formatInnings(t1Innings),
+        team2Score: formatInnings(t2Innings),
+    };
+}
+
+// ==================== CRICBUZZ-STYLE MATCH CARD COMPONENT ====================
 function MatchCard({ match, type, onSelectSeries, onQuickScorecard, highlightedPlayer = null }) {
     const stLower = (match.status_text || '').toLowerCase();
     const isInningsBreak = ['innings break', 'inn break', 'break', 'lunch', 'tea', 'dinner', 'strategic timeout', 'drinks'].some(w => stLower.includes(w));
@@ -1536,248 +1645,242 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, highlightedP
     const isRecent = type === 'recent' && !isInningsBreak;
     const isArchives = type === 'archives' && !isInningsBreak;
     const isDismissed = Boolean(match.is_dismissed || stLower === 'match dismissed');
+    const isFinished = isRecent || isArchives || (match.matchEnded ?? false) || ['won by', ' won', 'beat', 'tied', 'drawn', 'complete', 'result'].some(w => stLower.includes(w));
 
-    // Format teams & scores cleanly
-    const scores = match.score || [];
     const seriesTitle = match.series || match.series_name;
+    const [team1Name, team2Name] = parseMatchTeams(match);
+    const team1Code = getTeamCode(team1Name);
+    const team2Code = getTeamCode(team2Name);
+
+    const { team1Score, team2Score } = getScoresForTeams(match, team1Name, team2Name, isFinished);
+
+    const matchUrl = match.is_local
+        ? (match.match_url || `/matches/${match.local_id || (match.id ? String(match.id).replace('local_', '') : '')}`)
+        : `/live-scores/${match.id}?tab=${isLive ? 'live' : (type || 'live')}`;
+
+    const handleCardClick = (e) => {
+        if (e.target.closest('button') || e.target.closest('a')) {
+            return;
+        }
+        window.location.href = matchUrl;
+    };
 
     return (
-        <div className={`rounded-3xl border transition-all duration-300 flex flex-col justify-between overflow-hidden group relative bg-[#131b2e] ${
-            isLive
-                ? (isInningsBreak
-                    ? 'border-amber-500/30 hover:border-amber-500/60 shadow-xl hover:shadow-2xl hover:shadow-amber-500/10'
-                    : 'border-rose-500/30 hover:border-rose-500/60 shadow-xl hover:shadow-2xl hover:shadow-rose-500/10')
-                : isDismissed
-                    ? 'border-rose-500/20 hover:border-rose-500/40 shadow-lg'
-                    : 'border-white/10 hover:border-indigo-500/50 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/10'
-        }`}>
+        <div
+            onClick={handleCardClick}
+            className={`rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden group cursor-pointer bg-[#131b2e] hover:bg-[#162138] relative ${
+                isLive
+                    ? (isInningsBreak
+                        ? 'border-amber-500/30 hover:border-amber-500/60 shadow-xl hover:shadow-amber-500/10'
+                        : 'border-rose-500/30 hover:border-rose-500/60 shadow-xl hover:shadow-rose-500/10')
+                    : isDismissed
+                        ? 'border-rose-500/20 hover:border-rose-500/40 shadow-lg'
+                        : 'border-white/10 hover:border-indigo-500/50 shadow-xl hover:shadow-indigo-500/10'
+            }`}
+        >
             {/* Top Indicator Strip for Live Matches */}
             {isLive && (
                 <div className={`h-1 w-full ${isInningsBreak ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400' : 'bg-gradient-to-r from-rose-500 via-red-500 to-amber-500'}`}></div>
             )}
 
-            <div className="p-5 space-y-3.5">
-                {/* Header Tag Row */}
+            <div className="p-4 sm:p-5 space-y-3">
+                {/* Header Tag Row: Series Title & Match Format (Cricbuzz Style) */}
                 <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                        {seriesTitle ? (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectSeries && onSelectSeries(seriesTitle);
+                                }}
+                                className="text-xs font-semibold text-slate-400 hover:text-indigo-300 truncate max-w-full text-left transition block"
+                                title={`Click to filter by ${seriesTitle}`}
+                            >
+                                {seriesTitle}
+                            </button>
+                        ) : match.venue ? (
+                            <span className="text-xs font-semibold text-slate-400 truncate flex items-center gap-1" title={match.venue}>
+                                <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                                {match.venue.split(',')[0]}
+                            </span>
+                        ) : (
+                            <span className="text-xs font-semibold text-slate-400 truncate block">
+                                {match.name}
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {isLive && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                LIVE
+                            </span>
+                        )}
+                        {isInningsBreak && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                BREAK
+                            </span>
+                        )}
+                        {isUpcoming && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                UPCOMING
+                            </span>
+                        )}
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-white/10">
+                            {match.matchType || 'Match'}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Additional Badges if Network / Community / Stream / Player */}
+                {(highlightedPlayer || match.is_network_match || (match.is_local && !match.is_network_match) || match.stream_url) && (
                     <div className="flex items-center gap-1.5 flex-wrap">
                         {highlightedPlayer && (
                             (match.name || '').toLowerCase().includes((highlightedPlayer.country || '').toLowerCase()) ||
                             (Array.isArray(match.teams) && match.teams.some(t => (t || '').toLowerCase().includes((highlightedPlayer.country || '').toLowerCase())))
                         ) && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 shadow-xs">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-500/25 text-indigo-300 border border-indigo-500/40">
                                 🏏 {highlightedPlayer.name}'s Team
                             </span>
                         )}
                         {match.is_network_match && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                                 ⭐ My Network
                             </span>
                         )}
                         {match.is_local && !match.is_network_match && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/30">
                                 🏏 Community
                             </span>
                         )}
                         {match.stream_url && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                                🎥 Live Stream
+                                🎥 Stream
                             </span>
                         )}
-                        {isInningsBreak && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                                INNINGS BREAK
+                    </div>
+                )}
+
+                {/* Two Distinct Team Rows (Cricbuzz Core UI) */}
+                <div className="space-y-2.5 py-1">
+                    {/* Team 1 Row */}
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-white/10 flex flex-col items-center justify-center shrink-0 shadow-xs px-0.5">
+                                <span className="text-[10px] font-black text-indigo-300 uppercase leading-none">
+                                    {team1Code.slice(0, 3)}
+                                </span>
+                                {team1Name && (
+                                    <span className="text-[7px] text-slate-400 truncate max-w-[28px] uppercase tracking-tighter leading-none mt-0.5">
+                                        {team1Name.slice(0, 4)}
+                                    </span>
+                                )}
+                            </div>
+                            <span className="font-extrabold text-slate-100 text-sm sm:text-base tracking-tight truncate max-w-[130px] sm:max-w-[170px]" title={team1Name}>
+                                {team1Code}
                             </span>
-                        )}
-                        {!isInningsBreak && isLive && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                LIVE
-                            </span>
-                        )}
-                        {isUpcoming && (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                                UPCOMING
-                            </span>
-                        )}
-                        {isRecent && (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/40">
-                                {match.status === 'abandoned' ? 'ABANDONED' : 'RESULT'}
-                            </span>
-                        )}
-                        {isArchives && (
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black border ${
-                                isDismissed
-                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                                    : match.status === 'abandoned'
-                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                            }`}>
-                                {isDismissed ? 'DISMISSED' : match.status === 'abandoned' ? 'ABANDONED' : 'ARCHIVE'}
-                            </span>
-                        )}
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-300 truncate max-w-[140px]">
-                            {match.matchType || 'Match'}
-                        </span>
+                        </div>
+                        <div className="text-right shrink-0">
+                            {team1Score ? (
+                                <span className="text-sm sm:text-base font-black text-white font-mono tracking-tight">
+                                    {team1Score}
+                                </span>
+                            ) : isUpcoming ? (
+                                <span className="text-xs text-slate-500 font-medium">Starts soon</span>
+                            ) : null}
+                        </div>
                     </div>
 
-                    {/* Venue / Location */}
-                    {match.venue && (
-                        <span className="text-[11px] text-slate-400 font-medium truncate max-w-[120px] flex items-center gap-1 shrink-0" title={match.venue}>
-                            <MapPin className="w-3 h-3 text-slate-500" />
-                            {match.venue.split(',')[0]}
-                        </span>
-                    )}
+                    {/* Team 2 Row */}
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-white/10 flex flex-col items-center justify-center shrink-0 shadow-xs px-0.5">
+                                <span className="text-[10px] font-black text-indigo-300 uppercase leading-none">
+                                    {team2Code.slice(0, 3)}
+                                </span>
+                                {team2Name && (
+                                    <span className="text-[7px] text-slate-400 truncate max-w-[28px] uppercase tracking-tighter leading-none mt-0.5">
+                                        {team2Name.slice(0, 4)}
+                                    </span>
+                                )}
+                            </div>
+                            <span className="font-extrabold text-slate-100 text-sm sm:text-base tracking-tight truncate max-w-[130px] sm:max-w-[170px]" title={team2Name}>
+                                {team2Code}
+                            </span>
+                        </div>
+                        <div className="text-right shrink-0">
+                            {team2Score ? (
+                                <span className="text-sm sm:text-base font-black text-white font-mono tracking-tight">
+                                    {team2Score}
+                                </span>
+                            ) : null}
+                        </div>
+                    </div>
                 </div>
 
-                {/* Series Badge (Clickable) */}
-                {seriesTitle && (
-                    <div>
+                {/* Match Status Text (Cricbuzz Style highlight below teams) */}
+                {match.status_text ? (
+                    <div className="pt-0.5">
+                        <p className={`text-xs sm:text-sm font-semibold truncate ${
+                            isLive || ['opt to', 'elected to', 'chose to', 'target', 'need', 'require', 'trail', 'lead'].some(w => stLower.includes(w))
+                                ? 'text-rose-400'
+                                : (isFinished || ['won', 'beat', 'tied', 'drawn'].some(w => stLower.includes(w)))
+                                    ? 'text-emerald-400'
+                                    : 'text-amber-400'
+                        }`}>
+                            {match.status_text}
+                        </p>
+                    </div>
+                ) : isUpcoming && match.dateTimeGMT ? (
+                    <div className="pt-0.5">
+                        <p className="text-xs text-indigo-300 font-medium flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span>Starts: {match.dateTimeGMT} GMT</span>
+                        </p>
+                    </div>
+                ) : null}
+            </div>
+
+            {/* Cricbuzz Style Footer Action Bar */}
+            <div className="px-4 py-2.5 sm:px-5 sm:py-3 bg-slate-950/80 border-t border-white/5 flex items-center justify-between text-[11px] font-bold tracking-wider uppercase">
+                {/* Match Center Link */}
+                <a
+                    href={matchUrl}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors font-extrabold"
+                >
+                    <span>{match.is_local ? 'SCORECARD' : 'MATCH CENTER'}</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                </a>
+
+                <div className="flex items-center gap-3">
+                    {seriesTitle && onSelectSeries && (
                         <button
                             type="button"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onSelectSeries && onSelectSeries(seriesTitle);
+                                onSelectSeries(seriesTitle);
                             }}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition max-w-full text-left truncate group/series"
-                            title={`Click to view all matches in ${seriesTitle}`}
+                            className="text-slate-400 hover:text-white transition-colors"
+                            title={`Filter matches in ${seriesTitle}`}
                         >
-                            <Trophy className="w-3 h-3 text-amber-400 shrink-0" />
-                            <span className="truncate group-hover/series:underline">{seriesTitle}</span>
-                            <ChevronRight className="w-3 h-3 text-amber-400 shrink-0 opacity-70 group-hover/series:opacity-100" />
+                            POINTS TABLE
                         </button>
-                    </div>
-                )}
+                    )}
 
-                {/* Match Title */}
-                <h3 className="font-black text-white text-base leading-snug group-hover:text-indigo-400 transition line-clamp-1">
-                    {match.name}
-                </h3>
-
-                {/* Scores List for Live & Recent */}
-                {!isUpcoming && scores.length > 0 ? (
-                    <div className="space-y-2 pt-1">
-                        {scores.map((inning, idx) => {
-                            const inningName = inning.batting_team || inning.inning || `Team ${idx + 1}`;
-                            const runs = inning.runs ?? inning.r ?? 0;
-                            let wickets = inning.wickets ?? inning.w ?? 0;
-                            const overs = inning.overs ?? inning.o;
-                            const hasOvers = overs && overs !== '0' && overs !== 0 && overs !== '0.0';
-
-                            // Correction: If match is completed, and team lost by runs or stopped chasing, wickets must be 10 (all out), not 0
-                            const isMatchFinished = isRecent || isArchives || (match.matchEnded ?? false) || ['won by', ' won', 'beat', 'tied', 'drawn', 'complete', 'result'].some(w => (match.status_text || '').toLowerCase().includes(w));
-                            if (isMatchFinished && idx === 1 && wickets === 0) {
-                                const st = (match.status_text || '').toLowerCase();
-                                if (st.includes('won by') && st.includes('run')) {
-                                    wickets = 10;
-                                } else if (hasOvers && parseFloat(overs) < 50 && (match.matchType || '').toLowerCase().includes('odi')) {
-                                    wickets = 10;
-                                }
-                            }
-
-                            let displayScore = inning.display_score;
-                            if (!displayScore || (displayScore === `${runs}/0` && (wickets > 0 || isMatchFinished))) {
-                                displayScore = wickets === 10 ? `${runs}/10` : `${runs}/${wickets}`;
-                            }
-
-                            return (
-                                <div
-                                    key={idx}
-                                    className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/80 border border-white/5"
-                                >
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                        <div className={`w-2 h-2 rounded-full shrink-0 ${idx === 0 ? 'bg-indigo-400' : 'bg-emerald-400'}`}></div>
-                                        <span className="text-xs font-bold text-slate-200 truncate max-w-[160px]">
-                                            {inningName}
-                                        </span>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                        <span className="text-base font-black text-white font-mono">
-                                            {displayScore}
-                                        </span>
-                                        {hasOvers && (
-                                            <span className="text-xs font-bold text-sky-400 ml-1.5 font-mono">
-                                                ({overs} ov)
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : (match.status_text && (match.status === 'abandoned' || ['abandon', 'cancel', 'no result'].some(w => match.status_text.toLowerCase().includes(w)))) ? (
-                    <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/30 flex items-center gap-2.5 text-xs text-amber-300 font-bold">
-                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                        <div className="min-w-0">
-                            <span className="text-[10px] uppercase font-black tracking-wider text-amber-400 block">Match Status</span>
-                            <span className="truncate block text-white font-black">{match.status_text}</span>
-                        </div>
-                    </div>
-                ) : (match.status_text && !isRecent && !isArchives && (['opt to', 'elected to', 'chose to'].some(w => match.status_text.toLowerCase().includes(w)) || (match.status_text.toLowerCase().includes('toss') && !match.status_text.toLowerCase().includes('abandon')))) ? (
-                    <div className="p-3 bg-amber-500/15 rounded-2xl border border-amber-500/30 flex items-center gap-2.5 text-xs text-amber-300 font-bold">
-                        <Flame className="w-4 h-4 text-amber-400 shrink-0" />
-                        <div className="min-w-0">
-                            <span className="text-[10px] uppercase font-black tracking-wider text-amber-400 block">Toss Decision</span>
-                            <span className="truncate block text-white font-black">{match.status_text}</span>
-                        </div>
-                    </div>
-                ) : isUpcoming && match.dateTimeGMT ? (
-                    <div className="p-3 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 flex items-center gap-2 text-xs text-indigo-300 font-semibold">
-                        <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span>Match Starts: {match.dateTimeGMT} GMT</span>
-                    </div>
-                ) : (
-                    /* Default Teams View */
-                    <div className="p-3 bg-slate-950/60 rounded-2xl border border-white/5 flex items-center justify-between text-xs text-slate-300 font-bold">
-                        <span>{match.teams && match.teams.length >= 2 ? `${match.teams[0]} vs ${match.teams[1]}` : 'Match Scheduled'}</span>
-                        <span className="text-[10px] text-slate-500 font-normal">Starts soon</span>
-                    </div>
-                )}
-
-                {/* Status Text Banner */}
-                {match.status_text && (
-                    <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between gap-2 ${
-                        isDismissed
-                            ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                            : isLive
-                                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                                : isRecent
-                                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                                    : 'bg-slate-950/80 text-slate-300 border border-white/10'
-                    }`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                            <span className="shrink-0">
-                                {isDismissed ? (
-                                    <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-                                ) : isLive ? (
-                                    <Flame className="w-3.5 h-3.5 text-amber-400" />
-                                ) : (
-                                    <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                                )}
-                            </span>
-                            <span className="truncate">{match.status_text}</span>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Card Action Footer */}
-            <div className="px-5 py-3.5 bg-slate-950/70 border-t border-white/5 flex items-center justify-between">
-                <button
-                    type="button"
-                    onClick={onQuickScorecard}
-                    className="text-xs font-bold text-slate-400 hover:text-white transition"
-                >
-                    Quick View
-                </button>
-
-                <a
-                    href={match.is_local ? (match.match_url || `/matches/${match.local_id || match.id.replace('local_', '')}`) : `/live-scores/${match.id}?tab=${isLive ? 'live' : (type || 'live')}`}
-                    className="inline-flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-extrabold shadow-lg shadow-indigo-600/30 transition transform active:scale-95"
-                >
-                    <span>{match.is_local ? 'View Scorecard 📊' : 'Match Center'}</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                </a>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onQuickScorecard && onQuickScorecard();
+                        }}
+                        className="text-slate-400 hover:text-white transition-colors"
+                    >
+                        QUICK VIEW
+                    </button>
+                </div>
             </div>
         </div>
     );
