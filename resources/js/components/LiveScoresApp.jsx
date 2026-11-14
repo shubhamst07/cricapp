@@ -164,6 +164,9 @@ export default function LiveScoresApp({
     const [scorecardData, setScorecardData] = useState(null);
     const [loadingScorecard, setLoadingScorecard] = useState(false);
 
+    // Points Table Modal state
+    const [pointsTableModal, setPointsTableModal] = useState(null); // { seriesName, match }
+
     // Player Search & Career Profile Modal state
     const [playerResults, setPlayerResults] = useState([]);
     const [isSearchingPlayers, setIsSearchingPlayers] = useState(false);
@@ -505,6 +508,21 @@ export default function LiveScoresApp({
             matches
         }));
     }, [filteredMatches]);
+
+    // All known matches across all tabs (for global series standings)
+    const allKnownMatches = useMemo(() => {
+        return [...liveMatches, ...scheduledMatches, ...completedMatches];
+    }, [liveMatches, scheduledMatches, completedMatches]);
+
+    // Dynamic Points Table calculation for selected series
+    const activePointsTable = useMemo(() => {
+        if (!pointsTableModal?.seriesName) return null;
+        return computeSeriesPointsTable(pointsTableModal.seriesName, allKnownMatches);
+    }, [pointsTableModal, allKnownMatches]);
+
+    const openPointsTableModal = (seriesName, match) => {
+        setPointsTableModal({ seriesName, match });
+    };
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -922,14 +940,26 @@ export default function LiveScoresApp({
                                             {matches.length} {matches.length === 1 ? 'match' : 'matches'}
                                         </span>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedSeries(seriesName)}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-xl text-xs font-bold transition shrink-0"
-                                    >
-                                        <span>View Series</span>
-                                        <ChevronRight className="w-3.5 h-3.5" />
-                                    </button>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => openPointsTableModal(seriesName, matches[0])}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition"
+                                            title="View Series Points Table"
+                                        >
+                                            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                                            <span className="hidden sm:inline">Points Table</span>
+                                            <span className="sm:hidden">Table</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedSeries(seriesName)}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-xl text-xs font-bold transition"
+                                        >
+                                            <span>View Series</span>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Match Cards in this Series */}
@@ -940,6 +970,7 @@ export default function LiveScoresApp({
                                             match={match}
                                             type={activeTab}
                                             onSelectSeries={setSelectedSeries}
+                                            onOpenPointsTable={(series, m) => openPointsTableModal(series, m)}
                                             onQuickScorecard={() => openScorecardModal(match)}
                                             highlightedPlayer={playerResults[0] || null}
                                         />
@@ -957,6 +988,7 @@ export default function LiveScoresApp({
                                 match={match}
                                 type={activeTab}
                                 onSelectSeries={setSelectedSeries}
+                                onOpenPointsTable={(series, m) => openPointsTableModal(series, m)}
                                 onQuickScorecard={() => openScorecardModal(match)}
                                 highlightedPlayer={playerResults[0] || null}
                             />
@@ -1520,6 +1552,260 @@ export default function LiveScoresApp({
                 </div>
             )}
 
+            {/* Cricbuzz-Style Points Table Modal */}
+            {pointsTableModal && activePointsTable && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+                    <div className="bg-[#0f172a] border border-white/10 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                        {/* Modal Header */}
+                        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-slate-950/80">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-xs">
+                                    <Trophy className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider">
+                                            Tournament Standings
+                                        </span>
+                                        {pointsTableModal.match?.matchType && (
+                                            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/10">
+                                                {pointsTableModal.match.matchType}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h3 className="font-black text-white text-base sm:text-lg leading-tight mt-0.5 truncate" title={pointsTableModal.seriesName}>
+                                        {pointsTableModal.seriesName}
+                                    </h3>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setPointsTableModal(null)}
+                                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition"
+                                title="Close"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+                            {/* Series Stats Bar */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                                <div className="bg-slate-900/80 border border-white/5 p-3 rounded-2xl">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Teams</span>
+                                    <span className="text-base sm:text-lg font-black text-white">{activePointsTable.standings.length}</span>
+                                </div>
+                                <div className="bg-slate-900/80 border border-white/5 p-3 rounded-2xl">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Matches</span>
+                                    <span className="text-base sm:text-lg font-black text-white">{activePointsTable.totalMatches}</span>
+                                </div>
+                                <div className="bg-slate-900/80 border border-white/5 p-3 rounded-2xl">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Completed</span>
+                                    <span className="text-base sm:text-lg font-black text-emerald-400">{activePointsTable.completedMatches}</span>
+                                </div>
+                                <div className="bg-slate-900/80 border border-white/5 p-3 rounded-2xl">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Leader</span>
+                                    <span className="text-base sm:text-lg font-black text-amber-300 truncate block">
+                                        {activePointsTable.standings[0]?.name ? activePointsTable.standings[0].code : 'TBD'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Bilateral Series Special Banner if only 2 teams */}
+                            {activePointsTable.standings.length === 2 && (
+                                <div className="p-4 bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-950/80 border border-indigo-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div>
+                                        <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider block">
+                                            Bilateral Series Summary
+                                        </span>
+                                        <h4 className="text-sm sm:text-base font-bold text-white mt-0.5">
+                                            {activePointsTable.standings[0]?.name} ({activePointsTable.standings[0]?.won}W) vs {activePointsTable.standings[1]?.name} ({activePointsTable.standings[1]?.won}W)
+                                        </h4>
+                                    </div>
+                                    <span className="text-xs font-extrabold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 rounded-xl self-start sm:self-center">
+                                        {activePointsTable.standings[0]?.won > activePointsTable.standings[1]?.won
+                                            ? `${activePointsTable.standings[0].name} lead (${activePointsTable.standings[0].won}-${activePointsTable.standings[1].won})`
+                                            : activePointsTable.standings[1]?.won > activePointsTable.standings[0]?.won
+                                                ? `${activePointsTable.standings[1].name} lead (${activePointsTable.standings[1].won}-${activePointsTable.standings[0].won})`
+                                                : 'Series Level / Tied'}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Cricbuzz Standings Table */}
+                            <div className="bg-slate-950/80 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
+                                <div className="overflow-x-auto scrollbar-thin">
+                                    <table className="w-full text-left border-collapse min-w-[560px]">
+                                        <thead>
+                                            <tr className="border-b border-white/10 bg-slate-900/90 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                                                <th className="py-3 px-3 text-center w-12">Pos</th>
+                                                <th className="py-3 px-3">Team</th>
+                                                <th className="py-3 px-2 text-center w-12" title="Matches Played">P</th>
+                                                <th className="py-3 px-2 text-center w-12" title="Won">W</th>
+                                                <th className="py-3 px-2 text-center w-12" title="Lost">L</th>
+                                                <th className="py-3 px-2 text-center w-14" title="Tied / No Result">T/NR</th>
+                                                <th className="py-3 px-3 text-center w-16 text-white" title="Points">PTS</th>
+                                                <th className="py-3 px-3 text-center w-20" title="Net Run Rate">NRR</th>
+                                                <th className="py-3 px-3 text-center w-24">Form</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5 text-xs">
+                                            {activePointsTable.standings.map((team, idx) => {
+                                                const isQualifiedSpot = idx < 2; // top 2 qualification zone
+                                                const nrrNum = parseFloat(team.nrrRaw || 0);
+                                                return (
+                                                    <tr
+                                                        key={team.code || team.name}
+                                                        className={`hover:bg-white/5 transition-colors ${
+                                                            isQualifiedSpot ? 'bg-indigo-950/15' : ''
+                                                        }`}
+                                                    >
+                                                        <td className="py-3.5 px-3 text-center">
+                                                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-black ${
+                                                                idx === 0
+                                                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                                                    : isQualifiedSpot
+                                                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                                                        : 'text-slate-400 bg-white/5'
+                                                            }`}>
+                                                                {idx + 1}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3.5 px-3">
+                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                <div className="w-7 h-7 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center shrink-0 shadow-xs">
+                                                                    <span className="text-[10px] font-black text-indigo-300 uppercase leading-none">
+                                                                        {team.code.slice(0, 3)}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <span className="font-extrabold text-white text-sm block truncate" title={team.name}>
+                                                                        {team.name}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-400 uppercase tracking-tight block">
+                                                                        {team.code}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3.5 px-2 text-center font-bold text-slate-200">{team.played}</td>
+                                                        <td className="py-3.5 px-2 text-center font-bold text-emerald-400">{team.won}</td>
+                                                        <td className="py-3.5 px-2 text-center font-bold text-rose-400">{team.lost}</td>
+                                                        <td className="py-3.5 px-2 text-center font-medium text-slate-400">{team.tied + team.nr}</td>
+                                                        <td className="py-3.5 px-3 text-center">
+                                                            <span className="inline-block px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-white font-black font-mono text-sm shadow-xs">
+                                                                {team.points}
+                                                            </span>
+                                                        </td>
+                                                        <td className={`py-3.5 px-3 text-center font-mono font-bold text-xs ${
+                                                            nrrNum > 0 ? 'text-emerald-400' : nrrNum < 0 ? 'text-rose-400' : 'text-slate-400'
+                                                        }`}>
+                                                            {team.nrr}
+                                                        </td>
+                                                        <td className="py-3.5 px-3 text-center">
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                {team.last5Form.length > 0 ? (
+                                                                    team.last5Form.map((f, fIdx) => (
+                                                                        <span
+                                                                            key={fIdx}
+                                                                            className={`w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black uppercase ${
+                                                                                f === 'W'
+                                                                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                                                                    : f === 'L'
+                                                                                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                                                                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                                                            }`}
+                                                                            title={`Result: ${f}`}
+                                                                        >
+                                                                            {f}
+                                                                        </span>
+                                                                    ))
+                                                                ) : (
+                                                                    <span className="text-[10px] text-slate-500 font-mono">-</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="p-3 bg-slate-900/60 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-400"></span>
+                                            Top 2 Qualification Zone
+                                        </span>
+                                    </div>
+                                    <span>Win = 2 pts, Tie/NR = 1 pt</span>
+                                </div>
+                            </div>
+
+                            {/* Series Matches List Preview */}
+                            {activePointsTable.matches.length > 0 && (
+                                <div className="space-y-2.5">
+                                    <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center justify-between">
+                                        <span>Series Matches ({activePointsTable.matches.length})</span>
+                                        <span className="text-[10px] text-slate-500 font-normal">Live updates & results</span>
+                                    </h4>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                        {activePointsTable.matches.map((m) => (
+                                            <a
+                                                key={m.id}
+                                                href={m.is_local ? (m.match_url || `/matches/${m.local_id || m.id}`) : `/live-scores/${m.id}?tab=live`}
+                                                className="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-white/5 hover:border-indigo-500/30 transition flex flex-col justify-between group"
+                                            >
+                                                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                                                    <span className="font-bold text-slate-300">{m.matchType || 'Match'}</span>
+                                                    {m.status === 'live' ? (
+                                                        <span className="text-rose-400 font-black flex items-center gap-1">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                                            LIVE
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-500">{m.status_text ? m.status_text.slice(0, 20) : 'Scheduled'}</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs font-bold text-white group-hover:text-indigo-400 transition truncate">
+                                                    {m.name}
+                                                </p>
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/80 flex items-center justify-between gap-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSelectedSeries(pointsTableModal.seriesName);
+                                    setPointsTableModal(null);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-extrabold transition"
+                            >
+                                <Filter className="w-3.5 h-3.5" />
+                                <span>Filter Main List by this Series</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setPointsTableModal(null)}
+                                className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Mobile Sticky Bottom Sponsor Banner */}
             <AdSlot type="sticky-bottom" slotId="livescores-sticky" />
         </div>
@@ -1635,8 +1921,188 @@ function getScoresForTeams(match, team1, team2, isFinished) {
     };
 }
 
+// Compute points table for any series dynamically from all matches
+function computeSeriesPointsTable(seriesName, allMatches) {
+    if (!seriesName) return null;
+
+    const normSeries = seriesName.trim().toLowerCase();
+    const seriesMatches = (allMatches || []).filter(m => {
+        const s = (m.series || m.series_name || '').trim().toLowerCase();
+        return s === normSeries || (s && normSeries && (s.includes(normSeries) || normSeries.includes(s)));
+    });
+
+    const teamsMap = {};
+
+    const getOrInitTeam = (teamName) => {
+        const cleanName = (teamName || '').trim();
+        const code = getTeamCode(cleanName);
+        const key = (code && code !== 'TBA') ? code : (cleanName.toLowerCase() || 'team');
+        if (!teamsMap[key]) {
+            teamsMap[key] = {
+                name: cleanName || 'Team',
+                code: code || 'TBA',
+                played: 0,
+                won: 0,
+                lost: 0,
+                tied: 0,
+                nr: 0,
+                points: 0,
+                runsScored: 0,
+                oversFaced: 0,
+                runsConceded: 0,
+                oversBowled: 0,
+                form: [],
+            };
+        }
+        return teamsMap[key];
+    };
+
+    seriesMatches.forEach(m => {
+        const [t1Name, t2Name] = parseMatchTeams(m);
+        const t1 = getOrInitTeam(t1Name);
+        const t2 = getOrInitTeam(t2Name);
+
+        const st = (m.status_text || '').toLowerCase();
+        const isEnded = Boolean(m.matchEnded) || ['won by', ' won', 'beat', 'tied', 'drawn', 'complete', 'result'].some(w => st.includes(w));
+        const isAbandoned = m.status === 'abandoned' || ['abandon', 'cancel', 'no result'].some(w => st.includes(w));
+
+        if (isAbandoned) {
+            t1.played += 1;
+            t2.played += 1;
+            t1.nr += 1;
+            t2.nr += 1;
+            t1.points += 1;
+            t2.points += 1;
+            t1.form.push('NR');
+            t2.form.push('NR');
+            return;
+        }
+
+        if (!isEnded) {
+            return; // Not yet finished
+        }
+
+        t1.played += 1;
+        t2.played += 1;
+
+        if (st.includes('tied') || st.includes('drawn')) {
+            t1.tied += 1;
+            t2.tied += 1;
+            t1.points += 1;
+            t2.points += 1;
+            t1.form.push('T');
+            t2.form.push('T');
+            return;
+        }
+
+        // Determine winner
+        let winnerIsTeam1 = false;
+        let winnerIsTeam2 = false;
+
+        const winnerTeam = (m.winnerTeam || '').toLowerCase();
+        const t1Lower = t1.name.toLowerCase();
+        const t2Lower = t2.name.toLowerCase();
+        const t1CodeLower = t1.code.toLowerCase();
+        const t2CodeLower = t2.code.toLowerCase();
+
+        if (winnerTeam) {
+            if (winnerTeam.includes(t1Lower) || winnerTeam.includes(t1CodeLower)) winnerIsTeam1 = true;
+            else if (winnerTeam.includes(t2Lower) || winnerTeam.includes(t2CodeLower)) winnerIsTeam2 = true;
+        }
+
+        if (!winnerIsTeam1 && !winnerIsTeam2 && st) {
+            const wonMatch = st.match(/(.*?)\s+(?:won\s+by|won\s+the|beat)\s+/i);
+            if (wonMatch) {
+                const victor = wonMatch[1].trim().toLowerCase();
+                if (victor.includes(t1Lower) || victor.includes(t1CodeLower) || t1Lower.includes(victor)) {
+                    winnerIsTeam1 = true;
+                } else if (victor.includes(t2Lower) || victor.includes(t2CodeLower) || t2Lower.includes(victor)) {
+                    winnerIsTeam2 = true;
+                }
+            }
+        }
+
+        if (!winnerIsTeam1 && !winnerIsTeam2 && Array.isArray(m.score) && m.score.length >= 2) {
+            const r1 = m.score[0]?.runs ?? m.score[0]?.r ?? 0;
+            const r2 = m.score[1]?.runs ?? m.score[1]?.r ?? 0;
+            if (r1 > r2) winnerIsTeam1 = true;
+            else if (r2 > r1) winnerIsTeam2 = true;
+        }
+
+        if (winnerIsTeam1) {
+            t1.won += 1;
+            t1.points += 2;
+            t1.form.push('W');
+            t2.lost += 1;
+            t2.form.push('L');
+        } else if (winnerIsTeam2) {
+            t2.won += 1;
+            t2.points += 2;
+            t2.form.push('W');
+            t1.lost += 1;
+            t1.form.push('L');
+        } else {
+            t1.tied += 1;
+            t2.tied += 1;
+            t1.points += 1;
+            t2.points += 1;
+            t1.form.push('D');
+            t2.form.push('D');
+        }
+
+        // Calculate runs & overs for NRR if available
+        if (Array.isArray(m.score) && m.score.length >= 2) {
+            const s1 = m.score[0];
+            const s2 = m.score[1];
+            const r1 = s1?.runs ?? s1?.r ?? 0;
+            const o1 = parseFloat(s1?.overs ?? s1?.o ?? 0) || 20;
+            const r2 = s2?.runs ?? s2?.r ?? 0;
+            const o2 = parseFloat(s2?.overs ?? s2?.o ?? 0) || 20;
+
+            t1.runsScored += r1;
+            t1.oversFaced += o1;
+            t1.runsConceded += r2;
+            t1.oversBowled += o2;
+
+            t2.runsScored += r2;
+            t2.oversFaced += o2;
+            t2.runsConceded += r1;
+            t2.oversBowled += o1;
+        }
+    });
+
+    const list = Object.values(teamsMap).map(t => {
+        let nrr = 0.000;
+        if (t.oversFaced > 0 && t.oversBowled > 0) {
+            const forRate = t.runsScored / t.oversFaced;
+            const againstRate = t.runsConceded / t.oversBowled;
+            nrr = (forRate - againstRate);
+        }
+        return {
+            ...t,
+            nrr: nrr > 0 ? `+${nrr.toFixed(3)}` : nrr.toFixed(3),
+            nrrRaw: nrr,
+            last5Form: t.form.slice(-5).reverse(),
+        };
+    });
+
+    list.sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.won !== a.won) return b.won - a.won;
+        return b.nrrRaw - a.nrrRaw;
+    });
+
+    return {
+        seriesName,
+        totalMatches: seriesMatches.length,
+        completedMatches: seriesMatches.filter(m => Boolean(m.matchEnded)).length,
+        standings: list,
+        matches: seriesMatches,
+    };
+}
+
 // ==================== CRICBUZZ-STYLE MATCH CARD COMPONENT ====================
-function MatchCard({ match, type, onSelectSeries, onQuickScorecard, highlightedPlayer = null }) {
+function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPointsTable, highlightedPlayer = null }) {
     const stLower = (match.status_text || '').toLowerCase();
     const isInningsBreak = ['innings break', 'inn break', 'break', 'lunch', 'tea', 'dinner', 'strategic timeout', 'drinks'].some(w => stLower.includes(w));
     const hasLiveScore = Array.isArray(match.score) && match.score.length > 0;
@@ -1856,15 +2322,19 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, highlightedP
                 </a>
 
                 <div className="flex items-center gap-3">
-                    {seriesTitle && onSelectSeries && (
+                    {seriesTitle && (
                         <button
                             type="button"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onSelectSeries(seriesTitle);
+                                if (onOpenPointsTable) {
+                                    onOpenPointsTable(seriesTitle, match);
+                                } else if (onSelectSeries) {
+                                    onSelectSeries(seriesTitle);
+                                }
                             }}
                             className="text-slate-400 hover:text-white transition-colors"
-                            title={`Filter matches in ${seriesTitle}`}
+                            title={`View Points Table for ${seriesTitle}`}
                         >
                             POINTS TABLE
                         </button>
