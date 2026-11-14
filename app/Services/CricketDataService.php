@@ -179,7 +179,28 @@ class CricketDataService
     {
         $cacheKey = $this->cacheKey('points_table_' . md5(($seriesId ?? '') . '_' . ($seriesName ?? '')));
         return Cache::remember($cacheKey, 120, function () use ($seriesId, $seriesName) {
-            // 1. Try local score engine first
+            // 0. If seriesId is missing, resolve it from current matches
+            if (!$seriesId && $seriesName) {
+                $norm = strtolower(trim($seriesName));
+                foreach ($this->getCurrentMatches() as $m) {
+                    $s1 = strtolower(trim($m['series'] ?? ''));
+                    $s2 = strtolower(trim($m['series_name'] ?? ''));
+                    if (!empty($m['series_id']) && ($s1 === $norm || $s2 === $norm || str_contains($s1, $norm) || str_contains($norm, $s1))) {
+                        $seriesId = (string) $m['series_id'];
+                        break;
+                    }
+                }
+            }
+
+            // 1. Direct high-fidelity Cricbuzz points table scraper (contains full Pool/Group breakdown: Group A, B, C, D)
+            if ($seriesId && is_numeric($seriesId)) {
+                $direct = $this->scrapeCricbuzzPointsTableDirectly($seriesId, $seriesName);
+                if (!empty($direct) && !empty($direct['groups'])) {
+                    return $direct;
+                }
+            }
+
+            // 2. Try local score engine
             try {
                 $params = array_filter(['series_id' => $seriesId, 'series_name' => $seriesName]);
                 $url = "{$this->localUrl}/points-table";
@@ -194,7 +215,7 @@ class CricketDataService
                 // fall through
             }
 
-            // 2. Try CricAPI if series_id is available
+            // 3. Try CricAPI if series_id is available
             if ($seriesId && !empty($this->apiKey)) {
                 try {
                     $cricRes = Http::timeout(6)->get("{$this->baseUrl}/series_points", [
@@ -221,6 +242,80 @@ class CricketDataService
 
             return ['status' => 'error', 'message' => 'No points table found', 'groups' => []];
         });
+    }
+
+    /**
+     * Direct scraper for Cricbuzz tournament points tables with complete Pool/Group organization.
+     */
+    public function scrapeCricbuzzPointsTableDirectly(string $seriesId, ?string $seriesName = null): ?array
+    {
+        try {
+            $headers = [
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language' => 'en-US,en;q=0.9',
+            ];
+
+            $url = "https://www.cricbuzz.com/cricket-series/{$seriesId}/series/points-table";
+            $resp = Http::withHeaders($headers)->timeout(8)->get($url);
+            if (!$resp->successful()) return null;
+            $html = $resp->body();
+
+            $p = strpos($html, 'pointsTable\":[');
+            if ($p === false) $p = strpos($html, 'pointsTable":[');
+            if ($p === false) return null;
+
+            $arrStart = strpos($html, '[', $p);
+            if ($arrStart === false) return null;
+
+            $depth = 0; $arrEnd = -1; $len = strlen($html);
+            for ($i = $arrStart; $i < min($len, $arrStart + 400000); $i++) {
+                if ($html[$i] === '[') $depth++;
+                elseif ($html[$i] === ']') { $depth--; if ($depth === 0) { $arrEnd = $i; break; } }
+            }
+            if ($arrEnd === -1) return null;
+
+            $raw = substr($html, $arrStart, $arrEnd - $arrStart + 1);
+            $rawGroups = json_decode(stripslashes($raw), true);
+            if (!is_array($rawGroups) || empty($rawGroups)) return null;
+
+            $groups = [];
+            foreach ($rawGroups as $g) {
+                $gName = $g['groupName'] ?? 'Standings';
+                $teams = [];
+                foreach ($g['pointsTableInfo'] ?? [] as $t) {
+                    $teamName = $t['teamFullName'] ?? $t['teamName'] ?? 'Team';
+                    $teams[] = [
+                        'team' => $teamName,
+                        'name' => $teamName,
+                        'code' => $t['teamName'] ?? '',
+                        'p' => (int)($t['matchesPlayed'] ?? 0),
+                        'w' => (int)($t['matchesWon'] ?? 0),
+                        'l' => (int)($t['matchesLost'] ?? 0),
+                        'nr' => (int)(($t['matchesTied'] ?? 0) + ($t['noRes'] ?? 0) + ($t['matchesDrawn'] ?? 0)),
+                        'pts' => (int)($t['points'] ?? 0),
+                        'nrr' => (string)($t['nrr'] ?? '0.000'),
+                        'form' => $t['form'] ?? [],
+                    ];
+                }
+                $groups[] = [
+                    'groupName' => $gName,
+                    'teams' => $teams,
+                ];
+            }
+
+            // Natural sort: Elite Group A, Elite Group B, Elite Group C, Elite Group D
+            usort($groups, fn($a, $b) => strnatcasecmp($a['groupName'], $b['groupName']));
+
+            return [
+                'status' => 'success',
+                'title' => $seriesName ?? 'Tournament Standings',
+                'groups' => $groups,
+            ];
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('scrapeCricbuzzPointsTableDirectly error: ' . $e->getMessage());
+            return null;
+        }
     }
 
     public function getCricketNews(): array
@@ -1798,6 +1893,8 @@ class CricketDataService
             }
 
             $mappedStatus = $this->mapStatus($statusText, $matchStarted, $matchEnded);
+            $matchDesc = (string) ($match['match_desc'] ?? $match['matchDesc'] ?? '');
+            $seriesId = (string) ($match['series_id'] ?? $match['seriesId'] ?? '');
 
             $matches[] = [
                 'id' => (string) ($match['id'] ?? ''),
@@ -1806,6 +1903,8 @@ class CricketDataService
                 'status_text' => $statusText,
                 'series' => (string) ($match['series'] ?? $match['series_name'] ?? 'Other Matches'),
                 'series_name' => (string) ($match['series_name'] ?? $match['series'] ?? 'Other Matches'),
+                'series_id' => $seriesId,
+                'match_desc' => $matchDesc,
                 'venue' => (string) ($match['venue'] ?? ''),
                 'matchType' => $matchType,
                 'teams' => $match['teams'] ?? [],

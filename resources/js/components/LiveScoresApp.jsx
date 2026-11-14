@@ -532,16 +532,24 @@ export default function LiveScoresApp({
         setFetchedPointsTable(null);
         setLoadingPointsTable(true);
 
+        const mName = (match?.name || seriesName || '').toLowerCase();
+        const mDesc = (match?.match_desc || match?.matchType || '').toLowerCase();
+
         const sId = match?.series_id || '';
         fetch(`/api/points-table?series_name=${encodeURIComponent(resolved || '')}&series_id=${encodeURIComponent(sId)}`)
             .then(res => res.json())
             .then(data => {
                 if (data && data.groups && data.groups.length > 0) {
                     setFetchedPointsTable(data);
-                    const mName = (match?.name || seriesName || '').toLowerCase();
                     const groupIdx = data.groups.findIndex(g => {
                         const gName = (g.groupName || '').toLowerCase();
-                        return mName.includes(gName) || (gName.includes('group d') && mName.includes('group d')) || (gName.includes('group a') && mName.includes('group a'));
+                        if (mDesc && (gName.includes(mDesc) || mDesc.includes(gName))) return true;
+                        if (g.teams && Array.isArray(g.teams) && g.teams.some(t => {
+                            const tName = (t.team || t.name || '').toLowerCase();
+                            const tCode = (t.code || '').toLowerCase();
+                            return (tName && mName.includes(tName)) || (tCode && mName.includes(tCode));
+                        })) return true;
+                        return mName.includes(gName);
                     });
                     if (groupIdx !== -1) {
                         setSelectedGroupTab(groupIdx);
@@ -1586,9 +1594,16 @@ export default function LiveScoresApp({
 
             {/* Cricbuzz-Style Points Table Modal */}
             {pointsTableModal && (() => {
-                const isLiveFeed = fetchedPointsTable?.groups && fetchedPointsTable.groups.length > 0;
-                const currentGroup = isLiveFeed ? (fetchedPointsTable.groups[selectedGroupTab] || fetchedPointsTable.groups[0]) : null;
-                const standings = isLiveFeed ? (currentGroup?.teams || []) : (activePointsTable?.standings || []);
+                const isLiveFeed = Boolean(fetchedPointsTable?.groups && fetchedPointsTable.groups.length > 0);
+                const allGroups = isLiveFeed
+                    ? fetchedPointsTable.groups
+                    : (activePointsTable?.groups && activePointsTable.groups.length > 0 ? activePointsTable.groups : null);
+
+                const hasMultipleGroups = Boolean(allGroups && allGroups.length > 1);
+                const currentGroup = allGroups ? (allGroups[selectedGroupTab] || allGroups[0]) : null;
+                const standings = currentGroup
+                    ? (currentGroup.teams || currentGroup.standings || [])
+                    : (activePointsTable?.standings || []);
                 const titleText = (isLiveFeed && fetchedPointsTable.title) || pointsTableModal.seriesName;
 
                 return (
@@ -1601,10 +1616,15 @@ export default function LiveScoresApp({
                                         <Trophy className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider">
                                                 {isLiveFeed ? 'Official Tournament Standings' : 'Tournament Standings'}
                                             </span>
+                                            {currentGroup?.groupName && (
+                                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                                    {currentGroup.groupName}
+                                                </span>
+                                            )}
                                             {isLiveFeed ? (
                                                 <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1654,21 +1674,25 @@ export default function LiveScoresApp({
                                     </div>
                                 ) : (
                                     <>
-                                        {/* Group Tabs if multiple groups exist (e.g. Group A, Group B, Group D) */}
-                                        {isLiveFeed && fetchedPointsTable.groups.length > 1 && (
+                                        {/* Group / Pool Switcher Tabs */}
+                                        {hasMultipleGroups && (
                                             <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
-                                                {fetchedPointsTable.groups.map((grp, gIdx) => (
+                                                {allGroups.map((grp, gIdx) => (
                                                     <button
                                                         key={gIdx}
                                                         type="button"
                                                         onClick={() => setSelectedGroupTab(gIdx)}
-                                                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap border shrink-0 ${
+                                                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition whitespace-nowrap border shrink-0 flex items-center gap-2 ${
                                                             selectedGroupTab === gIdx
                                                                 ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
                                                                 : 'bg-white/5 text-slate-400 hover:text-white border-white/10'
                                                         }`}
                                                     >
-                                                        {grp.groupName}
+                                                        <span className={`w-2 h-2 rounded-full ${selectedGroupTab === gIdx ? 'bg-amber-400' : 'bg-slate-500'}`}></span>
+                                                        <span>{grp.groupName}</span>
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-slate-300 font-mono">
+                                                            {grp.teams?.length || 0}
+                                                        </span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -2027,21 +2051,19 @@ function isTournamentWithPointsTable(seriesTitle) {
     return tournamentIndicators.some(w => lower.includes(w));
 }
 
-// Compute points table for any series dynamically from all matches
-function computeSeriesPointsTable(seriesName, allMatches) {
-    if (!seriesName) return null;
-    const cleanSeries = seriesName.trim();
-    if (!isTournamentWithPointsTable(cleanSeries)) return null;
+// Helper to detect if a match belongs to a specific group/pool (e.g. "Elite Group D", "Pool A")
+function getMatchGroupName(m) {
+    if (!m) return null;
+    const raw = `${m.match_desc || ''} ${m.matchType || ''} ${m.name || ''}`;
+    const match = raw.match(/(?:elite\s+group\s+[a-z0-9]+|plate\s+group|group\s+[a-z0-9]+|pool\s+[a-z0-9]+)/i);
+    if (match) {
+        return match[0].trim().replace(/\b\w/g, c => c.toUpperCase());
+    }
+    return null;
+}
 
-    const normSeries = cleanSeries.toLowerCase();
-    const seriesMatches = (allMatches || []).filter(m => {
-        const s = resolveSeriesName(m).trim().toLowerCase();
-        if (!s || s === 'other matches' || s === 'international matches') return false;
-        return s === normSeries;
-    });
-
-    if (seriesMatches.length === 0) return null;
-
+// Helper to compute a team standings list for a given array of matches
+function computeStandingsForMatches(matches) {
     const teamsMap = {};
 
     const getOrInitTeam = (teamName) => {
@@ -2068,7 +2090,7 @@ function computeSeriesPointsTable(seriesName, allMatches) {
         return teamsMap[key];
     };
 
-    seriesMatches.forEach(m => {
+    matches.forEach(m => {
         const [t1Name, t2Name] = parseMatchTeams(m);
         const t1 = getOrInitTeam(t1Name);
         const t2 = getOrInitTeam(t2Name);
@@ -2203,11 +2225,52 @@ function computeSeriesPointsTable(seriesName, allMatches) {
         return b.nrrRaw - a.nrrRaw;
     });
 
+    return list;
+}
+
+// Compute points table for any series dynamically from all matches
+function computeSeriesPointsTable(seriesName, allMatches) {
+    if (!seriesName) return null;
+    const cleanSeries = seriesName.trim();
+    if (!isTournamentWithPointsTable(cleanSeries)) return null;
+
+    const normSeries = cleanSeries.toLowerCase();
+    const seriesMatches = (allMatches || []).filter(m => {
+        const s = resolveSeriesName(m).trim().toLowerCase();
+        if (!s || s === 'other matches' || s === 'international matches') return false;
+        return s === normSeries;
+    });
+
+    if (seriesMatches.length === 0) return null;
+
+    // Check if matches belong to distinct groups/pools (e.g. Group A, Group B, Group C, Group D)
+    const groupMatchesMap = {};
+    seriesMatches.forEach(m => {
+        const gName = getMatchGroupName(m) || 'Standings';
+        if (!groupMatchesMap[gName]) {
+            groupMatchesMap[gName] = [];
+        }
+        groupMatchesMap[gName].push(m);
+    });
+
+    const groupKeys = Object.keys(groupMatchesMap);
+    let computedGroups = null;
+    if (groupKeys.length > 1) {
+        groupKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        computedGroups = groupKeys.map(gName => ({
+            groupName: gName,
+            teams: computeStandingsForMatches(groupMatchesMap[gName])
+        }));
+    }
+
+    const overallStandings = computeStandingsForMatches(seriesMatches);
+
     return {
         seriesName,
         totalMatches: seriesMatches.length,
         completedMatches: seriesMatches.filter(m => Boolean(m.matchEnded)).length,
-        standings: list,
+        standings: overallStandings,
+        groups: computedGroups,
         matches: seriesMatches,
     };
 }
