@@ -11,7 +11,7 @@
             <div>
                 <span class="text-[11px] font-black uppercase text-red-600 dark:text-rose-400 tracking-wider flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
-                    CRICHEROES LIVE BROADCAST STUDIO
+                    {{ $isOwner ? 'CRICHEROES LIVE BROADCAST STUDIO' : 'CRICKET LIVE STREAM • AUDIENCE WATCH' }}
                 </span>
                 <h2 class="font-black text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight">
                     {{ $match->team1_name }} vs {{ $match->team2_name }}
@@ -306,7 +306,8 @@
         <span x-text="toastMsg"></span>
     </div>
 
-    <!-- Modal: Edit / Add YouTube / Facebook Live Stream URL -->
+    <!-- Modal: Edit / Add YouTube / Facebook Live Stream URL (Broadcaster Only) -->
+    @if($isOwner)
     <div x-cloak x-show="editStreamModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0"
@@ -322,7 +323,7 @@
 
             <div class="space-y-3 text-xs">
                 <p class="text-slate-300">
-                    Paste YouTube Live or Facebook Live URL here. The live video will play inside the studio with the TV scoreboard overlay updating in real-time!
+                    Paste YouTube Live or Facebook Live URL here. The live video will play for all audience members worldwide with the TV scoreboard overlay updating in real-time!
                 </p>
                 <div>
                     <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1">Live Stream URL</label>
@@ -348,6 +349,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     <div class="max-w-6xl mx-auto px-2 sm:px-4 space-y-4">
 
@@ -357,48 +359,84 @@
         <div id="broadcastArenaContainer" 
              class="relative w-full aspect-video sm:rounded-3xl overflow-hidden bg-black shadow-2xl border border-white/10 flex flex-col justify-between">
 
-            <!-- 1. LIVE VIDEO CAMERA STREAM -->
-            <video x-show="streamSource === 'camera'" id="broadcastVideo" autoplay playsinline muted 
-                   class="absolute inset-0 w-full h-full object-cover z-0"></video>
+            <!-- 1. LIVE VIDEO CAMERA STREAM (Broadcaster Device Preview) -->
+            @if($isOwner)
+                <video x-show="streamSource === 'camera'" id="broadcastVideo" autoplay playsinline muted 
+                       class="absolute inset-0 w-full h-full object-cover z-0"></video>
+            @endif
 
-            <!-- 2. EMBEDDED YOUTUBE / FACEBOOK LIVE STREAM -->
-            <template x-if="streamSource === 'youtube' && embedStreamUrl">
+            <!-- 2. EMBEDDED YOUTUBE / FACEBOOK LIVE STREAM (Shown to Audience & Broadcaster) -->
+            <template x-if="embedStreamUrl && (streamSource === 'youtube' || !{{ $isOwner ? 'true' : 'false' }})">
                 <iframe :src="embedStreamUrl" 
                         class="absolute inset-0 w-full h-full z-0 border-0 pointer-events-auto" 
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                         allowfullscreen></iframe>
             </template>
 
-            <!-- Camera Idle / Not Started Placeholder -->
-            <div x-show="streamSource === 'camera' && !streamActive" 
-                 class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
-                <div class="w-16 h-16 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-3 shadow-inner">
-                    📹
+            @if($isOwner)
+                <!-- Broadcaster Camera Idle / Not Started Placeholder -->
+                <div x-show="streamSource === 'camera' && !streamActive" 
+                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
+                    <div class="w-16 h-16 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-3 shadow-inner">
+                        📹
+                    </div>
+                    <h3 class="text-xl sm:text-2xl font-black text-white">Live Camera Broadcast Studio</h3>
+                    <p class="text-slate-400 text-xs sm:text-sm max-w-md mt-1">
+                        Start device camera or connect a <b class="text-white">YouTube / Facebook Live stream</b> so audience worldwide can watch this match live.
+                    </p>
+                    <div class="flex flex-wrap items-center justify-center gap-3 mt-4">
+                        <button type="button" @click="startCamera()" 
+                                class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-red-600/30 transition flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                            <span>Start Camera Preview 🔴</span>
+                        </button>
+                        <button type="button" @click="editStreamModal = true" 
+                                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black text-xs uppercase tracking-wider transition flex items-center gap-2">
+                            <span>🔗 Add YouTube / FB Stream</span>
+                        </button>
+                    </div>
                 </div>
-                <h3 class="text-xl sm:text-2xl font-black text-white">Live Camera Broadcast Idle</h3>
-                <p class="text-slate-400 text-xs sm:text-sm max-w-md mt-1">
-                    Click <b class="text-white">"Start Camera Stream"</b> below to start broadcasting ground action from your device camera.
-                </p>
-                <button type="button" @click="startCamera()" 
-                        class="mt-4 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-xl shadow-red-600/30 transition flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                    <span>Start Camera Stream 🔴</span>
-                </button>
-            </div>
 
-            <!-- YouTube URL Missing Placeholder -->
-            <div x-show="streamSource === 'youtube' && !embedStreamUrl" 
-                 class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
-                <div class="w-16 h-16 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-2 text-red-500 shadow-inner">
-                    📺
+                <!-- Broadcaster YouTube URL Missing Placeholder -->
+                <div x-show="streamSource === 'youtube' && !embedStreamUrl" 
+                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
+                    <div class="w-16 h-16 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-2 text-red-500 shadow-inner">
+                        📺
+                    </div>
+                    <h3 class="text-xl font-black text-white">No Live Stream Link Connected</h3>
+                    <p class="text-slate-400 text-xs max-w-sm mt-1">Enter a YouTube Live or Facebook Live stream link to broadcast to all audience with TV graphics overlay.</p>
+                    <button type="button" @click="editStreamModal = true" 
+                            class="mt-4 px-5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-red-600/30 transition">
+                        + Add Live Stream Link 🔗
+                    </button>
                 </div>
-                <h3 class="text-xl font-black text-white">No YouTube / Facebook Live Link Added</h3>
-                <p class="text-slate-400 text-xs max-w-sm mt-1">Enter a YouTube or Facebook Live stream link to watch with TV graphics overlay.</p>
-                <button type="button" @click="editStreamModal = true" 
-                        class="mt-4 px-5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-red-600/30 transition">
-                    + Add Live Stream Link 🔗
-                </button>
-            </div>
+            @else
+                <!-- AUDIENCE / VIEWER WAITING SCREEN (When stream_url is not added yet) -->
+                <div x-show="!embedStreamUrl" 
+                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
+                    <div class="w-16 h-16 rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-3xl mb-3 shadow-inner">
+                        📺
+                    </div>
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold mb-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                        <span>Broadcast Waiting</span>
+                    </div>
+                    <h3 class="text-xl sm:text-2xl font-black text-white">Live Video Stream Has Not Started Yet</h3>
+                    <p class="text-slate-400 text-xs sm:text-sm max-w-md mt-1 leading-relaxed">
+                        The match organizer has not connected a live video broadcast yet. You can follow live scores and ball-by-ball commentary below in real-time.
+                    </p>
+                    <div class="flex items-center gap-3 mt-4">
+                        <a href="{{ route('matches.show', $match) }}" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs transition">
+                            📋 View Full Scorecard
+                        </a>
+                        @guest
+                            <a href="{{ route('login') }}" class="px-4 py-2.5 rounded-2xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-red-300 font-bold text-xs transition">
+                                🔐 Match Organizer? Log In
+                            </a>
+                        @endguest
+                    </div>
+                </div>
+            @endif
 
             <!-- ============================================================== -->
             <!-- TV GRAPHICS OVERLAY: TOP BAR (HEADER & LIVE BADGES) -->
@@ -411,24 +449,26 @@
                         LIVE
                     </span>
 
-                    <!-- Source Switcher (Camera vs YouTube/Facebook) -->
-                    <div class="flex items-center gap-1 p-0.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-[10px] font-bold">
-                        <button type="button" 
-                                @click="streamSource = 'camera'"
-                                :class="streamSource === 'camera' ? 'bg-red-600 text-white shadow' : 'text-slate-400 hover:text-white'"
-                                class="px-2.5 py-1 rounded-lg transition flex items-center gap-1">
-                            <span>📷 Camera</span>
-                        </button>
-                        <button type="button" 
-                                @click="streamSource = 'youtube'; if (!embedStreamUrl) editStreamModal = true;"
-                                :class="streamSource === 'youtube' ? 'bg-red-600 text-white shadow' : 'text-slate-400 hover:text-white'"
-                                class="px-2.5 py-1 rounded-lg transition flex items-center gap-1">
-                            <span>🔴 YouTube / FB</span>
-                        </button>
-                        <button type="button" @click="editStreamModal = true" class="p-1 px-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition" title="Change Stream Link">
-                            ⚙️
-                        </button>
-                    </div>
+                    @if($isOwner)
+                        <!-- Source Switcher (Camera vs YouTube/Facebook) - ONLY FOR BROADCASTER -->
+                        <div class="flex items-center gap-1 p-0.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-[10px] font-bold">
+                            <button type="button" 
+                                    @click="streamSource = 'camera'"
+                                    :class="streamSource === 'camera' ? 'bg-red-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+                                    class="px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                                <span>📷 Camera</span>
+                            </button>
+                            <button type="button" 
+                                    @click="streamSource = 'youtube'; if (!embedStreamUrl) editStreamModal = true;"
+                                    :class="streamSource === 'youtube' ? 'bg-red-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+                                    class="px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                                <span>🔴 YouTube / FB</span>
+                            </button>
+                            <button type="button" @click="editStreamModal = true" class="p-1 px-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition" title="Change Stream Link">
+                                ⚙️
+                            </button>
+                        </div>
+                    @endif
 
                     <div class="hidden sm:flex bg-black/60 backdrop-blur-md px-3 py-1 rounded-xl border border-white/10 text-[11px] sm:text-xs items-center">
                         <span class="text-amber-400 font-extrabold uppercase">{{ $match->tournament_name ?? 'Tournament Match' }}</span>
@@ -439,30 +479,39 @@
 
                 <!-- Floating Broadcaster Control Bar -->
                 <div class="flex items-center gap-1 sm:gap-1.5 bg-black/70 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-xl pointer-events-auto">
-                    <template x-if="streamSource === 'camera'">
-                        <div class="flex items-center gap-1">
-                            <button type="button" @click="streamActive ? stopCamera() : startCamera()" 
-                                    :class="streamActive ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'"
-                                    class="px-2.5 py-1 rounded-xl font-black text-[10px] sm:text-xs uppercase transition flex items-center gap-1">
-                                <span x-text="streamActive ? '⏹️ Stop' : '🔴 Go Live'"></span>
-                            </button>
+                    @if($isOwner)
+                        <template x-if="streamSource === 'camera'">
+                            <div class="flex items-center gap-1">
+                                <button type="button" @click="streamActive ? stopCamera() : startCamera()" 
+                                        :class="streamActive ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'"
+                                        class="px-2.5 py-1 rounded-xl font-black text-[10px] sm:text-xs uppercase transition flex items-center gap-1">
+                                    <span x-text="streamActive ? '⏹️ Stop' : '🔴 Go Live'"></span>
+                                </button>
 
-                            <button type="button" @click="toggleCameraFlip()" 
-                                    class="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition"
-                                    title="Flip Camera (Rear/Front)">
-                                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                            </button>
+                                <button type="button" @click="toggleCameraFlip()" 
+                                        class="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition"
+                                        title="Flip Camera (Rear/Front)">
+                                    <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </button>
 
-                            <button type="button" @click="toggleMic()" 
-                                    :class="micMuted ? 'text-rose-400' : 'text-emerald-400'"
-                                    class="p-1.5 rounded-xl hover:bg-white/10 transition"
-                                    :title="micMuted ? 'Unmute Mic' : 'Mute Mic'">
-                                <span x-text="micMuted ? '🔇' : '🎙️'"></span>
-                            </button>
-                        </div>
-                    </template>
+                                <button type="button" @click="toggleMic()" 
+                                        :class="micMuted ? 'text-rose-400' : 'text-emerald-400'"
+                                        class="p-1.5 rounded-xl hover:bg-white/10 transition"
+                                        :title="micMuted ? 'Unmute Mic' : 'Mute Mic'">
+                                    <span x-text="micMuted ? '🔇' : '🎙️'"></span>
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- Quick Keypad Drawer Toggle -->
+                        <button type="button" @click="showKeypadDrawer = !showKeypadDrawer" 
+                                :class="showKeypadDrawer ? 'bg-amber-500 text-slate-950 font-black' : 'bg-white/10 text-white'"
+                                class="px-2 py-1 rounded-xl text-[10px] sm:text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                            <span>⚡ Scorer</span>
+                        </button>
+                    @endif
 
                     <button type="button" @click="toggleFullscreen()" 
                             class="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition"
@@ -471,15 +520,6 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                         </svg>
                     </button>
-
-                    @if($isOwner)
-                        <!-- Quick Keypad Drawer Toggle -->
-                        <button type="button" @click="showKeypadDrawer = !showKeypadDrawer" 
-                                :class="showKeypadDrawer ? 'bg-amber-500 text-slate-950 font-black' : 'bg-white/10 text-white'"
-                                class="px-2 py-1 rounded-xl text-[10px] sm:text-xs font-bold transition flex items-center gap-1 shadow-sm">
-                            <span>⚡ Scorer</span>
-                        </button>
-                    @endif
                 </div>
             </div>
 
@@ -635,13 +675,15 @@
                 <span class="text-2xl">📡</span>
                 <div>
                     <div class="text-white font-extrabold text-sm flex items-center gap-2">
-                        <span>CricHeroes Live Broadcast Studio</span>
+                        <span>{{ $isOwner ? 'CricHeroes Live Broadcast Studio' : 'Cricket Live Match Broadcast' }}</span>
                         <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-bold border border-emerald-500/30">
                             Auto-Sync Active
                         </span>
                     </div>
                     <div class="text-slate-400 mt-0.5">
-                        The TV lower-third scoreboard overlay automatically updates in real time over both Device Camera and YouTube/Facebook streams.
+                        {{ $isOwner 
+                            ? 'The TV lower-third scoreboard overlay automatically updates in real time over both Device Camera and YouTube/Facebook streams.'
+                            : 'Watch real-time live ball-by-ball updates with official TV scoreboard overlay synchronized with ground play.' }}
                     </div>
                 </div>
             </div>
@@ -651,9 +693,11 @@
                     <span>🎙️ Commentary</span>
                     <span class="px-1.5 py-0.2 rounded-full bg-black/40 text-[10px] font-mono" x-text="commentaryList.length"></span>
                 </button>
-                <button type="button" @click="editStreamModal = true" class="px-3.5 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 hover:text-white font-bold transition flex items-center gap-1.5">
-                    <span>🔗 Stream Link</span>
-                </button>
+                @if($isOwner)
+                    <button type="button" @click="editStreamModal = true" class="px-3.5 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 hover:text-white font-bold transition flex items-center gap-1.5">
+                        <span>🔗 Stream Link</span>
+                    </button>
+                @endif
                 <a href="{{ route('matches.show', $match) }}" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition">
                     Full Scorecard ➔
                 </a>

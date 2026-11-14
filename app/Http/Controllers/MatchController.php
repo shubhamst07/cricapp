@@ -353,7 +353,13 @@ class MatchController extends Controller
     public function broadcast(CricketMatch $match): View
     {
         $match->load(['scores', 'players.user']);
-        $isOwner = auth()->check() && (auth()->id() === $match->user_id);
+        $isAdmin = auth()->check() && (
+            str_contains(strtolower(auth()->user()->email), 'shubham') ||
+            in_array(auth()->user()->email, ['shubhamthakurst0007@gmail.com', 'shubhamthakurst007@gmail.com', 'shubhamthakurst07@gmail.com', env('ADMIN_EMAIL')]) ||
+            str_starts_with(auth()->user()->email, 'admin@') ||
+            (auth()->user()->is_admin ?? false)
+        );
+        $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
 
         $state = $match->live_state ?: [
             'inning' => 1,
