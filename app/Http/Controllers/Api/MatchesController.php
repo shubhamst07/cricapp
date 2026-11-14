@@ -570,7 +570,7 @@ class MatchesController extends Controller
         }
 
         $command = new \App\Console\Commands\SyncLiveCommentaryCommand();
-        $syncedCount = $command->syncActiveMatches($cricket);
+        $syncedCount = $command->syncActiveMatches($cricket, 25);
 
         return response()->json([
             'status' => 'success',

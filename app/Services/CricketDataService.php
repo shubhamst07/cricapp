@@ -857,7 +857,7 @@ class CricketDataService
             // 1. Try local service first
             if ($this->provider === 'local') {
                 try {
-                    $response = Http::timeout(8)->get("{$this->localUrl}/commentary/{$matchId}");
+                    $response = Http::timeout(3)->connectTimeout(1)->get("{$this->localUrl}/commentary/{$matchId}");
                     if ($response->successful()) {
                         $data = $response->json();
                         if (!empty($data) && ($data['status'] ?? '') === 'success' && !empty($data['data'])) {

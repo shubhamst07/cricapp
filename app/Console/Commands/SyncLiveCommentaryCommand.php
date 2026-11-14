@@ -70,11 +70,15 @@ class SyncLiveCommentaryCommand extends Command
 
     /**
      * Synchronize all currently live matches (international and local).
+     *
+     * @param CricketDataService $cricket
+     * @param int $timeLimit Max seconds to run (0 for unlimited)
      */
-    public function syncActiveMatches(CricketDataService $cricket): int
+    public function syncActiveMatches(CricketDataService $cricket, int $timeLimit = 0): int
     {
         $synced = 0;
         $liveMatchIds = [];
+        $startTime = microtime(true);
 
         try {
             // 1. Fetch current matches from Cricbuzz / API
@@ -156,6 +160,12 @@ class SyncLiveCommentaryCommand extends Command
                 }
 
                 $synced++;
+
+                // If running within an HTTP web cron request, respect time budget
+                if ($timeLimit > 0 && (microtime(true) - $startTime) >= $timeLimit) {
+                    $this->line("Time budget ({$timeLimit}s) reached. Yielding until next cron cycle.");
+                    break;
+                }
             } catch (\Throwable $e) {
                 Log::warning("CricketLiveSync: Error syncing match {$matchId}: " . $e->getMessage());
             }
