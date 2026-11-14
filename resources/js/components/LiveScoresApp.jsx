@@ -154,7 +154,11 @@ export default function LiveScoresApp({
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFormat, setSelectedFormat] = useState('all');
-    const [selectedSeries, setSelectedSeries] = useState('all');
+    const [selectedSeries, setSelectedSeries] = useState(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('series') || 'all';
+    });
+    const [isFetchingSeries, setIsFetchingSeries] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastUpdated, setLastUpdated] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -195,6 +199,8 @@ export default function LiveScoresApp({
             if (['live', 'upcoming', 'recent', 'archives'].includes(tabParam)) {
                 setActiveTab(tabParam);
             }
+            const seriesParam = urlParams.get('series');
+            setSelectedSeries(seriesParam || 'all');
         };
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
@@ -203,7 +209,7 @@ export default function LiveScoresApp({
     // Sync section change
     const handleSectionChange = (section) => {
         setCurrentSection(section);
-        setSelectedSeries('all');
+        handleSeriesSelect('all');
         try {
             localStorage.setItem('last_cricket_section', section);
         } catch (e) {}
@@ -215,7 +221,7 @@ export default function LiveScoresApp({
     // Sync tab to URL and localStorage
     const handleTabChange = (tab) => {
         setActiveTab(tab);
-        setSelectedSeries('all');
+        handleSeriesSelect('all');
         try {
             localStorage.setItem('last_cricket_tab', tab);
         } catch (e) {}
@@ -277,6 +283,76 @@ export default function LiveScoresApp({
         }, 20000);
         return () => clearInterval(interval);
     }, [autoRefresh]);
+
+    // Select series with instant UI update, URL sync, and API fetch
+    const handleSeriesSelect = (seriesName) => {
+        const target = (!seriesName || seriesName === 'all') ? 'all' : seriesName;
+        setSelectedSeries(target);
+
+        // Update URL
+        try {
+            const url = new URL(window.location);
+            if (target !== 'all') {
+                url.searchParams.set('series', target);
+            } else {
+                url.searchParams.delete('series');
+            }
+            window.history.pushState({}, '', url);
+        } catch (e) {}
+
+        // Trigger API fetch for the selected series
+        if (target !== 'all') {
+            setIsFetchingSeries(true);
+            fetch(`/api/series-schedule?series_name=${encodeURIComponent(target)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.status === 'success' && Array.isArray(data.matches) && data.matches.length > 0) {
+                        setScheduledMatches(prev => {
+                            const map = new Map(prev.map(m => [String(m.id), m]));
+                            (data.upcoming || data.matches.filter(m => m.status === 'scheduled')).forEach(m => {
+                                if (!map.has(String(m.id))) {
+                                    map.set(String(m.id), m);
+                                }
+                            });
+                            return Array.from(map.values());
+                        });
+                        setLiveMatches(prev => {
+                            const map = new Map(prev.map(m => [String(m.id), m]));
+                            (data.live || data.matches.filter(m => m.status === 'live')).forEach(m => {
+                                if (!map.has(String(m.id))) {
+                                    map.set(String(m.id), m);
+                                }
+                            });
+                            return Array.from(map.values());
+                        });
+                        setCompletedMatches(prev => {
+                            const map = new Map(prev.map(m => [String(m.id), m]));
+                            (data.completed || data.matches.filter(m => m.status === 'completed')).forEach(m => {
+                                if (!map.has(String(m.id))) {
+                                    map.set(String(m.id), m);
+                                }
+                            });
+                            return Array.from(map.values());
+                        });
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching series schedule API:', err);
+                })
+                .finally(() => {
+                    setIsFetchingSeries(false);
+                });
+        }
+    };
+
+    // Auto-fetch series schedule on mount if pre-selected in URL
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const s = urlParams.get('series');
+        if (s && s !== 'all') {
+            handleSeriesSelect(s);
+        }
+    }, []);
 
     // Open scorecard modal and load data
     const openScorecardModal = async (match) => {
@@ -435,7 +511,6 @@ export default function LiveScoresApp({
     // Filter matches by search query, format, and selected series (supports player search e.g. Rohit -> India match)
     const filteredMatches = useMemo(() => {
         const q = searchQuery.toLowerCase().trim();
-        if (!q) return currentList;
 
         // Player to team mapping dictionary
         const playerTeamMap = {
@@ -461,43 +536,50 @@ export default function LiveScoresApp({
         };
 
         const playerCountries = playerResults.map(p => (p.country || '').toLowerCase().trim()).filter(c => c && c !== 'local club' && c !== 'grassroots cricket');
-        const mappedTeam = playerTeamMap[q] || (playerCountries.length > 0 ? playerCountries[0] : null);
+        const mappedTeam = q ? (playerTeamMap[q] || (playerCountries.length > 0 ? playerCountries[0] : null)) : null;
 
         return currentList.filter(match => {
             const resolvedSeries = resolveSeriesName(match);
-            const nameMatch = (match.name || '').toLowerCase().includes(q);
-            const venueMatch = (match.venue || '').toLowerCase().includes(q);
-            const seriesMatch = (match.series || match.series_name || '').toLowerCase().includes(q) || resolvedSeries.toLowerCase().includes(q);
-            const statusMatch = (match.status_text || '').toLowerCase().includes(q);
-            const teamsMatch = Array.isArray(match.teams)
-                ? match.teams.some(t => (t || '').toLowerCase().includes(q))
-                : false;
-            const playersMatch = Array.isArray(match.players)
-                ? match.players.some(p => (p || '').toLowerCase().includes(q))
-                : false;
-            const batsmenMatch = Array.isArray(match.current_batsmen)
-                ? match.current_batsmen.some(b => (b?.name || '').toLowerCase().includes(q))
-                : false;
 
-            // Match if this player's national team is in this match
-            const teamPlayerMatch = mappedTeam && (
-                (match.name || '').toLowerCase().includes(mappedTeam) ||
-                (match.series || match.series_name || '').toLowerCase().includes(mappedTeam) ||
-                resolvedSeries.toLowerCase().includes(mappedTeam) ||
-                (Array.isArray(match.teams) && match.teams.some(t => (t || '').toLowerCase().includes(mappedTeam)))
-            );
+            // 1. Search Query Filter (if active)
+            if (q) {
+                const nameMatch = (match.name || '').toLowerCase().includes(q);
+                const venueMatch = (match.venue || '').toLowerCase().includes(q);
+                const seriesMatch = (match.series || match.series_name || '').toLowerCase().includes(q) || resolvedSeries.toLowerCase().includes(q);
+                const statusMatch = (match.status_text || '').toLowerCase().includes(q);
+                const teamsMatch = Array.isArray(match.teams)
+                    ? match.teams.some(t => (t || '').toLowerCase().includes(q))
+                    : false;
+                const playersMatch = Array.isArray(match.players)
+                    ? match.players.some(p => (p || '').toLowerCase().includes(q))
+                    : false;
+                const batsmenMatch = Array.isArray(match.current_batsmen)
+                    ? match.current_batsmen.some(b => (b?.name || '').toLowerCase().includes(q))
+                    : false;
 
-            const matchesSearch = nameMatch || venueMatch || seriesMatch || statusMatch || teamsMatch || playersMatch || batsmenMatch || teamPlayerMatch;
-            if (!matchesSearch) return false;
+                // Match if this player's national team is in this match
+                const teamPlayerMatch = mappedTeam && (
+                    (match.name || '').toLowerCase().includes(mappedTeam) ||
+                    (match.series || match.series_name || '').toLowerCase().includes(mappedTeam) ||
+                    resolvedSeries.toLowerCase().includes(mappedTeam) ||
+                    (Array.isArray(match.teams) && match.teams.some(t => (t || '').toLowerCase().includes(mappedTeam)))
+                );
 
+                const matchesSearch = nameMatch || venueMatch || seriesMatch || statusMatch || teamsMatch || playersMatch || batsmenMatch || teamPlayerMatch;
+                if (!matchesSearch) return false;
+            }
+
+            // 2. Format Filter
             if (selectedFormat !== 'all') {
                 const formatStr = (match.matchType || '').toLowerCase();
                 if (!formatStr.includes(selectedFormat.toLowerCase())) return false;
             }
 
+            // 3. Series Filter
             if (selectedSeries !== 'all') {
                 const matchSeries = resolvedSeries.trim().toLowerCase();
-                if (matchSeries !== selectedSeries.toLowerCase()) return false;
+                const targetSeries = selectedSeries.trim().toLowerCase();
+                if (matchSeries !== targetSeries) return false;
             }
 
             return true;
@@ -933,7 +1015,7 @@ export default function LiveScoresApp({
                         {selectedSeries !== 'all' && (
                             <button
                                 type="button"
-                                onClick={() => setSelectedSeries('all')}
+                                onClick={() => handleSeriesSelect('all')}
                                 className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-400 hover:text-indigo-300 transition"
                             >
                                 <X className="w-3.5 h-3.5" />
@@ -946,7 +1028,7 @@ export default function LiveScoresApp({
                     <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
                         <button
                             type="button"
-                            onClick={() => setSelectedSeries('all')}
+                            onClick={() => handleSeriesSelect('all')}
                             className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition border ${
                                 selectedSeries === 'all'
                                     ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-transparent shadow-lg shadow-indigo-600/30'
@@ -967,7 +1049,7 @@ export default function LiveScoresApp({
                                 <button
                                     key={s.name}
                                     type="button"
-                                    onClick={() => setSelectedSeries(isSelected ? 'all' : s.name)}
+                                    onClick={() => handleSeriesSelect(isSelected ? 'all' : s.name)}
                                     className={`shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition border ${
                                         isSelected
                                             ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border-transparent shadow-lg shadow-indigo-600/30'
@@ -996,11 +1078,22 @@ export default function LiveScoresApp({
                             <Trophy className="w-5 h-5 text-amber-300" />
                         </div>
                         <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400">Showing Series</span>
                                 <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 text-[10px] font-black rounded-md border border-indigo-500/30">
                                     {filteredMatches.length} {filteredMatches.length === 1 ? 'match' : 'matches'}
                                 </span>
+                                {isFetchingSeries ? (
+                                    <span className="text-[10px] font-bold text-indigo-300 flex items-center gap-1.5 px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/30">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping"></span>
+                                        <span>Fetching Live API...</span>
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] font-bold text-emerald-300 flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                        <span>Live Feed Connected</span>
+                                    </span>
+                                )}
                             </div>
                             <h2 className="text-base font-black text-white mt-0.5">
                                 {selectedSeries}
@@ -1010,7 +1103,7 @@ export default function LiveScoresApp({
 
                     <button
                         type="button"
-                        onClick={() => setSelectedSeries('all')}
+                        onClick={() => handleSeriesSelect('all')}
                         className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/10 transition"
                     >
                         <X className="w-4 h-4" />
@@ -1063,7 +1156,7 @@ export default function LiveScoresApp({
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setSelectedSeries(seriesName)}
+                                            onClick={() => handleSeriesSelect(seriesName)}
                                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-xl text-xs font-bold transition"
                                         >
                                             <span>View Series</span>
@@ -1079,7 +1172,7 @@ export default function LiveScoresApp({
                                             key={match.id}
                                             match={match}
                                             type={activeTab}
-                                            onSelectSeries={setSelectedSeries}
+                                            onSelectSeries={handleSeriesSelect}
                                             onOpenPointsTable={(series, m) => openPointsTableModal(series, m)}
                                             onOpenSchedule={(series, m) => openScheduleModal(series, m)}
                                             onQuickScorecard={() => openScorecardModal(match)}
@@ -1098,7 +1191,7 @@ export default function LiveScoresApp({
                                 key={match.id}
                                 match={match}
                                 type={activeTab}
-                                onSelectSeries={setSelectedSeries}
+                                onSelectSeries={handleSeriesSelect}
                                 onOpenPointsTable={(series, m) => openPointsTableModal(series, m)}
                                 onOpenSchedule={(series, m) => openScheduleModal(series, m)}
                                 onQuickScorecard={() => openScorecardModal(match)}
@@ -1217,7 +1310,7 @@ export default function LiveScoresApp({
                     {selectedSeries !== 'all' && (
                         <button
                             type="button"
-                            onClick={() => setSelectedSeries('all')}
+                            onClick={() => handleSeriesSelect('all')}
                             className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition"
                         >
                             <X className="w-3.5 h-3.5" />
@@ -1865,7 +1958,7 @@ export default function LiveScoresApp({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setSelectedSeries(pointsTableModal.seriesName);
+                                        handleSeriesSelect(pointsTableModal.seriesName);
                                         setPointsTableModal(null);
                                     }}
                                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-extrabold transition"
@@ -2144,7 +2237,7 @@ export default function LiveScoresApp({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setSelectedSeries(scheduleModal.seriesName);
+                                        handleSeriesSelect(scheduleModal.seriesName);
                                         setScheduleModal(null);
                                     }}
                                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-extrabold transition"
