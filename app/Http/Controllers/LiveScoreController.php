@@ -263,4 +263,12 @@ class LiveScoreController extends Controller
 
         return view('live.show', compact('match', 'scorecard', 'commentary', 'forceRefresh'));
     }
+
+    public function pointsTable(Request $request, CricketDataService $cricket)
+    {
+        $seriesId = $request->query('series_id');
+        $seriesName = $request->query('series_name');
+        $data = $cricket->getPointsTable($seriesId, $seriesName);
+        return response()->json($data);
+    }
 }

@@ -1448,6 +1448,121 @@ class ScoreService:
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}
 
+    @classmethod
+    async def fetch_points_table(cls, series_id: str = None, series_name: str = None) -> Dict[str, Any]:
+        cache_key = f"points_table_{series_id or series_name}"
+        cached = get_cached(cache_key, ttl=60)
+        if cached:
+            return cached
+
+        target_url = None
+        if series_id and series_id.isdigit():
+            target_url = f"https://www.cricbuzz.com/cricket-series/{series_id}/points-table"
+
+        if not target_url and series_name:
+            try:
+                async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+                    resp = await client.get(f"https://www.cricbuzz.com/cricket-match/live-scores?_={time.time_ns()}", headers=cls.HEADERS)
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, "lxml")
+                        links = soup.find_all("a", href=re.compile(r"/cricket-series/(\d+)/"))
+                        clean_target = series_name.lower().replace("•", " ").strip()
+                        target_words = [w for w in clean_target.split() if len(w) > 2 and w not in ['elite', 'plate', 'group', 'the', 'and', '2026', '2025']]
+
+                        best_match_id = None
+                        for link in links:
+                            l_href = link.get("href", "")
+                            l_text = link.get_text(" ", strip=True).lower()
+                            m = re.search(r"/cricket-series/(\d+)/", l_href)
+                            if m:
+                                s_id = m.group(1)
+                                if any(w in l_text or w in l_href for w in target_words):
+                                    best_match_id = s_id
+                                    break
+                        if best_match_id:
+                            target_url = f"https://www.cricbuzz.com/cricket-series/{best_match_id}/points-table"
+            except Exception:
+                pass
+
+        if not target_url:
+            return {"status": "error", "message": "Points table URL not found for series", "groups": []}
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                r = await client.get(target_url, headers=cls.HEADERS)
+                if r.status_code != 200:
+                    return {"status": "error", "message": f"HTTP {r.status_code}", "groups": []}
+
+            soup = BeautifulSoup(r.text, "lxml")
+            title = soup.find("h1")
+            title_text = title.get_text(strip=True) if title else (series_name or "Tournament Points Table")
+
+            hdrs = soup.find_all(lambda tag: tag.name == "div" and "NRR" in tag.get_text() and "bg-cbGrpHdrBkg" in tag.get("class", []))
+
+            groups = []
+            for h in hdrs:
+                h_text = h.get_text(" ", strip=True)
+                parts = h_text.split(" P ")
+                group_name = parts[0].strip() if len(parts) > 1 else h_text.split()[0]
+                group_name = re.sub(r"[\s|]+", " ", group_name).strip() or "Standings"
+
+                teams = []
+                for sibling in h.find_next_siblings():
+                    if "bg-cbGrpHdrBkg" in sibling.get("class", []):
+                        break
+                    grid = sibling.find("div", class_=lambda c: c and "point-table-grid" in c)
+                    if not grid:
+                        continue
+                    cells = [c.get_text(strip=True) for c in grid.children if hasattr(c, "name")]
+                    if len(cells) >= 8:
+                        pos = cells[0].lstrip("-").strip()
+                        team = cells[1].strip()
+                        p = cells[2].strip()
+                        w = cells[3].strip()
+                        l = cells[4].strip()
+                        nr = cells[5].strip()
+                        pts = cells[6].strip()
+                        nrr = cells[7].strip()
+                        if team and p.isdigit():
+                            teams.append({
+                                "pos": int(pos) if pos.isdigit() else (len(teams) + 1),
+                                "team": team,
+                                "p": int(p),
+                                "w": int(w) if w.isdigit() else 0,
+                                "l": int(l) if l.isdigit() else 0,
+                                "nr": int(nr) if nr.isdigit() else 0,
+                                "pts": int(pts) if pts.isdigit() else 0,
+                                "nrr": nrr
+                            })
+                if teams:
+                    groups.append({
+                        "groupName": group_name,
+                        "teams": teams
+                    })
+
+            result = {
+                "status": "success",
+                "title": title_text,
+                "groups": groups
+            }
+            if groups:
+                set_cached(cache_key, result)
+            return result
+        except Exception as e:
+            return {"status": "error", "message": str(e), "groups": []}
+
+
+@app.get("/points-table/{series_id}")
+async def get_points_table_by_id(series_id: str):
+    res = await ScoreService.fetch_points_table(series_id=series_id)
+    return res
+
+
+@app.get("/points-table")
+async def get_points_table_by_query(series_id: str = None, series_name: str = None):
+    res = await ScoreService.fetch_points_table(series_id=series_id, series_name=series_name)
+    return res
+
 
 @app.get("/news")
 async def get_news():

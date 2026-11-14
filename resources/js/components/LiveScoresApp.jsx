@@ -166,6 +166,9 @@ export default function LiveScoresApp({
 
     // Points Table Modal state
     const [pointsTableModal, setPointsTableModal] = useState(null); // { seriesName, match }
+    const [fetchedPointsTable, setFetchedPointsTable] = useState(null);
+    const [loadingPointsTable, setLoadingPointsTable] = useState(false);
+    const [selectedGroupTab, setSelectedGroupTab] = useState(0);
 
     // Player Search & Career Profile Modal state
     const [playerResults, setPlayerResults] = useState([]);
@@ -522,6 +525,30 @@ export default function LiveScoresApp({
 
     const openPointsTableModal = (seriesName, match) => {
         setPointsTableModal({ seriesName, match });
+        setSelectedGroupTab(0);
+        setFetchedPointsTable(null);
+        setLoadingPointsTable(true);
+
+        const sId = match?.series_id || '';
+        fetch(`/api/points-table?series_name=${encodeURIComponent(seriesName || '')}&series_id=${encodeURIComponent(sId)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.groups && data.groups.length > 0) {
+                    setFetchedPointsTable(data);
+                    const mName = (match?.name || seriesName || '').toLowerCase();
+                    const groupIdx = data.groups.findIndex(g => {
+                        const gName = (g.groupName || '').toLowerCase();
+                        return mName.includes(gName) || (gName.includes('group d') && mName.includes('group d')) || (gName.includes('group a') && mName.includes('group a'));
+                    });
+                    if (groupIdx !== -1) {
+                        setSelectedGroupTab(groupIdx);
+                    }
+                }
+            })
+            .catch(() => {})
+            .finally(() => {
+                setLoadingPointsTable(false);
+            });
     };
 
     return (
@@ -1555,258 +1582,188 @@ export default function LiveScoresApp({
             )}
 
             {/* Cricbuzz-Style Points Table Modal */}
-            {pointsTableModal && activePointsTable && (
-                <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
-                    <div className="bg-[#0f172a] border border-white/10 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                        {/* Modal Header */}
-                        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-slate-950/80">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-xs">
-                                    <Trophy className="w-5 h-5" />
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider">
-                                            Tournament Standings
-                                        </span>
-                                        {pointsTableModal.match?.matchType && (
-                                            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/10">
-                                                {pointsTableModal.match.matchType}
+            {pointsTableModal && (fetchedPointsTable?.groups?.length > 0 || activePointsTable) && (() => {
+                const isLiveFeed = fetchedPointsTable?.groups && fetchedPointsTable.groups.length > 0;
+                const currentGroup = isLiveFeed ? (fetchedPointsTable.groups[selectedGroupTab] || fetchedPointsTable.groups[0]) : null;
+                const standings = isLiveFeed ? (currentGroup?.teams || []) : (activePointsTable?.standings || []);
+                const titleText = (isLiveFeed && fetchedPointsTable.title) || pointsTableModal.seriesName;
+
+                return (
+                    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+                        <div className="bg-[#0f172a] border border-white/10 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                            {/* Modal Header */}
+                            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-slate-950/80">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-xs">
+                                        <Trophy className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider">
+                                                {isLiveFeed ? 'Official Tournament Standings' : 'Tournament Standings'}
                                             </span>
-                                        )}
+                                            {isLiveFeed ? (
+                                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                                    Live Feed
+                                                </span>
+                                            ) : loadingPointsTable ? (
+                                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                                    Syncing...
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                        <h3 className="font-black text-white text-base sm:text-lg leading-tight mt-0.5 truncate" title={titleText}>
+                                            {titleText}
+                                        </h3>
                                     </div>
-                                    <h3 className="font-black text-white text-base sm:text-lg leading-tight mt-0.5 truncate" title={pointsTableModal.seriesName}>
-                                        {pointsTableModal.seriesName}
-                                    </h3>
                                 </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setPointsTableModal(null)}
-                                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition"
-                                title="Close"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
-                            {/* Series Stats Bar */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                                <div className="bg-slate-900/80 border border-white/5 p-3 rounded-2xl">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Teams</span>
-                                    <span className="text-base sm:text-lg font-black text-white">{activePointsTable.standings.length}</span>
-                                </div>
-                                <div className="bg-slate-900/80 border border-white/5 p-3 rounded-2xl">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Matches</span>
-                                    <span className="text-base sm:text-lg font-black text-white">{activePointsTable.totalMatches}</span>
-                                </div>
-                                <div className="bg-slate-900/80 border border-white/5 p-3 rounded-2xl">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Completed</span>
-                                    <span className="text-base sm:text-lg font-black text-emerald-400">{activePointsTable.completedMatches}</span>
-                                </div>
-                                <div className="bg-slate-900/80 border border-white/5 p-3 rounded-2xl">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Leader</span>
-                                    <span className="text-base sm:text-lg font-black text-amber-300 truncate block">
-                                        {activePointsTable.standings[0]?.name ? activePointsTable.standings[0].code : 'TBD'}
-                                    </span>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setPointsTableModal(null)}
+                                    className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition"
+                                    title="Close"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
                             </div>
 
-                            {/* Bilateral Series Special Banner if only 2 teams */}
-                            {activePointsTable.standings.length === 2 && (
-                                <div className="p-4 bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-950/80 border border-indigo-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                    <div>
-                                        <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider block">
-                                            Bilateral Series Summary
-                                        </span>
-                                        <h4 className="text-sm sm:text-base font-bold text-white mt-0.5">
-                                            {activePointsTable.standings[0]?.name} ({activePointsTable.standings[0]?.won}W) vs {activePointsTable.standings[1]?.name} ({activePointsTable.standings[1]?.won}W)
-                                        </h4>
+                            {/* Modal Body */}
+                            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+                                {/* Group Tabs if multiple groups exist (e.g. Group A, Group B, Group D) */}
+                                {isLiveFeed && fetchedPointsTable.groups.length > 1 && (
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                                        {fetchedPointsTable.groups.map((grp, gIdx) => (
+                                            <button
+                                                key={gIdx}
+                                                type="button"
+                                                onClick={() => setSelectedGroupTab(gIdx)}
+                                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap border shrink-0 ${
+                                                    selectedGroupTab === gIdx
+                                                        ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
+                                                        : 'bg-white/5 text-slate-400 hover:text-white border-white/10'
+                                                }`}
+                                            >
+                                                {grp.groupName}
+                                            </button>
+                                        ))}
                                     </div>
-                                    <span className="text-xs font-extrabold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 rounded-xl self-start sm:self-center">
-                                        {activePointsTable.standings[0]?.won > activePointsTable.standings[1]?.won
-                                            ? `${activePointsTable.standings[0].name} lead (${activePointsTable.standings[0].won}-${activePointsTable.standings[1].won})`
-                                            : activePointsTable.standings[1]?.won > activePointsTable.standings[0]?.won
-                                                ? `${activePointsTable.standings[1].name} lead (${activePointsTable.standings[1].won}-${activePointsTable.standings[0].won})`
-                                                : 'Series Level / Tied'}
-                                    </span>
-                                </div>
-                            )}
+                                )}
 
-                            {/* Cricbuzz Standings Table */}
-                            <div className="bg-slate-950/80 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
-                                <div className="overflow-x-auto scrollbar-thin">
-                                    <table className="w-full text-left border-collapse min-w-[560px]">
-                                        <thead>
-                                            <tr className="border-b border-white/10 bg-slate-900/90 text-[11px] font-black uppercase tracking-wider text-slate-400">
-                                                <th className="py-3 px-3 text-center w-12">Pos</th>
-                                                <th className="py-3 px-3">Team</th>
-                                                <th className="py-3 px-2 text-center w-12" title="Matches Played">P</th>
-                                                <th className="py-3 px-2 text-center w-12" title="Won">W</th>
-                                                <th className="py-3 px-2 text-center w-12" title="Lost">L</th>
-                                                <th className="py-3 px-2 text-center w-14" title="Tied / No Result">T/NR</th>
-                                                <th className="py-3 px-3 text-center w-16 text-white" title="Points">PTS</th>
-                                                <th className="py-3 px-3 text-center w-20" title="Net Run Rate">NRR</th>
-                                                <th className="py-3 px-3 text-center w-24">Form</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-white/5 text-xs">
-                                            {activePointsTable.standings.map((team, idx) => {
-                                                const isQualifiedSpot = idx < 2; // top 2 qualification zone
-                                                const nrrNum = parseFloat(team.nrrRaw || 0);
-                                                return (
-                                                    <tr
-                                                        key={team.code || team.name}
-                                                        className={`hover:bg-white/5 transition-colors ${
-                                                            isQualifiedSpot ? 'bg-indigo-950/15' : ''
-                                                        }`}
-                                                    >
-                                                        <td className="py-3.5 px-3 text-center">
-                                                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-black ${
-                                                                idx === 0
-                                                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                                                                    : isQualifiedSpot
-                                                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                                                        : 'text-slate-400 bg-white/5'
-                                                            }`}>
-                                                                {idx + 1}
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-3.5 px-3">
-                                                            <div className="flex items-center gap-2.5 min-w-0">
-                                                                <div className="w-7 h-7 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center shrink-0 shadow-xs">
-                                                                    <span className="text-[10px] font-black text-indigo-300 uppercase leading-none">
-                                                                        {team.code.slice(0, 3)}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="min-w-0">
-                                                                    <span className="font-extrabold text-white text-sm block truncate" title={team.name}>
-                                                                        {team.name}
-                                                                    </span>
-                                                                    <span className="text-[10px] text-slate-400 uppercase tracking-tight block">
-                                                                        {team.code}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3.5 px-2 text-center font-bold text-slate-200">{team.played}</td>
-                                                        <td className="py-3.5 px-2 text-center font-bold text-emerald-400">{team.won}</td>
-                                                        <td className="py-3.5 px-2 text-center font-bold text-rose-400">{team.lost}</td>
-                                                        <td className="py-3.5 px-2 text-center font-medium text-slate-400">{team.tied + team.nr}</td>
-                                                        <td className="py-3.5 px-3 text-center">
-                                                            <span className="inline-block px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-white font-black font-mono text-sm shadow-xs">
-                                                                {team.points}
-                                                            </span>
-                                                        </td>
-                                                        <td className={`py-3.5 px-3 text-center font-mono font-bold text-xs ${
-                                                            nrrNum > 0 ? 'text-emerald-400' : nrrNum < 0 ? 'text-rose-400' : 'text-slate-400'
-                                                        }`}>
-                                                            {team.nrr}
-                                                        </td>
-                                                        <td className="py-3.5 px-3 text-center">
-                                                            <div className="flex items-center justify-center gap-1">
-                                                                {team.last5Form.length > 0 ? (
-                                                                    team.last5Form.map((f, fIdx) => (
-                                                                        <span
-                                                                            key={fIdx}
-                                                                            className={`w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black uppercase ${
-                                                                                f === 'W'
-                                                                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                                                                    : f === 'L'
-                                                                                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                                                                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                                                            }`}
-                                                                            title={`Result: ${f}`}
-                                                                        >
-                                                                            {f}
+                                {/* Standings Table */}
+                                <div className="bg-slate-950/80 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
+                                    <div className="overflow-x-auto scrollbar-thin">
+                                        <table className="w-full text-left border-collapse min-w-[560px]">
+                                            <thead>
+                                                <tr className="border-b border-white/10 bg-slate-900/90 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                                                    <th className="py-3 px-3 text-center w-12">Pos</th>
+                                                    <th className="py-3 px-3">Team</th>
+                                                    <th className="py-3 px-2 text-center w-12" title="Matches Played">P</th>
+                                                    <th className="py-3 px-2 text-center w-12" title="Won">W</th>
+                                                    <th className="py-3 px-2 text-center w-12" title="Lost">L</th>
+                                                    <th className="py-3 px-2 text-center w-14" title="Tied / No Result">NR</th>
+                                                    <th className="py-3 px-3 text-center w-16 text-white" title="Points">PTS</th>
+                                                    <th className="py-3 px-3 text-center w-20" title="Net Run Rate">NRR</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5 text-xs">
+                                                {standings.map((team, idx) => {
+                                                    const isQualifiedSpot = idx < 2;
+                                                    const posNum = team.pos || (idx + 1);
+                                                    const nrrStr = String(team.nrr ?? '0.000');
+                                                    const isPositiveNRR = nrrStr.startsWith('+') || parseFloat(nrrStr) > 0;
+                                                    const isNegativeNRR = nrrStr.startsWith('-') || parseFloat(nrrStr) < 0;
+                                                    const teamName = team.team || team.name || 'Team';
+                                                    const teamCode = getTeamCode(teamName);
+
+                                                    return (
+                                                        <tr
+                                                            key={team.team || team.code || idx}
+                                                            className={`hover:bg-white/5 transition-colors ${
+                                                                isQualifiedSpot ? 'bg-indigo-950/15' : ''
+                                                            }`}
+                                                        >
+                                                            <td className="py-3.5 px-3 text-center">
+                                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-black ${
+                                                                    idx === 0
+                                                                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                                                        : isQualifiedSpot
+                                                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                                                            : 'text-slate-400 bg-white/5'
+                                                                }`}>
+                                                                    {posNum}
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-3.5 px-3">
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <div className="w-7 h-7 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center shrink-0 shadow-xs">
+                                                                        <span className="text-[10px] font-black text-indigo-300 uppercase leading-none">
+                                                                            {teamCode.slice(0, 3)}
                                                                         </span>
-                                                                    ))
-                                                                ) : (
-                                                                    <span className="text-[10px] text-slate-500 font-mono">-</span>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <div className="p-3 bg-slate-900/60 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
-                                    <div className="flex items-center gap-3">
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <span className="font-extrabold text-white text-sm block truncate" title={teamName}>
+                                                                            {teamName}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-3.5 px-2 text-center font-bold text-slate-200">{team.p ?? team.played ?? 0}</td>
+                                                            <td className="py-3.5 px-2 text-center font-bold text-emerald-400">{team.w ?? team.won ?? 0}</td>
+                                                            <td className="py-3.5 px-2 text-center font-bold text-rose-400">{team.l ?? team.lost ?? 0}</td>
+                                                            <td className="py-3.5 px-2 text-center font-medium text-slate-400">{team.nr ?? (team.tied + team.nr) ?? 0}</td>
+                                                            <td className="py-3.5 px-3 text-center">
+                                                                <span className="inline-block px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-white font-black font-mono text-sm shadow-xs">
+                                                                    {team.pts ?? team.points ?? 0}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`py-3.5 px-3 text-center font-mono font-bold text-xs ${
+                                                                isPositiveNRR ? 'text-emerald-400' : isNegativeNRR ? 'text-rose-400' : 'text-slate-400'
+                                                            }`}>
+                                                                {nrrStr}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="p-3 bg-slate-900/60 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
                                         <span className="flex items-center gap-1.5">
                                             <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-400"></span>
                                             Top 2 Qualification Zone
                                         </span>
+                                        <span>Win = 2 pts, NR/Tie = 1 pt</span>
                                     </div>
-                                    <span>Win = 2 pts, Tie/NR = 1 pt</span>
                                 </div>
                             </div>
 
-                            {/* Series Matches List Preview */}
-                            {activePointsTable.matches.length > 0 && (
-                                <div className="space-y-2.5">
-                                    <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center justify-between">
-                                        <span>Series Matches ({activePointsTable.matches.length})</span>
-                                        <span className="text-[10px] text-slate-500 font-normal">Live updates & results</span>
-                                    </h4>
+                            {/* Modal Footer */}
+                            <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/80 flex items-center justify-between gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedSeries(pointsTableModal.seriesName);
+                                        setPointsTableModal(null);
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-extrabold transition"
+                                >
+                                    <Filter className="w-3.5 h-3.5" />
+                                    <span>Filter Main List by this Series</span>
+                                </button>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                        {activePointsTable.matches.map((m) => (
-                                            <a
-                                                key={m.id}
-                                                href={m.is_local ? (m.match_url || `/matches/${m.local_id || m.id}`) : `/live-scores/${m.id}?tab=live`}
-                                                className="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-white/5 hover:border-indigo-500/30 transition flex flex-col justify-between group"
-                                            >
-                                                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                                                    <span className="font-bold text-slate-300">{m.matchType || 'Match'}</span>
-                                                    {m.status === 'live' ? (
-                                                        <span className="text-rose-400 font-black flex items-center gap-1">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                                            LIVE
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-slate-500">{m.status_text ? m.status_text.slice(0, 20) : 'Scheduled'}</span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs font-bold text-white group-hover:text-indigo-400 transition truncate">
-                                                    {m.name}
-                                                </p>
-                                            </a>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/80 flex items-center justify-between gap-3">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSelectedSeries(pointsTableModal.seriesName);
-                                    setPointsTableModal(null);
-                                }}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-extrabold transition"
-                            >
-                                <Filter className="w-3.5 h-3.5" />
-                                <span>Filter Main List by this Series</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setPointsTableModal(null)}
-                                className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition"
-                            >
-                                Close
-                            </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPointsTableModal(null)}
+                                    className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition"
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Mobile Sticky Bottom Sponsor Banner */}
             <AdSlot type="sticky-bottom" slotId="livescores-sticky" />

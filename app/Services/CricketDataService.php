@@ -157,6 +157,54 @@ class CricketDataService
         return collect($matches)->where('status', 'scheduled')->values()->toArray();
     }
 
+    public function getPointsTable(?string $seriesId = null, ?string $seriesName = null): array
+    {
+        $cacheKey = $this->cacheKey('points_table_' . md5(($seriesId ?? '') . '_' . ($seriesName ?? '')));
+        return Cache::remember($cacheKey, 120, function () use ($seriesId, $seriesName) {
+            // 1. Try local score engine first
+            try {
+                $params = array_filter(['series_id' => $seriesId, 'series_name' => $seriesName]);
+                $url = "{$this->localUrl}/points-table";
+                $response = Http::timeout(8)->get($url, $params);
+                if ($response->successful()) {
+                    $json = $response->json();
+                    if (!empty($json['groups'])) {
+                        return $json;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // fall through
+            }
+
+            // 2. Try CricAPI if series_id is available
+            if ($seriesId && !empty($this->apiKey)) {
+                try {
+                    $cricRes = Http::timeout(6)->get("{$this->baseUrl}/series_points", [
+                        'apikey' => $this->apiKey,
+                        'id' => $seriesId,
+                    ]);
+                    if ($cricRes->successful()) {
+                        $json = $cricRes->json();
+                        if (!empty($json['data'])) {
+                            return [
+                                'status' => 'success',
+                                'title' => $seriesName ?? 'Tournament Standings',
+                                'groups' => [
+                                    [
+                                        'groupName' => 'Standings',
+                                        'teams' => $json['data']
+                                    ]
+                                ]
+                            ];
+                        }
+                    }
+                } catch (\Throwable $e) {}
+            }
+
+            return ['status' => 'error', 'message' => 'No points table found', 'groups' => []];
+        });
+    }
+
     public function getCricketNews(): array
     {
         if ($this->provider === 'local') {

@@ -48,6 +48,7 @@ Route::get('/app-status', function () {
     ]);
 });
 Route::get('/live-scores', [LiveScoreController::class, 'index'])->name('live-scores.index');
+Route::get('/api/points-table', [LiveScoreController::class, 'pointsTable'])->name('live-scores.points-table');
 Route::get('/live-scores/{matchId}', [LiveScoreController::class, 'show'])->name('live-scores.show');
 Route::view('/offline', 'offline')->name('offline');
 
