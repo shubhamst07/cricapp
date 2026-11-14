@@ -465,7 +465,7 @@
                     <div>
                         <span class="text-[10px] font-bold text-blue-400 uppercase">Team 1</span>
                         <div class="font-extrabold text-white text-lg sm:text-xl mt-0.5">{{ $match->team1_name }}</div>
-                        <div class="text-xs text-slate-400 mt-1">Overs: {{ $score1->overs ?? '0.0' }} / {{ $match->total_overs }}</div>
+                        <div class="text-xs text-slate-400 mt-1">Overs: {{ $score1 ? $score1->formatted_overs : '0.0' }} / {{ $match->total_overs }}</div>
                     </div>
                     <div class="text-right">
                         <div class="text-3xl sm:text-4xl font-black text-white font-mono">
@@ -480,7 +480,7 @@
                     <div>
                         <span class="text-[10px] font-bold text-rose-400 uppercase">Team 2</span>
                         <div class="font-extrabold text-white text-lg sm:text-xl mt-0.5">{{ $match->team2_name }}</div>
-                        <div class="text-xs text-slate-400 mt-1">Overs: {{ $score2->overs ?? '0.0' }} / {{ $match->total_overs }}</div>
+                        <div class="text-xs text-slate-400 mt-1">Overs: {{ $score2 ? $score2->formatted_overs : '0.0' }} / {{ $match->total_overs }}</div>
                     </div>
                     <div class="text-right">
                         <div class="text-3xl sm:text-4xl font-black text-white font-mono">
@@ -839,7 +839,7 @@
                     <div class="p-6 sm:p-8 rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/40 to-slate-800/80 border-2 border-blue-500/50 text-center space-y-4 shadow-2xl">
                         <div class="flex items-center justify-center gap-2">
                             <span class="px-3.5 py-1.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-black uppercase tracking-wider">
-                                🔔 1st Innings Completed ({{ $score1->overs ?? '0.0' }} / {{ $match->total_overs }} Ov)
+                                🔔 1st Innings Completed ({{ $score1 ? $score1->formatted_overs : '0.0' }} / {{ $match->total_overs }} Ov)
                             </span>
                         </div>
 
@@ -847,7 +847,7 @@
                             <div class="text-xs uppercase font-bold text-slate-400">{{ $match->team1_name }} Final Score</div>
                             <div class="text-3xl sm:text-4xl font-black font-mono text-white mt-1">
                                 {{ $score1->runs ?? 0 }}/{{ $score1->wickets ?? 0 }}
-                                <span class="text-sm sm:text-base font-sans font-normal text-slate-400">({{ $score1->overs ?? '0.0' }} ov)</span>
+                                <span class="text-sm sm:text-base font-sans font-normal text-slate-400">({{ $score1 ? $score1->formatted_overs : '0.0' }} ov)</span>
                             </div>
                         </div>
 
@@ -1098,7 +1098,7 @@
                             <span>🏏 {{ $match->team1_name }} Batting Card</span>
                         </h4>
                         <span class="text-xs text-slate-400 font-mono">
-                            Overs: {{ $score1->overs ?? '0.0' }} / {{ $match->total_overs }}
+                            Overs: {{ $score1 ? $score1->formatted_overs : '0.0' }} / {{ $match->total_overs }}
                         </span>
                     </div>
 
@@ -1265,7 +1265,7 @@
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->overs_bowled ?: '0.0' }}</td>
+                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->formatted_overs ?: '0.0' }}</td>
                                         <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->maidens }}</td>
                                         <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->runs_conceded }}</td>
                                         <td class="py-3 px-3 text-right font-black font-mono text-sm">
@@ -1306,7 +1306,7 @@
                             <span>🏏 {{ $match->team2_name }} Batting Card</span>
                         </h4>
                         <span class="text-xs text-slate-400 font-mono">
-                            Overs: {{ $score2->overs ?? '0.0' }} / {{ $match->total_overs }}
+                            Overs: {{ $score2 ? $score2->formatted_overs : '0.0' }} / {{ $match->total_overs }}
                         </span>
                     </div>
 
@@ -1469,7 +1469,7 @@
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->overs_bowled ?: '0.0' }}</td>
+                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->formatted_overs ?: '0.0' }}</td>
                                         <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->maidens }}</td>
                                         <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->runs_conceded }}</td>
                                         <td class="py-3 px-3 text-right font-black font-mono text-sm">

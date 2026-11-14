@@ -35,6 +35,56 @@ class CricketDataService
         return 'cricket_' . $key;
     }
 
+    public static function normalizeCricketOvers(mixed $overs, bool $allowZero = false): ?string
+    {
+        if ($overs === null || $overs === '' || $overs === 0 || $overs === '0' || $overs === '0.0') {
+            return $allowZero ? '0' : null;
+        }
+
+        $str = trim((string) $overs);
+        if ($str === '' || $str === '0' || $str === '0.0') {
+            return $allowZero ? '0' : null;
+        }
+
+        if (str_contains($str, '.')) {
+            $parts = explode('.', $str, 2);
+            $ov = (int) ($parts[0] ?? 0);
+            $balls = (int) ($parts[1] ?? 0);
+
+            if ($balls >= 6) {
+                $ov += intdiv($balls, 6);
+                $rem = $balls % 6;
+                return $rem > 0 ? "{$ov}.{$rem}" : (string) $ov;
+            }
+
+            if ($balls === 0) {
+                return (string) $ov;
+            }
+
+            return "{$ov}.{$balls}";
+        }
+
+        return $str;
+    }
+
+    public static function normalizeScoreString(?string $scoreStr): ?string
+    {
+        if ($scoreStr === null || $scoreStr === '') {
+            return $scoreStr;
+        }
+
+        return preg_replace_callback('/\((\d+)\.(\d+)(\s*(?:ov(?:ers?)?)?)\)/i', function ($matches) {
+            $ov = (int) $matches[1];
+            $balls = (int) $matches[2];
+            if ($balls >= 6) {
+                $ov += intdiv($balls, 6);
+                $balls = $balls % 6;
+            }
+            $oStr = $balls > 0 ? "{$ov}.{$balls}" : (string) $ov;
+            return "({$oStr}{$matches[3]})";
+        }, $scoreStr);
+    }
+
     protected function get(string $endpoint, array $params = [], int $ttl = 0, string $cacheKey = ''): mixed
     {
         $cKey = $cacheKey ?: $this->cacheKey(md5($endpoint . serialize($params)));
@@ -481,7 +531,7 @@ class CricketDataService
                                     if (!$inn || !is_array($inn)) continue;
                                     $r = (int)($inn['runs'] ?? 0);
                                     $w = !empty($inn['isAllOut']) ? 10 : (int)($inn['wickets'] ?? 0);
-                                    $o = (string)($inn['overs'] ?? '0');
+                                    $o = self::normalizeCricketOvers($inn['overs'] ?? '0') ?? (string)($inn['overs'] ?? '0');
                                     $scores[] = [
                                         'inning' => ($inngKey === 'inngs1') ? "{$tName} Inning 1" : "{$tName} Inning 2",
                                         'batting_team' => $tName,
@@ -768,10 +818,11 @@ class CricketDataService
 
             $runs = (int) ($s['r'] ?? $s['runs'] ?? 0);
             $wickets = (int) ($s['w'] ?? $s['wickets'] ?? 0);
-            $overs = (string) ($s['o'] ?? $s['overs'] ?? '0');
+            $rawOvers = (string) ($s['o'] ?? $s['overs'] ?? '0');
+            $overs = self::normalizeCricketOvers($rawOvers) ?? $rawOvers;
             $ovFloat = (float) $overs;
             $rr = $ovFloat > 0 ? number_format($runs / $ovFloat, 2) : 'N/A';
-            $displayScore = $s['display_score'] ?? "{$runs}/{$wickets}";
+            $displayScore = self::normalizeScoreString($s['display_score'] ?? "{$runs}/{$wickets}");
 
             $isCurrentBatting = ($idx === $scoresCount - 1) && in_array(($match['status'] ?? ''), ['live', 'in progress']);
 
@@ -1495,7 +1546,7 @@ class CricketDataService
                                                         if (!$inn || !is_array($inn)) continue;
                                                         $r = (int)($inn['runs'] ?? 0);
                                                         $w = !empty($inn['isAllOut']) ? 10 : (int)($inn['wickets'] ?? 0);
-                                                        $o = (string)($inn['overs'] ?? '0');
+                                                        $o = self::normalizeCricketOvers($inn['overs'] ?? '0') ?? (string)($inn['overs'] ?? '0');
                                                         $scores[] = [
                                                             'inning' => ($inngKey === 'inngs1') ? "{$tName} Inning 1" : "{$tName} Inning 2",
                                                             'batting_team' => $tName,
@@ -1623,7 +1674,7 @@ class CricketDataService
                                             if (!$inn || !is_array($inn)) continue;
                                             $r = (int)($inn['runs'] ?? 0);
                                             $w = !empty($inn['isAllOut']) ? 10 : (int)($inn['wickets'] ?? 0);
-                                            $o = (string)($inn['overs'] ?? '0');
+                                            $o = self::normalizeCricketOvers($inn['overs'] ?? '0') ?? (string)($inn['overs'] ?? '0');
                                             $scores[] = [
                                                 'inning' => ($inngKey === 'inngs1') ? "{$tName} Inning 1" : "{$tName} Inning 2",
                                                 'batting_team' => $tName,
@@ -1756,9 +1807,9 @@ class CricketDataService
                     'r' => (int) ($inn['score'] ?? 0),
                     'wickets' => (int) ($inn['wickets'] ?? 0),
                     'w' => (int) ($inn['wickets'] ?? 0),
-                    'overs' => (string) ($inn['overs'] ?? '0'),
-                    'o' => (string) ($inn['overs'] ?? '0'),
-                    'display_score' => ($inn['score'] ?? 0) . '/' . ($inn['wickets'] ?? 0)
+                    'overs' => self::normalizeCricketOvers($inn['overs'] ?? '0') ?? (string) ($inn['overs'] ?? '0'),
+                    'o' => self::normalizeCricketOvers($inn['overs'] ?? '0') ?? (string) ($inn['overs'] ?? '0'),
+                    'display_score' => self::normalizeScoreString(($inn['score'] ?? 0) . '/' . ($inn['wickets'] ?? 0))
                 ];
             }
 
@@ -1885,7 +1936,7 @@ class CricketDataService
                         'id' => $bwId ? (string) $bwId : null,
                         'bowler' => $bw['bowlName'] ?? '',
                         'name' => $bw['bowlName'] ?? '',
-                        'overs' => (string) ($bw['overs'] ?? '0'),
+                        'overs' => self::normalizeCricketOvers($bw['overs'] ?? '0', true) ?? (string) ($bw['overs'] ?? '0'),
                         'maidens' => (int) ($bw['maidens'] ?? 0),
                         'runs' => (int) ($bw['runs'] ?? 0),
                         'wickets' => (int) ($bw['wickets'] ?? 0),
@@ -1898,7 +1949,7 @@ class CricketDataService
                     $fow[] = [
                         'wkt_nbr' => (int) ($w['wktNbr'] ?? 0),
                         'score' => (int) ($w['wktRuns'] ?? 0),
-                        'over' => (string) ($w['wktOver'] ?? '0'),
+                        'over' => self::normalizeCricketOvers($w['wktOver'] ?? '0') ?? (string) ($w['wktOver'] ?? '0'),
                         'batsman' => $w['batName'] ?? '',
                     ];
                 }
@@ -1910,9 +1961,9 @@ class CricketDataService
                     'short_name' => $batTeam['batTeamShortName'] ?? '',
                     'runs' => (int) ($scoreDetails['runs'] ?? 0),
                     'wickets' => (int) ($scoreDetails['wickets'] ?? 0),
-                    'overs' => (string) ($scoreDetails['overs'] ?? '0'),
+                    'overs' => self::normalizeCricketOvers($scoreDetails['overs'] ?? '0') ?? (string) ($scoreDetails['overs'] ?? '0'),
                     'run_rate' => (float) ($scoreDetails['runRate'] ?? 0.0),
-                    'score' => ($scoreDetails['runs'] ?? 0) . '/' . ($scoreDetails['wickets'] ?? 0),
+                    'score' => self::normalizeScoreString(($scoreDetails['runs'] ?? 0) . '/' . ($scoreDetails['wickets'] ?? 0)),
                     'batting' => $batting,
                     'did_not_bat' => $didNotBat,
                     'extras' => $extras,
@@ -1988,7 +2039,7 @@ class CricketDataService
             $runs = isset($s['r']) ? (int) $s['r'] : (isset($s['runs']) ? (int) $s['runs'] : 0);
             $wickets = isset($s['w']) ? (int) $s['w'] : (isset($s['wickets']) ? (int) $s['wickets'] : 0);
             $rawOvers = $s['o'] ?? $s['overs'] ?? null;
-            $overs = ($rawOvers !== null && $rawOvers !== '' && $rawOvers !== '0' && $rawOvers !== 0 && $rawOvers !== '0.0') ? (string) $rawOvers : null;
+            $overs = self::normalizeCricketOvers($rawOvers);
 
             // Intelligent correction for all-out teams:
             // When a team is all out in cricket (10 wickets), some APIs omit wickets or return w: 0.
@@ -2016,6 +2067,8 @@ class CricketDataService
             $displayScore = (string) ($s['display_score'] ?? '');
             if (empty($displayScore) || ($displayScore === "{$runs}/0" && $wickets > 0)) {
                 $displayScore = "{$runs}/{$wickets}";
+            } else {
+                $displayScore = self::normalizeScoreString($displayScore);
             }
 
             $cleanTeam = trim(preg_replace('/\s*innings\s*\d*/i', '', $inningName));

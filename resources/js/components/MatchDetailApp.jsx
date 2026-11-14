@@ -34,6 +34,7 @@ import {
     Trash2,
     Clock
 } from 'lucide-react';
+import { formatCricketOvers, normalizeScoreString, parseOversToDecimal } from './LiveScoresApp';
 
 // Ball-by-ball commentary is loaded live directly from Cricbuzz API
 
@@ -560,14 +561,15 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
                 const r = s.r ?? s.runs ?? 0;
                 const w = s.w ?? s.wickets ?? 0;
-                const o = s.o ?? s.overs ?? '';
-                const ovNum = parseFloat(o);
-                const rr = (ovNum > 0) ? (r / ovNum).toFixed(2) : 'N/A';
+                const rawO = s.o ?? s.overs ?? '';
+                const o = formatCricketOvers(rawO);
+                const ovDec = parseOversToDecimal(rawO);
+                const rr = (ovDec > 0) ? (r / ovDec).toFixed(2) : 'N/A';
 
                 return {
                     team: cleanTeam || `Innings ${idx + 1}`,
                     short_name: cleanTeam || `Innings ${idx + 1}`,
-                    score: s.display_score || `${r}/${w}`,
+                    score: normalizeScoreString(s.display_score || `${r}/${w}`),
                     runs: r,
                     wickets: w,
                     overs: o,
@@ -1317,9 +1319,10 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             if (scInns && scInns.length > 0) {
                 scInns.forEach(inn => {
                     const t = inn.short_name || (inn.team ? (inn.team.length > 5 ? inn.team.split(' ').map(w => w[0]).join('').toUpperCase() : inn.team) : '');
-                    const sc = inn.score;
+                    const sc = normalizeScoreString(inn.score);
                     if (sc && sc !== '0/0') {
-                        const ov = inn.overs ? ` (${inn.overs} ov)` : '';
+                        const rawOv = formatCricketOvers(inn.overs);
+                        const ov = rawOv ? ` (${rawOv} ov)` : '';
                         scoreParts.push(`${t ? `${t} ` : ''}${sc}${ov}`.trim());
                     }
                 });
@@ -1332,9 +1335,10 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                     const shortT = t ? (t.length > 5 ? t.split(' ').map(w => w[0]).join('').toUpperCase() : t) : '';
                     const runs = s.r ?? s.runs ?? 0;
                     const wkts = s.w ?? s.wickets ?? 0;
-                    const sc = s.display_score || `${runs}/${wkts}`;
+                    const sc = normalizeScoreString(s.display_score || `${runs}/${wkts}`);
                     if (sc && sc !== '0/0') {
-                        const ov = (s.overs || s.o) ? ` (${s.overs || s.o} ov)` : '';
+                        const rawOv = formatCricketOvers(s.overs || s.o);
+                        const ov = rawOv ? ` (${rawOv} ov)` : '';
                         scoreParts.push(`${shortT ? `${shortT} ` : ''}${sc}${ov}`.trim());
                     }
                 });
@@ -1343,8 +1347,9 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             // 3. Fallback to miniscore live crease
             if (scoreParts.length === 0 && liveCreaseScore) {
                 const liveTeam = liveCreaseBatTeam ? (liveCreaseBatTeam.length > 5 ? liveCreaseBatTeam.split(' ').map(w => w[0]).join('').toUpperCase() : liveCreaseBatTeam) : '';
-                const ov = miniscore?.overs ? ` (${miniscore.overs} ov)` : '';
-                scoreParts.push(`${liveTeam ? `${liveTeam} ` : ''}${liveCreaseScore}${ov}`.trim());
+                const rawOv = formatCricketOvers(miniscore?.overs);
+                const ov = rawOv ? ` (${rawOv} ov)` : '';
+                scoreParts.push(`${liveTeam ? `${liveTeam} ` : ''}${normalizeScoreString(liveCreaseScore)}${ov}`.trim());
             }
 
             const matchName = match?.name || (match?.team1_name && match?.team2_name ? `${match.team1_name} vs ${match.team2_name}` : '');
@@ -1494,18 +1499,18 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                 {inn.run_rate && inn.run_rate !== 'N/A' ? (
                                                     <span>RR: <span className="text-slate-300 font-bold">{inn.run_rate}</span></span>
                                                 ) : null}
-                                                {inn.overs ? ` • ${inn.overs} Overs` : ''}
+                                                {formatCricketOvers(inn.overs) ? ` • ${formatCricketOvers(inn.overs)} Overs` : ''}
                                                 <span className="ml-2 text-[10px] text-indigo-400 font-semibold">View Scorecard ›</span>
                                             </p>
                                         </div>
                                     </div>
                                     <div className="text-right shrink-0">
                                         <span className="text-2xl font-black font-mono text-amber-300 tracking-tight">
-                                            {inn.score || '0/0'}
+                                            {normalizeScoreString(inn.score || '0/0')}
                                         </span>
-                                        {inn.overs && (
+                                        {formatCricketOvers(inn.overs) && (
                                             <span className="block text-xs font-mono text-slate-400">
-                                                ({inn.overs} ov)
+                                                ({formatCricketOvers(inn.overs)} ov)
                                             </span>
                                         )}
                                     </div>
@@ -1662,7 +1667,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                             <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-black ${
                                                 selectedInningIdx === idx ? 'bg-black/30 text-white' : 'bg-white/10 text-slate-300'
                                             }`}>
-                                                {inn.score} {inn.overs ? `(${inn.overs} ov)` : ''}
+                                                {normalizeScoreString(inn.score)} {formatCricketOvers(inn.overs) ? `(${formatCricketOvers(inn.overs)} ov)` : ''}
                                             </span>
                                         </button>
                                     );
@@ -1681,7 +1686,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                         {(activeInning.team || '').replace(/\s*inning\s*\d*/gi, '').trim() || activeInning.team} Batting
                                                     </h2>
                                                     <span className="text-xs sm:text-sm font-black text-indigo-900 bg-indigo-50 px-2.5 sm:px-3 py-1 rounded-lg">
-                                                        {activeInning.score} ({activeInning.overs} Ov, RR: {activeInning.run_rate || 'N/A'})
+                                                        {normalizeScoreString(activeInning.score)} ({formatCricketOvers(activeInning.overs)} Ov, RR: {activeInning.run_rate || 'N/A'})
                                                     </span>
                                                 </div>
                                                 <div className="overflow-x-auto scrollbar-none">
@@ -1744,8 +1749,8 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                             <tr className="bg-indigo-50/40 text-xs sm:text-sm font-bold text-gray-900 border-t border-gray-200">
                                                                 <td className="px-3 sm:px-6 py-2.5 sm:py-3.5">Total</td>
                                                                 <td colSpan={5} className="px-2 sm:px-4 py-2.5 sm:py-3.5 text-right">
-                                                                    <span className="text-sm sm:text-base font-black text-indigo-900">{activeInning.score}</span>
-                                                                    <span className="text-[10px] sm:text-xs text-gray-500 ml-1.5 font-normal">({activeInning.overs} Overs, RR: {activeInning.run_rate || 'N/A'})</span>
+                                                                    <span className="text-sm sm:text-base font-black text-indigo-900">{normalizeScoreString(activeInning.score)}</span>
+                                                                    <span className="text-[10px] sm:text-xs text-gray-500 ml-1.5 font-normal">({formatCricketOvers(activeInning.overs)} Overs, RR: {activeInning.run_rate || 'N/A'})</span>
                                                                 </td>
                                                             </tr>
                                                         </tbody>
@@ -1783,7 +1788,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                         {activeInning.fall_of_wickets.map((f, idx) => (
                                                             <div key={idx} className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-1.5 text-[11px] sm:text-xs">
                                                                 <span className="font-black text-rose-600">{f.score}-{f.wkt_nbr}</span>
-                                                                <span className="text-gray-700 font-semibold">({f.batsman}, {f.over} ov)</span>
+                                                                <span className="text-gray-700 font-semibold">({f.batsman}, {formatCricketOvers(f.over)} ov)</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -1821,7 +1826,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                                                 {bowler.name || bowler.bowler}
                                                                             </button>
                                                                         </td>
-                                                                        <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{bowler.overs ?? 0}</td>
+                                                                        <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{formatCricketOvers(bowler.overs, true) || bowler.overs || 0}</td>
                                                                         <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-500">{bowler.maidens ?? 0}</td>
                                                                         <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right text-gray-700 font-medium">{bowler.runs ?? 0}</td>
                                                                         <td className="px-2 sm:px-4 py-2 sm:py-3.5 text-right font-black text-indigo-700 text-sm sm:text-base">{bowler.wickets ?? 0}</td>
@@ -1846,10 +1851,10 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                 </div>
                                                 <div className="text-right">
                                                     <div className="text-3xl font-black font-mono text-indigo-700">
-                                                        {activeInning.score}
+                                                        {normalizeScoreString(activeInning.score)}
                                                     </div>
                                                     <div className="text-xs text-gray-500 font-medium mt-0.5">
-                                                        {activeInning.overs ? `${activeInning.overs} Overs` : ''}
+                                                        {formatCricketOvers(activeInning.overs) ? `${formatCricketOvers(activeInning.overs)} Overs` : ''}
                                                         {activeInning.run_rate && activeInning.run_rate !== 'N/A' ? ` • RR: ${activeInning.run_rate}` : ''}
                                                     </div>
                                                 </div>
@@ -1886,7 +1891,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                 <div className="text-xs text-indigo-950 space-y-1">
                                                     <p className="font-bold">Ball-by-ball player figures syncing from official ground feeds</p>
                                                     <p className="text-indigo-800/80 leading-relaxed">
-                                                        The verified team total for {(activeInning.team || '').replace(/\s*inning\s*\d*/gi, '').trim() || activeInning.team} is <strong className="text-indigo-950 font-black">{activeInning.score}</strong> ({activeInning.overs} ov). Detailed player records will populate as soon as the official match score sheet publishes.
+                                                        The verified team total for {(activeInning.team || '').replace(/\s*inning\s*\d*/gi, '').trim() || activeInning.team} is <strong className="text-indigo-950 font-black">{normalizeScoreString(activeInning.score)}</strong> ({formatCricketOvers(activeInning.overs)} ov). Detailed player records will populate as soon as the official match score sheet publishes.
                                                     </p>
                                                 </div>
                                             </div>
@@ -1972,7 +1977,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                                 {bowler.name || bowler.bowler}
                                                             </button>
                                                         </td>
-                                                        <td className="px-4 py-3 text-right text-gray-700">{bowler.overs ?? 0}</td>
+                                                        <td className="px-4 py-3 text-right text-gray-700">{formatCricketOvers(bowler.overs, true) || bowler.overs || 0}</td>
                                                         <td className="px-4 py-3 text-right text-gray-500">{bowler.maidens ?? 0}</td>
                                                         <td className="px-4 py-3 text-right text-gray-700">{bowler.runs ?? 0}</td>
                                                         <td className="px-4 py-3 text-right font-black text-gray-900">{bowler.wickets ?? 0}</td>
@@ -2100,7 +2105,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                     <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
                                     <span className="text-[10px] sm:text-[11px] font-black tracking-wider uppercase text-rose-400">Live Crease</span>
                                     <span className="text-white font-black text-xs sm:text-base">
-                                        {liveCreaseBatTeam}{liveCreaseScore ? `: ${liveCreaseScore}` : ''} ({miniscore.overs} Ov)
+                                        {liveCreaseBatTeam}{liveCreaseScore ? `: ${normalizeScoreString(liveCreaseScore)}` : ''} ({formatCricketOvers(miniscore.overs)} Ov)
                                     </span>
                                 </div>
                                 {miniscore.status && (
@@ -2146,7 +2151,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                         <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-0.5 sm:gap-1 text-xs sm:text-sm font-black text-white">
                                             <span className="text-indigo-300 truncate">{miniscore.bowlerStriker.name}</span>
                                             <span className="shrink-0 font-mono text-[11px] sm:text-xs text-slate-300">
-                                                {miniscore.bowlerStriker.overs}-{miniscore.bowlerStriker.maidens}-{miniscore.bowlerStriker.runs}-<strong className="text-indigo-400 text-xs sm:text-sm">{miniscore.bowlerStriker.wickets}</strong>
+                                                {formatCricketOvers(miniscore.bowlerStriker.overs, true) || miniscore.bowlerStriker.overs || 0}-{miniscore.bowlerStriker.maidens}-{miniscore.bowlerStriker.runs}-<strong className="text-indigo-400 text-xs sm:text-sm">{miniscore.bowlerStriker.wickets}</strong>
                                             </span>
                                         </div>
                                     )}
@@ -2579,9 +2584,9 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                         {match.score && match.score.length > 0 ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {match.score.map((inn, idx) => {
-                                    const innOvers = inn.overs ?? inn.o;
-                                    const hasInnOvers = innOvers && innOvers !== '0' && innOvers !== 0 && innOvers !== '0.0';
-                                    const displayScore = inn.display_score || `${inn.runs ?? inn.r ?? 0}/${inn.wickets ?? inn.w ?? 0}`;
+                                    const innOvers = formatCricketOvers(inn.overs ?? inn.o);
+                                    const hasInnOvers = Boolean(innOvers);
+                                    const displayScore = normalizeScoreString(inn.display_score || `${inn.runs ?? inn.r ?? 0}/${inn.wickets ?? inn.w ?? 0}`);
                                     return (
                                         <div key={idx} className="bg-gray-50 border border-gray-100 rounded-xl p-4 flex justify-between items-center">
                                             <div>
@@ -2683,7 +2688,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
                                                         {bowler.name || bowler.bowler}
                                                     </button>
                                                 </td>
-                                                <td className="px-4 py-3.5 text-right text-gray-700">{bowler.overs ?? 0}</td>
+                                                <td className="px-4 py-3.5 text-right text-gray-700">{formatCricketOvers(bowler.overs, true) || bowler.overs || 0}</td>
                                                 <td className="px-4 py-3.5 text-right text-gray-500">{bowler.maidens ?? 0}</td>
                                                 <td className="px-4 py-3.5 text-right text-gray-700">{bowler.runs ?? 0}</td>
                                                 <td className="px-4 py-3.5 text-right font-black text-indigo-700">{bowler.wickets ?? 0}</td>

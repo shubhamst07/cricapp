@@ -12,9 +12,11 @@
         foreach ($match['score'] as $s) {
             $t = $s['batting_team'] ?? $s['inning'] ?? '';
             $shortT = !empty($t) ? (strlen($t) > 5 ? preg_replace('/(\b\w)\w*\s*/', '$1', $t) : $t) : '';
-            $sc = $s['display_score'] ?? (($s['r'] ?? $s['runs'] ?? 0) . '/' . ($s['w'] ?? $s['wickets'] ?? 0));
+            $rawSc = $s['display_score'] ?? (($s['r'] ?? $s['runs'] ?? 0) . '/' . ($s['w'] ?? $s['wickets'] ?? 0));
+            $sc = \App\Services\CricketDataService::normalizeScoreString($rawSc);
             if ($sc && $sc !== '0/0') {
-                $ov = !empty($s['overs'] ?? $s['o']) ? ' (' . ($s['overs'] ?? $s['o']) . ' ov)' : '';
+                $rawOv = \App\Services\CricketDataService::normalizeCricketOvers($s['overs'] ?? $s['o'] ?? null);
+                $ov = !empty($rawOv) ? ' (' . $rawOv . ' ov)' : '';
                 $parts[] = trim(($shortT ? "$shortT " : "") . $sc . $ov);
             }
         }
@@ -27,9 +29,10 @@
         $parts = [];
         foreach ($scorecard['data']['innings'] as $inn) {
             $t = $inn['short_name'] ?? $inn['team'] ?? '';
-            $sc = $inn['score'] ?? '';
+            $sc = \App\Services\CricketDataService::normalizeScoreString($inn['score'] ?? '');
             if ($sc && $sc !== '0/0') {
-                $ov = !empty($inn['overs']) ? ' (' . $inn['overs'] . ' ov)' : '';
+                $rawOv = \App\Services\CricketDataService::normalizeCricketOvers($inn['overs'] ?? null);
+                $ov = !empty($rawOv) ? ' (' . $rawOv . ' ov)' : '';
                 $parts[] = trim(($t ? "$t " : "") . $sc . $ov);
             }
         }

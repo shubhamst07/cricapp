@@ -289,16 +289,16 @@
         </style>
 
         <!-- Floating Toast -->
-        <div x-cloak x-show="toastMsg" x-transition 
+        <div x-cloak x-show="toastMsg" x-transition
              class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-2 border border-white/20">
             <span x-text="toastMsg"></span>
         </div>
 
         <div class="max-w-4xl mx-auto px-4 py-8 md:py-12">
-            
+
             <!-- Instagram Header Profile Block -->
             <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-12 pb-8 border-b border-white/10">
-                
+
                 <!-- Profile Avatar with Story Ring -->
                 <div class="relative shrink-0">
                     <div class="w-28 h-28 sm:w-36 sm:h-36 rounded-full p-[3px] story-ring-lg shadow-xl shadow-rose-950/20">
@@ -307,7 +307,7 @@
                         </div>
                     </div>
                     @if($isOwner)
-                        <button @click="$refs.avatarFileInput.click()" 
+                        <button @click="$refs.avatarFileInput.click()"
                                 class="absolute bottom-0 right-0 bg-emerald-600 hover:bg-emerald-500 text-white p-2.5 rounded-full shadow-lg border-2 border-[#090d16] transition transform hover:scale-110 cursor-pointer"
                                 title="Change Profile Picture (WhatsApp Style Crop)">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -322,7 +322,7 @@
 
                 <!-- Info & Actions -->
                 <div class="flex-1 text-center sm:text-left min-w-0">
-                    
+
                     <!-- Username & Action Buttons Row -->
                     <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-3">
                         <div class="flex items-center justify-center sm:justify-start gap-2">
@@ -336,28 +336,28 @@
 
                         <div class="flex items-center justify-center gap-2">
                             @if($isOwner)
-                                <button @click="editModalOpen = true" 
+                                <button @click="editModalOpen = true"
                                         class="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition border border-white/15">
                                     Edit Profile
                                 </button>
-                                <button @click="shareProfile()" 
+                                <button @click="shareProfile()"
                                         class="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition border border-white/15" title="Share Profile">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                                     </svg>
                                 </button>
                             @else
-                                <button @click="toggleFollow({{ $user->id }})" 
+                                <button @click="toggleFollow({{ $user->id }})"
                                         :class="isFollowing ? 'bg-white/10 hover:bg-rose-500/20 text-white border border-white/20' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold'"
                                         class="px-6 py-1.5 rounded-lg text-sm transition transform active:scale-95 shadow-md flex items-center gap-1.5">
                                     <span x-show="!isFollowLoading" x-text="isFollowing ? 'Following' : 'Follow'"></span>
                                     <span x-show="isFollowLoading" class="animate-spin text-xs">⏳</span>
                                 </button>
-                                <a href="mailto:{{ $user->email }}" 
+                                <a href="mailto:{{ $user->email }}"
                                    class="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition border border-white/15">
                                     Message
                                 </a>
-                                <button @click="shareProfile()" 
+                                <button @click="shareProfile()"
                                         class="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition border border-white/15" title="Share Profile">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -383,15 +383,15 @@
                     <!-- Follower / Post Stats Row -->
                     <div class="flex items-center justify-center sm:justify-start gap-8 my-3 text-sm">
                         <div>
-                            <span class="font-extrabold text-white text-base">{{ $posts->count() }}</span> 
+                            <span class="font-extrabold text-white text-base">{{ $posts->count() }}</span>
                             <span class="text-slate-400">posts</span>
                         </div>
                         <div>
-                            <span class="font-extrabold text-white text-base" x-text="followersCount">{{ $user->followers_count ?? 0 }}</span> 
+                            <span class="font-extrabold text-white text-base" x-text="followersCount">{{ $user->followers_count ?? 0 }}</span>
                             <span class="text-slate-400">followers</span>
                         </div>
                         <div>
-                            <span class="font-extrabold text-white text-base" x-text="followingCount">{{ $user->following_count ?? 0 }}</span> 
+                            <span class="font-extrabold text-white text-base" x-text="followingCount">{{ $user->following_count ?? 0 }}</span>
                             <span class="text-slate-400">following</span>
                         </div>
                     </div>
@@ -437,12 +437,12 @@
                         @foreach($suggestedUsers as $suggested)
                             <div class="shrink-0 flex flex-col items-center p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition w-36 text-center">
                                 <a href="{{ route('profile.user', $suggested->id) }}" class="group">
-                                    <img src="{{ $suggested->avatar_url }}" alt="{{ $suggested->name }}" 
+                                    <img src="{{ $suggested->avatar_url }}" alt="{{ $suggested->name }}"
                                          class="w-14 h-14 rounded-full object-cover mx-auto ring-2 ring-indigo-500/40 group-hover:scale-105 transition">
                                     <div class="font-bold text-white text-xs mt-2 truncate w-28">{{ $suggested->name }}</div>
                                     <div class="text-[10px] text-slate-400 truncate w-28">{{ $suggested->handle }}</div>
                                 </a>
-                                <a href="{{ route('profile.user', $suggested->id) }}" 
+                                <a href="{{ route('profile.user', $suggested->id) }}"
                                    class="mt-2.5 w-full py-1 text-[11px] font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition">
                                     View Profile
                                 </a>
@@ -454,7 +454,7 @@
 
             <!-- Navigation Tabs (Posts | CricHeroes Career Stats | Saved) -->
             <div class="flex items-center justify-center gap-8 sm:gap-14 text-xs font-bold uppercase tracking-widest text-slate-400 mt-2 border-b border-white/10">
-                <button @click="activeTab = 'posts'" 
+                <button @click="activeTab = 'posts'"
                         :class="activeTab === 'posts' ? 'active' : ''"
                         class="tab-btn py-3.5 flex items-center gap-2 hover:text-white transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -463,13 +463,13 @@
                     <span>Posts ({{ $posts->count() }})</span>
                 </button>
 
-                <button @click="activeTab = 'stats'" 
+                <button @click="activeTab = 'stats'"
                         :class="activeTab === 'stats' ? 'active' : ''"
                         class="tab-btn py-3.5 flex items-center gap-2 hover:text-white transition">
                     <span>🏏 CricHeroes Stats</span>
                 </button>
 
-                <button @click="activeTab = 'saved'" 
+                <button @click="activeTab = 'saved'"
                         :class="activeTab === 'saved' ? 'active' : ''"
                         class="tab-btn py-3.5 flex items-center gap-2 hover:text-white transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -511,7 +511,7 @@
                                      'user_name' => $post->user_name,
                                      'team_tag' => $post->team_tag,
                                  ]) }}">
-                                
+
                                 @if($post->media_url)
                                     <img src="{{ $post->media_url }}" alt="Cricket Post" class="w-full h-full object-cover transition duration-300 group-hover:scale-105">
                                 @else
@@ -556,7 +556,7 @@
             <!-- TAB 2: CRICHEROES CAREER STATS & PASSPORT -->
             <!-- ============================================================== -->
             <div x-show="activeTab === 'stats'" class="pt-6 space-y-6">
-                
+
                 <!-- CricHeroes Player Passport Banner -->
                 <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-2xl relative overflow-hidden">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
@@ -581,7 +581,7 @@
 
                     <!-- Batting & Bowling Stats Grid -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
-                        
+
                         <!-- Batting Stats Card -->
                         <div class="p-5 rounded-2xl bg-black/40 border border-white/5 space-y-4">
                             <div class="flex items-center justify-between">
@@ -688,11 +688,11 @@
                                                 <div class="font-extrabold text-rose-400 text-sm mt-0.5">
                                                     {{ $mp->wickets_taken }}/{{ $mp->runs_conceded }}
                                                 </div>
-                                                <div class="text-[9px] text-slate-400">({{ $mp->overs_bowled }} ov)</div>
+                                                <div class="text-[9px] text-slate-400">({{ $mp->formatted_overs }} ov)</div>
                                             </div>
                                         @endif
 
-                                        <a href="{{ route('matches.show', $mp->match_id) }}" 
+                                        <a href="{{ route('matches.show', $mp->match_id) }}"
                                            class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-xs">
                                             Match →
                                         </a>
@@ -732,7 +732,7 @@
              @keydown.escape.window="selectedPost = null">
             <div class="relative bg-slate-900 border border-white/10 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
                  @click.away="selectedPost = null">
-                
+
                 <div class="flex items-center justify-between p-4 border-b border-white/10">
                     <div class="flex items-center gap-3">
                         <img src="{{ $user->avatar_url }}" class="w-9 h-9 rounded-full object-cover">
@@ -750,7 +750,7 @@
                             <img :src="selectedPost.media_url" class="max-h-96 w-full object-contain">
                         </div>
                     </template>
-                    
+
                     <div class="p-5">
                         <p class="text-slate-200 text-sm whitespace-pre-line leading-relaxed" x-text="selectedPost ? selectedPost.content : ''"></p>
 
@@ -781,7 +781,7 @@
                  @keydown.escape.window="editModalOpen = false">
                 <div class="relative bg-slate-900 border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
                      @click.away="editModalOpen = false">
-                    
+
                     <div class="flex items-center justify-between pb-4 border-b border-white/10 mb-5">
                         <h2 class="text-lg font-black text-white flex items-center gap-2">
                             <span>Edit Cricket Profile & Specs</span>
@@ -798,7 +798,7 @@
                             <div>
                                 <input type="hidden" name="cropped_avatar" :value="croppedAvatarBase64">
                                 <label class="cursor-pointer px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition inline-flex items-center gap-1.5 shadow">
-                                    <span>📸 Crop Photo (WhatsApp Style)</span>
+                                    <span>📸 Crop Photo</span>
                                     <input type="file" accept="image/jpeg,image/png,image/jpg,image/webp" class="hidden"
                                            @change="if($event.target.files[0]) { openCropper($event.target.files[0]); } $event.target.value = '';">
                                 </label>
@@ -881,11 +881,11 @@
                         <input type="hidden" name="email" value="{{ $user->email }}">
 
                         <div class="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
-                            <button type="button" @click="editModalOpen = false" 
+                            <button type="button" @click="editModalOpen = false"
                                     class="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-bold transition">
                                 Cancel
                             </button>
-                            <button type="submit" 
+                            <button type="submit"
                                     class="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold shadow-lg shadow-blue-600/30 transition">
                                 Save Profile
                             </button>

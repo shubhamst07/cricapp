@@ -151,7 +151,8 @@ class CricketMatch extends Model
             return 'Yet to bat';
         }
 
-        $oversStr = $score->overs ? "({$score->overs} ov)" : '';
+        $normOvers = \App\Services\CricketDataService::normalizeCricketOvers($score->overs);
+        $oversStr = $normOvers ? "({$normOvers} ov)" : '';
         return "{$score->runs}/{$score->wickets} {$oversStr}";
     }
 
@@ -197,15 +198,16 @@ class CricketMatch extends Model
     {
         $scores = [];
         foreach ($this->scores as $sc) {
+            $normOvers = \App\Services\CricketDataService::normalizeCricketOvers($sc->overs);
             $scores[] = [
                 'r' => (int) $sc->runs,
                 'w' => (int) $sc->wickets,
-                'o' => (string) $sc->overs,
+                'o' => $normOvers ?: (string) $sc->overs,
                 'inning' => $sc->batting_team,
                 'batting_team' => $sc->batting_team,
                 'runs' => (int) $sc->runs,
                 'wickets' => (int) $sc->wickets,
-                'overs' => (string) $sc->overs,
+                'overs' => $normOvers ?: (string) $sc->overs,
                 'display_score' => "{$sc->runs}/{$sc->wickets}",
             ];
         }

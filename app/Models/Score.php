@@ -33,4 +33,9 @@ class Score extends Model
      {
          return $this->belongsTo(CricketMatch::class);
      }
+
+     public function getFormattedOversAttribute(): string
+     {
+         return \App\Services\CricketDataService::normalizeCricketOvers($this->overs) ?: ($this->overs ?: '0.0');
+     }
 }

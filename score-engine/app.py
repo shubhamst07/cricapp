@@ -36,6 +36,44 @@ def set_cached(key: str, data: Any):
     _CACHE[key] = {"ts": time.time(), "data": data}
 
 
+def normalize_cricket_overs(val: Any, allow_zero: bool = False) -> Optional[str]:
+    if val is None:
+        return "0" if allow_zero else None
+    val_str = str(val).strip()
+    if not val_str or val_str in ("0", "0.0", "None"):
+        return "0" if allow_zero else None
+    if "." in val_str:
+        parts = val_str.split(".", 1)
+        try:
+            ov = int(parts[0])
+            balls = int(parts[1])
+            if balls >= 6:
+                ov += balls // 6
+                rem = balls % 6
+                return f"{ov}.{rem}" if rem > 0 else str(ov)
+            if balls == 0:
+                return str(ov)
+            return f"{ov}.{balls}"
+        except (ValueError, TypeError):
+            pass
+    return val_str
+
+
+def normalize_score_string(s: Optional[str]) -> Optional[str]:
+    if not s:
+        return s
+    def repl(m):
+        ov = int(m.group(1))
+        balls = int(m.group(2))
+        suffix = m.group(3) or ""
+        if balls >= 6:
+            ov += balls // 6
+            balls = balls % 6
+        ostr = f"{ov}.{balls}" if balls > 0 else str(ov)
+        return f"({ostr}{suffix})"
+    return re.sub(r'\((\d+)\.(\d+)(\s*(?:ov(?:ers?)?)?)\)', repl, s, flags=re.IGNORECASE)
+
+
 class APIError(Exception):
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
@@ -330,7 +368,7 @@ class ScoreService:
                                                     raw_w = inn.get("wickets")
                                                     is_all_out = bool(inn.get("isAllOut"))
                                                     wickets = 10 if is_all_out else (int(raw_w) if raw_w is not None else 0)
-                                                    overs = str(inn.get("overs", "0"))
+                                                    overs = normalize_cricket_overs(inn.get("overs", "0")) or str(inn.get("overs", "0"))
                                                     scores.append({
                                                         "inning": f"{team_name} Innings" if inngs_key == "inngs1" else f"{team_name} 2nd Innings",
                                                         "batting_team": team_name,
@@ -433,7 +471,7 @@ class ScoreService:
                                             wickets = int(raw_w)
                                         else:
                                             wickets = 0
-                                        overs = str(inn.get('overs', '0'))
+                                        overs = normalize_cricket_overs(inn.get('overs', '0')) or str(inn.get('overs', '0'))
                                         scores.append({
                                             'inning': f"{team_name} Innings" if inngs_key == 'inngs1' else f"{team_name} 2nd Innings",
                                             'batting_team': team_name,
@@ -637,7 +675,8 @@ class ScoreService:
                             if sm:
                                 runs = int(sm.group(1))
                                 raw_w = sm.group(2)
-                                overs = sm.group(3) if (sm.group(3) and sm.group(3) != "0" and sm.group(3) != "0.0") else None
+                                raw_ov = sm.group(3) if (sm.group(3) and sm.group(3) != "0" and sm.group(3) != "0.0") else None
+                                overs = normalize_cricket_overs(raw_ov) if raw_ov else None
                                 wickets = int(raw_w) if raw_w is not None else 10
                                 scores.append({
                                     "inning": f"{team_name} Inn {s_idx + 1}" if len(sub_parts) > 1 else f"{team_name} Inning 1",
@@ -655,7 +694,8 @@ class ScoreService:
                         if sm:
                             runs = int(sm.group(1))
                             raw_w = sm.group(2)
-                            overs = sm.group(3) if (sm.group(3) and sm.group(3) != "0" and sm.group(3) != "0.0") else None
+                            raw_ov = sm.group(3) if (sm.group(3) and sm.group(3) != "0" and sm.group(3) != "0.0") else None
+                            overs = normalize_cricket_overs(raw_ov) if raw_ov else None
                             # Cricbuzz omits wickets ONLY when a team is all out (10 wickets)!
                             # e.g. "239 (50 Ovs)" or "174 (43.4 Ovs)" -> 10 wickets!
                             wickets = int(raw_w) if raw_w is not None else 10
@@ -1110,7 +1150,7 @@ class ScoreService:
                                         "id": str(bw_id) if bw_id else None,
                                         "bowler": bw.get("bowlName"),
                                         "name": bw.get("bowlName"),
-                                        "overs": str(bw.get("overs", "0")),
+                                        "overs": normalize_cricket_overs(bw.get("overs", "0"), allow_zero=True) or str(bw.get("overs", "0")),
                                         "maidens": bw.get("maidens", 0),
                                         "runs": bw.get("runs", 0),
                                         "wickets": bw.get("wickets", 0),
@@ -1122,7 +1162,7 @@ class ScoreService:
                                     fow.append({
                                         "wkt_nbr": w.get("wktNbr"),
                                         "score": w.get("wktRuns"),
-                                        "over": w.get("wktOver"),
+                                        "over": normalize_cricket_overs(w.get("wktOver", "0")) or str(w.get("wktOver", "0")),
                                         "batsman": w.get("batName")
                                     })
                                 fow.sort(key=lambda x: x.get("wkt_nbr", 0))
@@ -1133,7 +1173,7 @@ class ScoreService:
                                     "short_name": bat_team.get("batTeamShortName"),
                                     "runs": score_details.get("runs", 0),
                                     "wickets": score_details.get("wickets", 0),
-                                    "overs": str(score_details.get("overs", "0")),
+                                    "overs": normalize_cricket_overs(score_details.get("overs", "0")) or str(score_details.get("overs", "0")),
                                     "run_rate": score_details.get("runRate", 0.0),
                                     "score": f"{score_details.get('runs', 0)}/{score_details.get('wickets', 0)}",
                                     "batting": batting,

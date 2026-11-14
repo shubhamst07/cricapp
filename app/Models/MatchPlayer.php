@@ -75,4 +75,9 @@ class MatchPlayer extends Model
         if ($balls <= 0) return 0.0;
         return round(($this->runs_conceded / $balls) * 6, 2);
     }
+
+    public function getFormattedOversAttribute(): string
+    {
+        return \App\Services\CricketDataService::normalizeCricketOvers($this->overs_bowled, true) ?: ($this->overs_bowled ?: '0.0');
+    }
 }

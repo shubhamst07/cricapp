@@ -1349,9 +1349,10 @@ export default function LiveScoresApp({
                                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Scores</h4>
                                     <div className="space-y-2">
                                         {modalMatch.score.map((inn, idx) => {
-                                            const innOvers = inn.overs ?? inn.o;
-                                            const hasInnOvers = innOvers && innOvers !== '0' && innOvers !== 0 && innOvers !== '0.0';
-                                            const innScore = inn.display_score || `${inn.runs ?? inn.r ?? 0}/${inn.wickets ?? inn.w ?? 0}`;
+                                            const innOvers = formatCricketOvers(inn.overs ?? inn.o);
+                                            const hasInnOvers = Boolean(innOvers);
+                                            const rawScore = inn.display_score || `${inn.runs ?? inn.r ?? 0}/${inn.wickets ?? inn.w ?? 0}`;
+                                            const innScore = normalizeScoreString(rawScore).replace(/\s*\([\d.]+\s*(?:ov(?:ers?)?)?\)/gi, '').trim();
                                             return (
                                                 <div key={idx} className="flex justify-between items-center text-sm py-1.5 border-b border-white/5 last:border-0">
                                                     <span className="font-bold text-slate-200">{inn.batting_team || inn.inning || `Innings ${idx + 1}`}</span>
@@ -2179,8 +2180,8 @@ export default function LiveScoresApp({
                                                             <span className="font-bold text-white text-sm truncate">{t1}</span>
                                                             {m.score && m.score[0] && (
                                                                 <span className="font-mono font-black text-slate-200 text-xs ml-auto sm:ml-2">
-                                                                    {m.score[0].display_score || `${m.score[0].runs}/${m.score[0].wickets}`}
-                                                                    {m.score[0].overs && <span className="text-slate-400 text-[10px] ml-1">({m.score[0].overs} ov)</span>}
+                                                                    {m.score[0].display_score ? normalizeScoreString(m.score[0].display_score).replace(/\s*\([\d.]+\s*(?:ov(?:ers?)?)?\)/gi, '').trim() : `${m.score[0].runs}/${m.score[0].wickets}`}
+                                                                    {formatCricketOvers(m.score[0].overs) && <span className="text-slate-400 text-[10px] ml-1">({formatCricketOvers(m.score[0].overs)} ov)</span>}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -2193,8 +2194,8 @@ export default function LiveScoresApp({
                                                             <span className="font-bold text-white text-sm truncate">{t2}</span>
                                                             {m.score && m.score[1] && (
                                                                 <span className="font-mono font-black text-slate-200 text-xs ml-auto sm:ml-2">
-                                                                    {m.score[1].display_score || `${m.score[1].runs}/${m.score[1].wickets}`}
-                                                                    {m.score[1].overs && <span className="text-slate-400 text-[10px] ml-1">({m.score[1].overs} ov)</span>}
+                                                                    {m.score[1].display_score ? normalizeScoreString(m.score[1].display_score).replace(/\s*\([\d.]+\s*(?:ov(?:ers?)?)?\)/gi, '').trim() : `${m.score[1].runs}/${m.score[1].wickets}`}
+                                                                    {formatCricketOvers(m.score[1].overs) && <span className="text-slate-400 text-[10px] ml-1">({formatCricketOvers(m.score[1].overs)} ov)</span>}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -2266,6 +2267,55 @@ export default function LiveScoresApp({
 }
 
 // ==================== CRICBUZZ-STYLE MATCH CARD HELPERS ====================
+export function formatCricketOvers(overs, allowZero = false) {
+    if (overs === undefined || overs === null || overs === '') return allowZero ? '0' : '';
+    const str = String(overs).trim();
+    if (!str || str === '0' || str === '0.0') return allowZero ? '0' : '';
+    if (str.includes('.')) {
+        const parts = str.split('.');
+        let ov = parseInt(parts[0], 10);
+        if (isNaN(ov)) ov = 0;
+        let balls = parseInt(parts[1], 10);
+        if (isNaN(balls)) balls = 0;
+        if (balls >= 6) {
+            ov += Math.floor(balls / 6);
+            const rem = balls % 6;
+            return rem > 0 ? `${ov}.${rem}` : String(ov);
+        }
+        if (balls === 0) {
+            return String(ov);
+        }
+        return `${ov}.${balls}`;
+    }
+    return str;
+}
+
+export function normalizeScoreString(scoreStr) {
+    if (!scoreStr) return scoreStr;
+    return String(scoreStr).replace(/\((\d+)\.(\d+)(\s*(?:ov(?:ers?)?)?)\)/gi, (match, ov, balls, suffix) => {
+        let o = parseInt(ov, 10) || 0;
+        let b = parseInt(balls, 10) || 0;
+        if (b >= 6) {
+            o += Math.floor(b / 6);
+            b = b % 6;
+        }
+        const oStr = b > 0 ? `${o}.${b}` : `${o}`;
+        return `(${oStr}${suffix || ''})`;
+    });
+}
+
+export function parseOversToDecimal(overs) {
+    if (!overs) return 0;
+    const str = String(overs).trim();
+    if (str.includes('.')) {
+        const [ovStr, ballsStr] = str.split('.');
+        const ov = parseInt(ovStr, 10) || 0;
+        const balls = parseInt(ballsStr, 10) || 0;
+        return ov + (balls / 6);
+    }
+    return parseFloat(str) || 0;
+}
+
 function parseMatchTeams(match) {
     let t1 = '';
     let t2 = '';
@@ -2348,8 +2398,8 @@ function getScoresForTeams(match, team1, team2, isFinished) {
         return inns.map((inn, idx) => {
             const runs = inn.runs ?? inn.r ?? 0;
             let wickets = inn.wickets ?? inn.w ?? 0;
-            const overs = inn.overs ?? inn.o;
-            const hasOvers = overs !== undefined && overs !== null && overs !== '' && overs !== 0 && overs !== '0' && overs !== '0.0';
+            const rawOvers = inn.overs ?? inn.o;
+            let overs = formatCricketOvers(rawOvers);
 
             if (isFinished && wickets === 0 && (inn.display_score || '').includes('/10')) {
                 wickets = 10;
@@ -2357,9 +2407,19 @@ function getScoresForTeams(match, team1, team2, isFinished) {
 
             let scStr = `${runs}-${wickets}`;
             if (inn.display_score) {
-                scStr = inn.display_score.replace(/\//g, '-').replace(/\s*\([\d.]+\s*ov\)/gi, '').trim();
+                if (!overs) {
+                    const ovMatch = String(inn.display_score).match(/\(([\d.]+)\s*(?:ov(?:ers?)?)?\)/i);
+                    if (ovMatch && ovMatch[1]) {
+                        overs = formatCricketOvers(ovMatch[1]);
+                    }
+                }
+                scStr = normalizeScoreString(inn.display_score)
+                    .replace(/\//g, '-')
+                    .replace(/\s*\([\d.]+\s*(?:ov(?:ers?)?)?\)/gi, '')
+                    .trim();
             }
 
+            const hasOvers = Boolean(overs);
             const isLast = idx === inns.length - 1;
             if (isLast && hasOvers) {
                 return `${scStr} (${overs})`;
@@ -2632,9 +2692,9 @@ function computeStandingsForMatches(matches) {
             const s1 = m.score[0];
             const s2 = m.score[1];
             const r1 = s1?.runs ?? s1?.r ?? 0;
-            const o1 = parseFloat(s1?.overs ?? s1?.o ?? 0) || 20;
+            const o1 = parseOversToDecimal(s1?.overs ?? s1?.o) || 20;
             const r2 = s2?.runs ?? s2?.r ?? 0;
-            const o2 = parseFloat(s2?.overs ?? s2?.o ?? 0) || 20;
+            const o2 = parseOversToDecimal(s2?.overs ?? s2?.o) || 20;
 
             t1.runsScored += r1;
             t1.oversFaced += o1;
