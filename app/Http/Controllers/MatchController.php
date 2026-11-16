@@ -473,6 +473,7 @@ class MatchController extends Controller
             'commentary' => array_slice($state['commentary'] ?? [], 0, 30),
             'stream_url' => $match->stream_url,
             'embed_stream_url' => $match->embed_stream_url,
+            'is_direct_video' => (bool) $match->is_direct_video,
             'is_camera_live' => (bool) ($state['is_camera_live'] ?? false),
             'agora_app_id' => config('services.agora.app_id', env('AGORA_APP_ID', '')),
             'agora_channel' => 'livecricket_match_' . $match->id,
@@ -1966,5 +1967,35 @@ class MatchController extends Controller
         \Illuminate\Support\Facades\Cache::put($staleKey, $data, 600);
 
         return view('dashboard', $data);
+    }
+
+    /**
+     * Upload and permanently attach recorded match live stream video to the match.
+     */
+    public function uploadRecording(Request $request, CricketMatch $match): JsonResponse
+    {
+        $this->authorizeMatch($match);
+
+        $request->validate([
+            'video' => 'required|file|max:512000',
+        ]);
+
+        $file = $request->file('video');
+        $ext = $file->getClientOriginalExtension() ?: 'webm';
+        $filename = "match_{$match->id}_" . time() . ".{$ext}";
+
+        // Save to public storage disk (storage/app/public/recordings)
+        $path = $file->storeAs('recordings', $filename, 'public');
+        $publicUrl = "/storage/" . $path;
+
+        $match->update([
+            'stream_url' => $publicUrl,
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Match recording saved permanently! Replay is now available to all users 📹',
+            'video_url' => $publicUrl,
+        ]);
     }
 }

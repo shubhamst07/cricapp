@@ -595,15 +595,21 @@
         </div>
 
         <!-- ============================================== -->
-        <!-- LIVE STREAM BROADCAST (PHONE CAMERA / YOUTUBE) -->
+        <!-- LIVE STREAM BROADCAST (PHONE CAMERA / YOUTUBE / REPLAY) -->
         <!-- ============================================== -->
         @if($match->stream_url)
             <div class="bg-[#131b2e] border border-red-500/30 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden" x-data="{ streamOpen: true }">
                 <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10 text-xs">
                     <div class="flex items-center gap-2.5">
-                        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
-                        <span class="font-black text-red-500 uppercase tracking-wider">LIVE STREAM BROADCAST</span>
-                        <span class="text-slate-400">• Video Stream with TV Overlay</span>
+                        @if($match->is_direct_video)
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                            <span class="font-black text-emerald-400 uppercase tracking-wider">MATCH VIDEO REPLAY 📹</span>
+                            <span class="text-slate-400">• Saved In-App Recording</span>
+                        @else
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                            <span class="font-black text-red-500 uppercase tracking-wider">LIVE STREAM BROADCAST</span>
+                            <span class="text-slate-400">• Video Stream with TV Overlay</span>
+                        @endif
                     </div>
                     <div class="flex items-center gap-2">
                         <a href="{{ route('matches.broadcast', $match) }}" 
@@ -619,7 +625,20 @@
                 </div>
 
                 <div x-show="streamOpen" x-transition class="mt-4">
-                    @if($match->embed_stream_url)
+                    @if($match->is_direct_video)
+                        <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
+                            <video src="{{ $match->stream_url }}" controls playsinline class="w-full h-full object-contain"></video>
+                        </div>
+                        <div class="mt-2.5 flex items-center justify-between text-xs text-slate-400">
+                            <span class="flex items-center gap-1.5 text-emerald-400 font-bold">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                Recorded In-App Match Video Replay
+                            </span>
+                            <a href="{{ $match->stream_url }}" download="Match_{{ $match->id }}_Replay.webm" class="px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition flex items-center gap-1">
+                                <span>📥 Download Video</span>
+                            </a>
+                        </div>
+                    @elseif($match->embed_stream_url)
                         <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
                             <iframe src="{{ $match->embed_stream_url }}" 
                                     class="w-full h-full border-0" 

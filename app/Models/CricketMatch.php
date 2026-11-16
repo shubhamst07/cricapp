@@ -71,6 +71,16 @@ class CricketMatch extends Model
         return $url;
     }
 
+    /**
+     * Check if the stream_url points to a recorded direct video file (MP4/WebM/storage).
+     */
+    public function getIsDirectVideoAttribute(): bool
+    {
+        if (empty($this->stream_url)) return false;
+        $url = strtolower(trim($this->stream_url));
+        return str_ends_with($url, '.mp4') || str_ends_with($url, '.webm') || str_ends_with($url, '.mov') || str_contains($url, '/storage/recordings/') || str_contains($url, '/storage/');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

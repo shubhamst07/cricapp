@@ -51,6 +51,20 @@
     streamActive: {{ $isCameraLive ? 'true' : 'false' }},
     isBroadcasting: false,
 
+    // Live Match Recording & Storage States
+    isRecordingStream: false,
+    recordingSeconds: 0,
+    recordingTimer: null,
+    mediaRecorder: null,
+    recordedChunks: [],
+    showRecordingSavedModal: false,
+    savedVideoBlobUrl: null,
+    savedVideoDownloadName: '',
+    isUploadingRecording: false,
+    uploadProgressText: '',
+    savedVideoServerUrl: '{{ addslashes($match->stream_url ?? '') }}',
+    isDirectVideo: {{ $match->is_direct_video ? 'true' : 'false' }},
+
     facingMode: 'environment', // 'environment' for rear cricket ground camera, 'user' for selfie
     micMuted: false,
     isBroadcaster: {{ $isOwner ? 'true' : 'false' }},
@@ -164,6 +178,141 @@
     },
 
     // Camera Broadcaster Engine (In-App Real-time Live Stream)
+    formatRecordingTime(secs) {
+        const m = Math.floor(secs / 60).toString().padStart(2, '0');
+        const s = (secs % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    },
+
+    startRecording() {
+        if (typeof MediaRecorder === 'undefined') {
+            console.warn('MediaRecorder not supported on this browser or device.');
+            return;
+        }
+
+        let streamToRecord = null;
+        if (window.localMediaStream) {
+            streamToRecord = window.localMediaStream;
+        } else if (this.localVideoTrack) {
+            try {
+                const tracks = [this.localVideoTrack.getMediaStreamTrack()];
+                if (this.localAudioTrack) {
+                    tracks.push(this.localAudioTrack.getMediaStreamTrack());
+                }
+                streamToRecord = new MediaStream(tracks);
+            } catch(e) {
+                console.warn('Could not extract Agora tracks for recording:', e);
+            }
+        }
+
+        if (!streamToRecord) {
+            console.warn('No active camera media stream available to record.');
+            return;
+        }
+
+        let options = {};
+        const candidates = [
+            'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=vp8',
+            'video/webm',
+            'video/mp4;codecs=avc1,mp4a.40.2',
+            'video/mp4'
+        ];
+        for (const type of candidates) {
+            if (MediaRecorder.isTypeSupported(type)) {
+                options = { mimeType: type };
+                break;
+            }
+        }
+
+        try {
+            this.recordedChunks = [];
+            this.mediaRecorder = new MediaRecorder(streamToRecord, options);
+
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    this.recordedChunks.push(event.data);
+                }
+            };
+
+            this.mediaRecorder.onstop = async () => {
+                clearInterval(this.recordingTimer);
+                this.isRecordingStream = false;
+
+                if (this.recordedChunks.length === 0) return;
+
+                const mime = this.mediaRecorder.mimeType || 'video/webm';
+                const extension = mime.includes('mp4') ? 'mp4' : 'webm';
+                const finalBlob = new Blob(this.recordedChunks, { type: mime });
+
+                this.savedVideoBlobUrl = URL.createObjectURL(finalBlob);
+                this.savedVideoDownloadName = 'Match_{{ $match->id }}_LiveRecording_' + Date.now() + '.' + extension;
+                this.showRecordingSavedModal = true;
+
+                // Auto-upload recording to server so match replay is saved permanently
+                await this.uploadRecordingToServer(finalBlob, this.savedVideoDownloadName);
+            };
+
+            this.mediaRecorder.start(2000); // 2-second chunks
+            this.isRecordingStream = true;
+            this.recordingSeconds = 0;
+            if (this.recordingTimer) clearInterval(this.recordingTimer);
+            this.recordingTimer = setInterval(() => {
+                this.recordingSeconds++;
+            }, 1000);
+
+            this.showToast('⏺️ Match recording started automatically!');
+        } catch(e) {
+            console.warn('Failed to start MediaRecorder:', e);
+        }
+    },
+
+    stopRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            try {
+                this.mediaRecorder.stop();
+            } catch(e) {
+                console.warn('Error stopping MediaRecorder:', e);
+            }
+        }
+        clearInterval(this.recordingTimer);
+        this.isRecordingStream = false;
+    },
+
+    async uploadRecordingToServer(blob, filename) {
+        this.isUploadingRecording = true;
+        this.uploadProgressText = 'Uploading match recording to server... ⏳';
+
+        try {
+            const formData = new FormData();
+            formData.append('video', blob, filename);
+
+            const res = await fetch('{{ route('matches.upload-recording', $match) }}', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: formData
+            });
+
+            const data = await res.json();
+            if (res.ok && data.status === 'success') {
+                this.uploadProgressText = '✅ Match video saved to app! Replay is now available to all users.';
+                this.savedVideoServerUrl = data.video_url;
+                this.isDirectVideo = true;
+                this.showToast('📹 Match replay saved to platform!');
+            } else {
+                this.uploadProgressText = '⚠️ Server upload notice: ' + (data.message || 'Please use download button below to keep your copy.');
+            }
+        } catch(err) {
+            console.error('Upload recording error:', err);
+            this.uploadProgressText = '⚠️ Server upload could not complete. You can download the video directly to your phone below!';
+        } finally {
+            this.isUploadingRecording = false;
+        }
+    },
+
     async startCamera() {
         try {
             if (this.isBroadcasting) return;
@@ -217,6 +366,9 @@
             this.isBroadcasting = true;
             this.isCameraLive = true;
 
+            // Start automatic recording of live camera stream
+            this.startRecording();
+
             // Notify backend that Broadcaster is live with camera
             await fetch('{{ route('matches.stream-signal', $match) }}', {
                 method: 'POST',
@@ -237,6 +389,9 @@
 
     async stopCamera() {
         try {
+            // Stop recording & finalize video
+            this.stopRecording();
+
             if (this.localAudioTrack) {
                 this.localAudioTrack.stop();
                 this.localAudioTrack.close();
@@ -500,6 +655,13 @@
 
                     if (data.embed_stream_url && data.embed_stream_url !== this.embedStreamUrl) {
                         this.embedStreamUrl = data.embed_stream_url;
+                    }
+
+                    if (data.stream_url && data.stream_url !== this.savedVideoServerUrl) {
+                        this.savedVideoServerUrl = data.stream_url;
+                    }
+                    if (typeof data.is_direct_video !== 'undefined') {
+                        this.isDirectVideo = data.is_direct_video;
                     }
 
                     // Trigger banner if remote score updated to 4, 6 or Wicket
@@ -785,6 +947,70 @@
     </div>
     @endif
 
+    <!-- ============================================================== -->
+    <!-- MODAL: MATCH RECORDING SAVED (REPLAY & DOWNLOAD) -->
+    <!-- ============================================================== -->
+    <div x-cloak x-show="showRecordingSavedModal" 
+         class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+         @keydown.escape.window="showRecordingSavedModal = false"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+        <div class="relative bg-slate-900 border border-white/20 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 text-slate-100"
+             @click.away="showRecordingSavedModal = false">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 font-black flex items-center justify-center text-lg border border-emerald-500/30">📹</span>
+                    <div>
+                        <h3 class="font-black text-base sm:text-lg text-white">Live Broadcast Saved! 🏏</h3>
+                        <p class="text-[11px] text-slate-400">Match video recorded & saved directly to this app</p>
+                    </div>
+                </div>
+                <button type="button" @click="showRecordingSavedModal = false" class="text-slate-400 hover:text-white font-bold p-1">✕</button>
+            </div>
+
+            <!-- Video Preview -->
+            <template x-if="savedVideoBlobUrl">
+                <div class="rounded-2xl overflow-hidden bg-black border border-white/10 aspect-video flex items-center justify-center shadow-inner">
+                    <video :src="savedVideoBlobUrl" controls playsinline class="w-full h-full object-contain"></video>
+                </div>
+            </template>
+
+            <!-- Upload & Storage Status -->
+            <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5 text-xs">
+                <div class="flex items-center gap-2">
+                    <template x-if="isUploadingRecording">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                    </template>
+                    <template x-if="!isUploadingRecording">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    </template>
+                    <span class="font-bold text-slate-200" x-text="uploadProgressText"></span>
+                </div>
+                <p class="text-[11px] text-slate-400 leading-relaxed">
+                    This match video is automatically saved so any viewer can re-watch the full match anytime from the 
+                    <a href="{{ route('matches.show', $match) }}" class="underline text-emerald-400 font-bold">Scorecard</a> or Broadcast Arena. You can also save a direct copy to your mobile phone gallery below!
+                </p>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
+                <a :href="savedVideoBlobUrl" :download="savedVideoDownloadName" 
+                   class="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs text-center shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2">
+                    <span>📥 Download to Phone Gallery</span>
+                </a>
+                <button type="button" @click="showRecordingSavedModal = false" 
+                        class="w-full sm:w-auto px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white font-bold text-xs transition">
+                    Done & Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="max-w-6xl mx-auto px-2 sm:px-4 space-y-4">
 
         <!-- ============================================================== -->
@@ -813,9 +1039,30 @@
                         allowfullscreen></iframe>
             </template>
 
+            <!-- 4. RECORDED MATCH VIDEO REPLAY (Full match video saved permanently) -->
+            <template x-if="isDirectVideo && savedVideoServerUrl && !streamActive && !isCameraLive">
+                <div class="absolute inset-0 w-full h-full z-0 flex items-center justify-center bg-black">
+                    <video :src="savedVideoServerUrl" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
+                    <div class="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center gap-2 pointer-events-none shadow-xl">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span>📼 MATCH VIDEO REPLAY</span>
+                    </div>
+                </div>
+            </template>
+
             @if($isOwner)
+                <!-- Button to Go Live when a Replay is currently loaded -->
+                <div x-cloak x-show="isDirectVideo && savedVideoServerUrl && !streamActive && streamSource === 'camera'" 
+                     class="absolute top-14 left-4 z-20 pointer-events-auto">
+                    <button type="button" @click="startCamera()" 
+                            class="px-4 py-2 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-2xl flex items-center gap-2 border border-white/20">
+                        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                        <span>Go Live (Camera) 🔴</span>
+                    </button>
+                </div>
+
                 <!-- Broadcaster Camera Idle / Not Started Placeholder -->
-                <div x-show="streamSource === 'camera' && !streamActive" 
+                <div x-show="streamSource === 'camera' && !streamActive && !(isDirectVideo && savedVideoServerUrl)" 
                      class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
                     <div class="w-16 h-16 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-3 shadow-inner">
                         📹
@@ -852,7 +1099,7 @@
                 </div>
             @else
                 <!-- AUDIENCE / VIEWER WAITING SCREEN (When neither in-app camera nor YouTube is active) -->
-                <div x-show="!isCameraLive && !embedStreamUrl" 
+                <div x-show="!isCameraLive && !embedStreamUrl && !(isDirectVideo && savedVideoServerUrl)" 
                      class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
                     <div class="w-16 h-16 rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-3xl mb-3 shadow-inner">
                         📺
@@ -888,6 +1135,14 @@
                         <span class="w-2 h-2 rounded-full bg-white"></span>
                         LIVE
                     </span>
+
+                    <!-- Live In-App Recording Pulse Indicator -->
+                    <template x-if="isRecordingStream">
+                        <span class="px-2.5 py-1 rounded-full bg-rose-700/95 text-white font-black font-mono text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-rose-700/50 animate-pulse">
+                            <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                            <span>REC <span x-text="formatRecordingTime(recordingSeconds)"></span></span>
+                        </span>
+                    </template>
 
                     @if($isOwner)
                         <!-- Source Switcher (Camera vs YouTube/Facebook) - ONLY FOR BROADCASTER -->

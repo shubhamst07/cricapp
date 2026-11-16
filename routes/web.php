@@ -120,5 +120,6 @@ Route::get('/matches/{match}', [MatchController::class, 'show'])->name('matches.
 Route::get('/matches/{match}/broadcast', [MatchController::class, 'broadcast'])->name('matches.broadcast');
 Route::get('/matches/{match}/broadcast/state', [MatchController::class, 'broadcastState'])->name('matches.broadcast.state');
 Route::post('/matches/{match}/stream-signal', [MatchController::class, 'updateStreamSignal'])->name('matches.stream-signal');
+Route::post('/matches/{match}/recording', [MatchController::class, 'uploadRecording'])->name('matches.upload-recording');
 
 require __DIR__.'/auth.php';
