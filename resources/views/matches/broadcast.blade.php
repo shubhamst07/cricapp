@@ -54,6 +54,7 @@
     // Live Match Recording & Storage States
     isRecordingStream: false,
     recordingSeconds: 0,
+    recordedBytes: 0,
     recordingTimer: null,
     mediaRecorder: null,
     recordedChunks: [],
@@ -64,6 +65,10 @@
     uploadProgressText: '',
     savedVideoServerUrl: '{{ addslashes($match->stream_url ?? '') }}',
     isDirectVideo: {{ $match->is_direct_video ? 'true' : 'false' }},
+
+    formatRecordedSize(bytes) {
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    },
 
     facingMode: 'environment', // 'environment' for rear cricket ground camera, 'user' for selfie
     micMuted: false,
@@ -210,7 +215,10 @@
             return;
         }
 
-        let options = {};
+        let options = {
+            videoBitsPerSecond: 800000, // 800 Kbps - High compression, crisp 720p/480p cricket video (fits ~20-25 mins under 100 MB!)
+            audioBitsPerSecond: 64000   // 64 Kbps - Clear voice commentary
+        };
         const candidates = [
             'video/webm;codecs=vp8,opus',
             'video/webm;codecs=vp8',
@@ -220,18 +228,20 @@
         ];
         for (const type of candidates) {
             if (MediaRecorder.isTypeSupported(type)) {
-                options = { mimeType: type };
+                options.mimeType = type;
                 break;
             }
         }
 
         try {
             this.recordedChunks = [];
+            this.recordedBytes = 0;
             this.mediaRecorder = new MediaRecorder(streamToRecord, options);
 
             this.mediaRecorder.ondataavailable = (event) => {
                 if (event.data && event.data.size > 0) {
                     this.recordedChunks.push(event.data);
+                    this.recordedBytes += event.data.size;
                 }
             };
 
@@ -1140,7 +1150,7 @@
                     <template x-if="isRecordingStream">
                         <span class="px-2.5 py-1 rounded-full bg-rose-700/95 text-white font-black font-mono text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-rose-700/50 animate-pulse">
                             <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                            <span>REC <span x-text="formatRecordingTime(recordingSeconds)"></span></span>
+                            <span>REC <span x-text="formatRecordingTime(recordingSeconds)"></span> (<span x-text="formatRecordedSize(recordedBytes)"></span>)</span>
                         </span>
                     </template>
 
