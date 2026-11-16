@@ -17,9 +17,15 @@
         </div>
 
         @if($isOwner)
-            <span class="px-3 py-1 rounded-full text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700/40">
-                👑 You Own This Venue
-            </span>
+            <div class="flex items-center gap-2">
+                <span class="px-3 py-1 rounded-full text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700/40">
+                    👑 You Own This Venue
+                </span>
+                <a href="{{ route('grounds.edit', $ground) }}"
+                   class="px-3 py-1 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 transition flex items-center gap-1.5 shadow">
+                    <span>✏️</span> Edit Ground
+                </a>
+            </div>
         @endif
     </div>
 @endsection
@@ -126,6 +132,13 @@
                         </div>
 
                         @auth
+                            @if($isOwner)
+                                <a href="{{ route('grounds.edit', $ground) }}"
+                                   class="px-5 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/20 transition transform active:scale-95 flex items-center gap-1.5">
+                                    <span>✏️</span>
+                                    <span>Edit Venue</span>
+                                </a>
+                            @endif
                             <button type="button" @click="bookingModal = true"
                                     class="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm shadow-xl shadow-emerald-600/30 transition transform active:scale-95">
                                 Book Slot 📅
@@ -274,6 +287,13 @@
 
                     <div class="space-y-2 pt-2">
                         @auth
+                            @if($isOwner)
+                                <a href="{{ route('grounds.edit', $ground) }}"
+                                   class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 transition flex items-center justify-center gap-1.5">
+                                    <span>✏️</span>
+                                    <span>Edit Venue Details</span>
+                                </a>
+                            @endif
                             <button type="button" @click="bookingModal = true"
                                     class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/30 transition">
                                 Request Slot Booking 📅

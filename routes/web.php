@@ -101,6 +101,8 @@ Route::middleware('auth')->group(function () {
     // Grounds Management & Booking
     Route::get('/grounds/create', [GroundController::class, 'create'])->name('grounds.create');
     Route::post('/grounds', [GroundController::class, 'store'])->name('grounds.store');
+    Route::get('/grounds/{ground}/edit', [GroundController::class, 'edit'])->name('grounds.edit');
+    Route::put('/grounds/{ground}', [GroundController::class, 'update'])->name('grounds.update');
     Route::post('/grounds/{ground}/book', [GroundController::class, 'book'])->name('grounds.book');
     Route::patch('/ground-bookings/{booking}/status', [GroundController::class, 'updateBookingStatus'])->name('grounds.bookings.status');
 

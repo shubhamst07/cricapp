@@ -383,7 +383,14 @@
                                         <span>{{ $ground->city }}</span>
                                     </div>
                                     @if(auth()->check() && auth()->id() === $ground->user_id)
-                                        <span class="px-2 py-0.5 rounded bg-blue-600 text-[10px] font-black uppercase">Your Listing</span>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="px-2 py-0.5 rounded bg-blue-600 text-[10px] font-black uppercase">Your Listing</span>
+                                            <a href="{{ route('grounds.edit', $ground) }}"
+                                               class="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] uppercase transition flex items-center gap-0.5 shadow"
+                                               title="Edit Ground">
+                                                <span>✏️</span> Edit
+                                            </a>
+                                        </div>
                                     @endif
                                 </div>
                             </div>
@@ -430,6 +437,15 @@
                                        class="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 text-xs font-bold transition">
                                         Details
                                     </a>
+
+                                    @if(auth()->check() && auth()->id() === $ground->user_id)
+                                        <a href="{{ route('grounds.edit', $ground) }}"
+                                           class="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold transition flex items-center gap-1"
+                                           title="Edit Ground">
+                                            <span>✏️</span>
+                                            <span>Edit</span>
+                                        </a>
+                                    @endif
 
                                     @if($ground->whatsapp)
                                         <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $ground->whatsapp) }}?text=Hi,%20I%20am%20interested%20in%20booking%20slots%20at%20{{ urlencode($ground->name) }}" target="_blank"

@@ -204,6 +204,112 @@ class GroundController extends Controller
     }
 
     /**
+     * Show form to edit an existing ground.
+     */
+    public function edit(Ground $ground): View
+    {
+        if (Auth::id() !== $ground->user_id) {
+            abort(403, 'Unauthorized. Only the creator/owner can edit this ground.');
+        }
+
+        return view('grounds.edit', compact('ground'));
+    }
+
+    /**
+     * Update an existing ground.
+     */
+    public function update(Request $request, Ground $ground, \App\Services\ImageKitService $imageKit): RedirectResponse
+    {
+        if (Auth::id() !== $ground->user_id) {
+            abort(403, 'Unauthorized. Only the creator/owner can edit this ground.');
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'city' => 'required|string|max:100',
+            'address' => 'required|string|max:500',
+            'pitch_type' => 'required|string|max:100',
+            'price_per_slot' => 'required|numeric|min:0',
+            'slot_duration' => 'required|string|max:100',
+            'phone' => 'required|string|max:30',
+            'whatsapp' => 'nullable|string|max:30',
+            'amenities' => 'nullable|array',
+            'existing_photos' => 'nullable|array|max:5',
+            'photos' => 'nullable|array|max:5',
+            'photos.*' => 'nullable|file|image|mimes:jpeg,png,jpg,webp,gif|max:5120',
+            'photos_base64' => 'nullable|array|max:5',
+            'image_url' => 'nullable|string|max:1000',
+            'description' => 'nullable|string|max:2000',
+            'status' => 'nullable|string|in:available,maintenance,booked,inactive',
+        ]);
+
+        $validated['amenities'] = $validated['amenities'] ?? [];
+        $validated['whatsapp'] = $validated['whatsapp'] ?: $validated['phone'];
+        $validated['status'] = $validated['status'] ?? $ground->status;
+
+        // 0. Retain existing photos that user didn't remove
+        $images = $request->input('existing_photos', []);
+        if (!is_array($images)) {
+            $images = [];
+        }
+        $images = array_values(array_filter($images));
+
+        // 1. Process multiple newly uploaded files (up to total 5) with ImageKit Cloud
+        if ($request->hasFile('photos')) {
+            $uploadDir = public_path('uploads/grounds');
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0775, true);
+            }
+
+            foreach ($request->file('photos') as $idx => $photoFile) {
+                if (count($images) >= 5) break;
+                if ($photoFile && $photoFile->isValid()) {
+                    $cloudUrl = $imageKit->upload($photoFile, '/cricapp/grounds');
+                    if ($cloudUrl) {
+                        $images[] = $cloudUrl;
+                    } else {
+                        $ext = $photoFile->getClientOriginalExtension() ?: 'jpg';
+                        $filename = 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.' . $ext;
+                        $photoFile->move($uploadDir, $filename);
+                        $images[] = asset('uploads/grounds/' . $filename);
+                    }
+                }
+            }
+        }
+
+        // 2. Process base64 photos
+        if (!empty($request->input('photos_base64')) && is_array($request->input('photos_base64'))) {
+            foreach ($request->input('photos_base64') as $b64) {
+                if (count($images) >= 5) break;
+                if (!empty($b64) && str_starts_with($b64, 'data:image/')) {
+                    $cloudUrl = $imageKit->upload($b64, '/cricapp/grounds');
+                    $images[] = $cloudUrl ?: $b64;
+                }
+            }
+        }
+
+        // 3. Fallback to image_url if provided and under limit
+        if (!empty($validated['image_url']) && count($images) < 5) {
+            if (!in_array($validated['image_url'], $images)) {
+                $images[] = $validated['image_url'];
+            }
+        }
+
+        $validated['images'] = array_slice($images, 0, 5);
+        $validated['image_url'] = $validated['images'][0] ?? ($validated['image_url'] ?? $ground->image_url);
+
+        $ground->update($validated);
+
+        try {
+            \Illuminate\Support\Facades\Cache::forget('grounds_cities_list');
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        return redirect()->route('grounds.show', $ground)->with('status', 'Ground details updated successfully! 🏟️✨');
+    }
+
+    /**
      * Show ground details and booking form.
      */
     public function show(Ground $ground): View

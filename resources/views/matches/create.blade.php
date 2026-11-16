@@ -15,200 +15,206 @@
 @endsection
 
 @section('content')
-<div class="py-8 bg-slate-900 min-h-screen text-slate-100 font-sans" x-data="{
-    matchTeam1Name: 'Royal Strikers',
-    matchTeam2Name: 'Thunder Titans',
-    activeSquadTab: 1,
-    team1Squad: [],
-    team2Squad: [],
-    playerSearchQuery: '',
-    isSearchingPlayer: false,
-    searchedPlayer: null,
-    searchNotFound: false,
-    newPlayerName: '',
-    newPlayerPhone: '',
-    newPlayerRole: 'All-Rounder',
-    isCaptainTag: false,
-    isWkTag: false,
-    selectedPlayerOfMatch: '{{ addslashes(old('player_of_match', '')) }}',
-    customPlayerOfMatch: false,
+<script>
+function matchCreateData() {
+    return {
+        matchTeam1Name: 'Royal Strikers',
+        matchTeam2Name: 'Thunder Titans',
+        activeSquadTab: 1,
+        team1Squad: [],
+        team2Squad: [],
+        playerSearchQuery: '',
+        isSearchingPlayer: false,
+        searchedPlayer: null,
+        searchNotFound: false,
+        newPlayerName: '',
+        newPlayerPhone: '',
+        newPlayerRole: 'All-Rounder',
+        isCaptainTag: false,
+        isWkTag: false,
+        selectedPlayerOfMatch: {!! json_encode(old('player_of_match', '')) !!},
+        customPlayerOfMatch: false,
 
-    init() {
-        this.$nextTick(() => {
-            this.syncPlayerOfMatchOptions();
-        });
-    },
-
-    syncPlayerOfMatchOptions() {
-        const select = this.$refs.playerOfMatchSelect;
-        if (!select) return;
-        const currentVal = (this.selectedPlayerOfMatch || '').trim();
-        
-        let html = '<option value="">-- Select Player of the Match (Optional) --</option>';
-        
-        const t1 = this.team1Squad || [];
-        if (t1.length > 0) {
-            html += `<optgroup label="${this.matchTeam1Name || 'Team 1'} Squad">`;
-            t1.forEach(p => {
-                const pName = (p.player_name || '').trim();
-                if (!pName) return;
-                const isSel = (pName.toLowerCase() === currentVal.toLowerCase()) ? 'selected' : '';
-                html += `<option value="${pName}" ${isSel}>${pName} (${this.matchTeam1Name || 'Team 1'} • ${p.player_role || 'Player'})</option>`;
+        init() {
+            this.$nextTick(() => {
+                this.syncPlayerOfMatchOptions();
             });
-            html += `</optgroup>`;
-        }
-        
-        const t2 = this.team2Squad || [];
-        if (t2.length > 0) {
-            html += `<optgroup label="${this.matchTeam2Name || 'Team 2'} Squad">`;
-            t2.forEach(p => {
-                const pName = (p.player_name || '').trim();
-                if (!pName) return;
-                const isSel = (pName.toLowerCase() === currentVal.toLowerCase()) ? 'selected' : '';
-                html += `<option value="${pName}" ${isSel}>${pName} (${this.matchTeam2Name || 'Team 2'} • ${p.player_role || 'Player'})</option>`;
+        },
+
+        syncPlayerOfMatchOptions() {
+            const select = this.$refs.playerOfMatchSelect;
+            if (!select) return;
+            const currentVal = (this.selectedPlayerOfMatch || '').trim();
+            
+            let html = '<option value="">-- Select Player of the Match (Optional) --</option>';
+            
+            const t1 = this.team1Squad || [];
+            if (t1.length > 0) {
+                html += `<optgroup label="${this.matchTeam1Name || 'Team 1'} Squad">`;
+                t1.forEach(p => {
+                    const pName = (p.player_name || '').trim();
+                    if (!pName) return;
+                    const isSel = (pName.toLowerCase() === currentVal.toLowerCase()) ? 'selected' : '';
+                    html += `<option value="${pName}" ${isSel}>${pName} (${this.matchTeam1Name || 'Team 1'} • ${p.player_role || 'Player'})</option>`;
+                });
+                html += `</optgroup>`;
+            }
+            
+            const t2 = this.team2Squad || [];
+            if (t2.length > 0) {
+                html += `<optgroup label="${this.matchTeam2Name || 'Team 2'} Squad">`;
+                t2.forEach(p => {
+                    const pName = (p.player_name || '').trim();
+                    if (!pName) return;
+                    const isSel = (pName.toLowerCase() === currentVal.toLowerCase()) ? 'selected' : '';
+                    html += `<option value="${pName}" ${isSel}>${pName} (${this.matchTeam2Name || 'Team 2'} • ${p.player_role || 'Player'})</option>`;
+                });
+                html += `</optgroup>`;
+            }
+
+            if (currentVal) {
+                const inT1 = t1.some(p => (p.player_name || '').trim().toLowerCase() === currentVal.toLowerCase());
+                const inT2 = t2.some(p => (p.player_name || '').trim().toLowerCase() === currentVal.toLowerCase());
+                if (!inT1 && !inT2) {
+                    html += `<optgroup label="Custom"><option value="${currentVal}" selected>${currentVal} (Selected)</option></optgroup>`;
+                }
+            }
+
+            select.innerHTML = html;
+            if (currentVal) {
+                select.value = currentVal;
+            }
+        },
+
+        get allSquadPlayers() {
+            const list = [];
+            const seen = new Set();
+            (this.team1Squad || []).forEach(p => {
+                const name = (p.player_name || '').trim();
+                if (name && !seen.has(name)) {
+                    seen.add(name);
+                    list.push({
+                        name: name,
+                        role: p.player_role || 'Batter',
+                        team: this.matchTeam1Name || 'Team 1',
+                        teamNum: 1
+                    });
+                }
             });
-            html += `</optgroup>`;
-        }
+            (this.team2Squad || []).forEach(p => {
+                const name = (p.player_name || '').trim();
+                if (name && !seen.has(name)) {
+                    seen.add(name);
+                    list.push({
+                        name: name,
+                        role: p.player_role || 'Batter',
+                        team: this.matchTeam2Name || 'Team 2',
+                        teamNum: 2
+                    });
+                }
+            });
+            return list;
+        },
 
-        if (currentVal) {
-            const inT1 = t1.some(p => (p.player_name || '').trim().toLowerCase() === currentVal.toLowerCase());
-            const inT2 = t2.some(p => (p.player_name || '').trim().toLowerCase() === currentVal.toLowerCase());
-            if (!inT1 && !inT2) {
-                html += `<optgroup label="Custom"><option value="${currentVal}" selected>${currentVal} (Selected)</option></optgroup>`;
+        toastMsg: '',
+        showToast(msg) {
+            this.toastMsg = msg;
+            setTimeout(() => { this.toastMsg = ''; }, 3000);
+        },
+
+        openManualAdd(defaultName = '') {
+            this.searchedPlayer = null;
+            this.searchNotFound = true;
+            this.newPlayerName = defaultName || this.playerSearchQuery.trim();
+            this.newPlayerPhone = '';
+            this.newPlayerRole = 'All-Rounder';
+        },
+
+        async searchPlayerWhatsApp() {
+            const query = this.playerSearchQuery.trim();
+            if (!query) {
+                this.showToast('Please enter a WhatsApp number or player name');
+                return;
             }
-        }
 
-        select.innerHTML = html;
-        if (currentVal) {
-            select.value = currentVal;
-        }
-    },
+            this.isSearchingPlayer = true;
+            this.searchedPlayer = null;
+            this.searchNotFound = false;
 
-    get allSquadPlayers() {
-        const list = [];
-        const seen = new Set();
-        (this.team1Squad || []).forEach(p => {
-            const name = (p.player_name || '').trim();
-            if (name && !seen.has(name)) {
-                seen.add(name);
-                list.push({
-                    name: name,
-                    role: p.player_role || 'Batter',
-                    team: this.matchTeam1Name || 'Team 1',
-                    teamNum: 1
-                });
+            try {
+                const res = await fetch('/api/players/lookup?query=' + encodeURIComponent(query));
+                const data = await res.json();
+
+                if (data.status === 'success' && data.found) {
+                    this.searchedPlayer = data.player;
+                    this.newPlayerName = data.player.name;
+                    this.newPlayerRole = data.player.role || 'All-Rounder';
+                    this.newPlayerPhone = data.player.phone || '';
+                } else {
+                    this.searchNotFound = true;
+                    this.newPlayerName = isNaN(query) ? query : '';
+                    this.newPlayerPhone = !isNaN(query) ? query : '';
+                }
+            } catch(e) {
+                console.error(e);
+                this.showToast('Error looking up player');
+            } finally {
+                this.isSearchingPlayer = false;
             }
-        });
-        (this.team2Squad || []).forEach(p => {
-            const name = (p.player_name || '').trim();
-            if (name && !seen.has(name)) {
-                seen.add(name);
-                list.push({
-                    name: name,
-                    role: p.player_role || 'Batter',
-                    team: this.matchTeam2Name || 'Team 2',
-                    teamNum: 2
-                });
+        },
+
+        addPlayerToSquad() {
+            const name = (this.newPlayerName || (this.searchedPlayer ? this.searchedPlayer.name : '')).trim();
+            if (!name) {
+                this.showToast('Player name is required');
+                return;
             }
-        });
-        return list;
-    },
 
-    toastMsg: '',
-    showToast(msg) {
-        this.toastMsg = msg;
-        setTimeout(() => { this.toastMsg = ''; }, 3000);
-    },
+            const phone = this.searchedPlayer ? this.searchedPlayer.phone : (this.newPlayerPhone.trim() || (!isNaN(this.playerSearchQuery.trim()) ? this.playerSearchQuery.trim() : null));
 
-    openManualAdd(defaultName = '') {
-        this.searchedPlayer = null;
-        this.searchNotFound = true;
-        this.newPlayerName = defaultName || this.playerSearchQuery.trim();
-        this.newPlayerPhone = '';
-        this.newPlayerRole = 'All-Rounder';
-    },
+            const playerObj = {
+                player_name: name,
+                player_phone: phone,
+                user_id: this.searchedPlayer ? this.searchedPlayer.user_id : null,
+                player_role: this.searchedPlayer ? this.searchedPlayer.role : this.newPlayerRole,
+                is_captain: this.isCaptainTag,
+                is_wicketkeeper: this.isWkTag,
+                stats: this.searchedPlayer ? this.searchedPlayer.stats : null,
+                avatar: this.searchedPlayer ? this.searchedPlayer.avatar : null,
+            };
 
-    async searchPlayerWhatsApp() {
-        const query = this.playerSearchQuery.trim();
-        if (!query) {
-            this.showToast('Please enter a WhatsApp number or player name');
-            return;
-        }
-
-        this.isSearchingPlayer = true;
-        this.searchedPlayer = null;
-        this.searchNotFound = false;
-
-        try {
-            const res = await fetch('/api/players/lookup?query=' + encodeURIComponent(query));
-            const data = await res.json();
-
-            if (data.status === 'success' && data.found) {
-                this.searchedPlayer = data.player;
-                this.newPlayerName = data.player.name;
-                this.newPlayerRole = data.player.role || 'All-Rounder';
-                this.newPlayerPhone = data.player.phone || '';
+            if (this.activeSquadTab === 1) {
+                this.team1Squad.push(playerObj);
+                this.showToast(name + ' added to ' + (this.matchTeam1Name || 'Team 1') + '! 🏏');
             } else {
-                this.searchNotFound = true;
-                this.newPlayerName = isNaN(query) ? query : '';
-                this.newPlayerPhone = !isNaN(query) ? query : '';
+                this.team2Squad.push(playerObj);
+                this.showToast(name + ' added to ' + (this.matchTeam2Name || 'Team 2') + '! 🏏');
             }
-        } catch(e) {
-            console.error(e);
-            this.showToast('Error looking up player');
-        } finally {
-            this.isSearchingPlayer = false;
+
+            this.syncPlayerOfMatchOptions();
+
+            this.searchedPlayer = null;
+            this.searchNotFound = false;
+            this.playerSearchQuery = '';
+            this.newPlayerName = '';
+            this.newPlayerPhone = '';
+            this.isCaptainTag = false;
+            this.isWkTag = false;
+        },
+
+        removePlayer(teamNum, index) {
+            if (teamNum === 1) {
+                this.team1Squad.splice(index, 1);
+            } else {
+                this.team2Squad.splice(index, 1);
+            }
+            this.syncPlayerOfMatchOptions();
         }
-    },
+    };
+}
+</script>
 
-    addPlayerToSquad() {
-        const name = (this.newPlayerName || (this.searchedPlayer ? this.searchedPlayer.name : '')).trim();
-        if (!name) {
-            this.showToast('Player name is required');
-            return;
-        }
-
-        const phone = this.searchedPlayer ? this.searchedPlayer.phone : (this.newPlayerPhone.trim() || (!isNaN(this.playerSearchQuery.trim()) ? this.playerSearchQuery.trim() : null));
-
-        const playerObj = {
-            player_name: name,
-            player_phone: phone,
-            user_id: this.searchedPlayer ? this.searchedPlayer.user_id : null,
-            player_role: this.searchedPlayer ? this.searchedPlayer.role : this.newPlayerRole,
-            is_captain: this.isCaptainTag,
-            is_wicketkeeper: this.isWkTag,
-            stats: this.searchedPlayer ? this.searchedPlayer.stats : null,
-            avatar: this.searchedPlayer ? this.searchedPlayer.avatar : null,
-        };
-
-        if (this.activeSquadTab === 1) {
-            this.team1Squad.push(playerObj);
-            this.showToast(name + ' added to ' + (this.matchTeam1Name || 'Team 1') + '! 🏏');
-        } else {
-            this.team2Squad.push(playerObj);
-            this.showToast(name + ' added to ' + (this.matchTeam2Name || 'Team 2') + '! 🏏');
-        }
-
-        this.syncPlayerOfMatchOptions();
-
-        this.searchedPlayer = null;
-        this.searchNotFound = false;
-        this.playerSearchQuery = '';
-        this.newPlayerName = '';
-        this.newPlayerPhone = '';
-        this.isCaptainTag = false;
-        this.isWkTag = false;
-    },
-
-    removePlayer(teamNum, index) {
-        if (teamNum === 1) {
-            this.team1Squad.splice(index, 1);
-        } else {
-            this.team2Squad.splice(index, 1);
-        }
-        this.syncPlayerOfMatchOptions();
-    }
-}">
+<div class="py-8 bg-slate-900 min-h-screen text-slate-100 font-sans" x-data="matchCreateData()">
     <!-- Floating Toast -->
     <div x-cloak x-show="toastMsg" x-transition 
          class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-2 border border-white/20">
