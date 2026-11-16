@@ -164,11 +164,11 @@ class GroundController extends Controller
             foreach ($request->file('photos') as $idx => $photoFile) {
                 if ($idx >= 5) break;
                 if ($photoFile && $photoFile->isValid()) {
-                    $cloudUrl = $imageKit->upload($photoFile, '/cricapp/grounds');
+                    $ext = $photoFile->getClientOriginalExtension() ?: 'jpg';
+                    $cloudUrl = $imageKit->upload($photoFile, '/cricapp/grounds', 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.' . $ext);
                     if ($cloudUrl) {
                         $images[] = $cloudUrl;
                     } else {
-                        $ext = $photoFile->getClientOriginalExtension() ?: 'jpg';
                         $filename = 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.' . $ext;
                         $photoFile->move($uploadDir, $filename);
                         $images[] = asset('uploads/grounds/' . $filename);
@@ -179,10 +179,10 @@ class GroundController extends Controller
 
         // 2. Process base64 photos (e.g. from drag & drop or client preview)
         if (!empty($request->input('photos_base64')) && is_array($request->input('photos_base64'))) {
-            foreach ($request->input('photos_base64') as $b64) {
+            foreach ($request->input('photos_base64') as $idx => $b64) {
                 if (count($images) >= 5) break;
                 if (!empty($b64) && str_starts_with($b64, 'data:image/')) {
-                    $cloudUrl = $imageKit->upload($b64, '/cricapp/grounds');
+                    $cloudUrl = $imageKit->upload($b64, '/cricapp/grounds', 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.jpg');
                     $images[] = $cloudUrl ?: $b64;
                 }
             }
@@ -264,11 +264,11 @@ class GroundController extends Controller
             foreach ($request->file('photos') as $idx => $photoFile) {
                 if (count($images) >= 5) break;
                 if ($photoFile && $photoFile->isValid()) {
-                    $cloudUrl = $imageKit->upload($photoFile, '/cricapp/grounds');
+                    $ext = $photoFile->getClientOriginalExtension() ?: 'jpg';
+                    $cloudUrl = $imageKit->upload($photoFile, '/cricapp/grounds', 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.' . $ext);
                     if ($cloudUrl) {
                         $images[] = $cloudUrl;
                     } else {
-                        $ext = $photoFile->getClientOriginalExtension() ?: 'jpg';
                         $filename = 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.' . $ext;
                         $photoFile->move($uploadDir, $filename);
                         $images[] = asset('uploads/grounds/' . $filename);
@@ -279,10 +279,10 @@ class GroundController extends Controller
 
         // 2. Process base64 photos
         if (!empty($request->input('photos_base64')) && is_array($request->input('photos_base64'))) {
-            foreach ($request->input('photos_base64') as $b64) {
+            foreach ($request->input('photos_base64') as $idx => $b64) {
                 if (count($images) >= 5) break;
                 if (!empty($b64) && str_starts_with($b64, 'data:image/')) {
-                    $cloudUrl = $imageKit->upload($b64, '/cricapp/grounds');
+                    $cloudUrl = $imageKit->upload($b64, '/cricapp/grounds', 'ground_' . Auth::id() . '_' . time() . '_' . count($images) . '.jpg');
                     $images[] = $cloudUrl ?: $b64;
                 }
             }

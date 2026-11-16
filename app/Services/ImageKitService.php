@@ -42,7 +42,11 @@ class ImageKitService
             ]);
 
             if ($file instanceof UploadedFile) {
-                $actualName = $fileName ?: ($file->getClientOriginalName() ?: 'file_' . time());
+                $ext = $file->getClientOriginalExtension() ?: 'jpg';
+                $actualName = $fileName ?: ($file->getClientOriginalName() ?: 'file_' . time() . '.' . $ext);
+                if (!str_contains($actualName, '.')) {
+                    $actualName .= '.' . $ext;
+                }
                 $response = $request->attach(
                     'file',
                     fopen($file->getRealPath(), 'r'),
@@ -53,7 +57,11 @@ class ImageKitService
                     'useUniqueFileName' => 'true',
                 ]);
             } elseif (is_string($file) && file_exists($file)) {
-                $actualName = $fileName ?: basename($file);
+                $ext = pathinfo($file, PATHINFO_EXTENSION) ?: 'jpg';
+                $actualName = $fileName ?: (basename($file) ?: 'file_' . time() . '.' . $ext);
+                if (!str_contains($actualName, '.')) {
+                    $actualName .= '.' . $ext;
+                }
                 $response = $request->attach(
                     'file',
                     fopen($file, 'r'),
@@ -65,7 +73,19 @@ class ImageKitService
                 ]);
             } else {
                 // Remote URL or Base64 data string
-                $actualName = $fileName ?: 'file_' . time();
+                $ext = 'jpg';
+                if (is_string($file) && preg_match('/^data:image\/([a-zA-Z0-9\+]+);base64,/', $file, $m)) {
+                    $mimeExt = strtolower($m[1]);
+                    $ext = ($mimeExt === 'jpeg') ? 'jpg' : $mimeExt;
+                } elseif (is_string($file) && preg_match('/\.(jpg|jpeg|png|webp|gif|svg|mp4|webm)$/i', parse_url($file, PHP_URL_PATH) ?? '', $m)) {
+                    $ext = strtolower($m[1]);
+                }
+
+                $actualName = $fileName ?: ('file_' . time() . '_' . substr(md5(uniqid()), 0, 6) . '.' . $ext);
+                if (!str_contains($actualName, '.')) {
+                    $actualName .= '.' . $ext;
+                }
+
                 $response = $request->asMultipart()->post('https://upload.imagekit.io/api/v1/files/upload', [
                     [
                         'name' => 'file',
