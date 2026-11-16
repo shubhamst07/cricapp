@@ -1972,7 +1972,7 @@ class MatchController extends Controller
     /**
      * Upload and permanently attach recorded match live stream video to the match.
      */
-    public function uploadRecording(Request $request, CricketMatch $match): JsonResponse
+    public function uploadRecording(Request $request, CricketMatch $match, \App\Services\ImageKitService $imageKit): JsonResponse
     {
         $this->authorizeMatch($match);
 
@@ -1984,18 +1984,23 @@ class MatchController extends Controller
         $ext = $file->getClientOriginalExtension() ?: 'webm';
         $filename = "match_{$match->id}_" . time() . ".{$ext}";
 
-        // Save to public storage disk (storage/app/public/recordings)
-        $path = $file->storeAs('recordings', $filename, 'public');
-        $publicUrl = "/storage/" . $path;
+        // 1. Upload to ImageKit Cloud for permanent, zero-server-load CDN streaming
+        $videoUrl = $imageKit->upload($file, '/cricapp/recordings', $filename);
+
+        // 2. Fallback to local storage if cloud is unreachable
+        if (!$videoUrl) {
+            $path = $file->storeAs('recordings', $filename, 'public');
+            $videoUrl = "/storage/" . $path;
+        }
 
         $match->update([
-            'stream_url' => $publicUrl,
+            'stream_url' => $videoUrl,
         ]);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Match recording saved permanently! Replay is now available to all users 📹',
-            'video_url' => $publicUrl,
+            'video_url' => $videoUrl,
         ]);
     }
 }

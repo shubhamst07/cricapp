@@ -129,7 +129,7 @@ class GroundController extends Controller
     /**
      * Store newly registered ground.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, \App\Services\ImageKitService $imageKit): RedirectResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -154,7 +154,7 @@ class GroundController extends Controller
 
         $images = [];
 
-        // 1. Process multiple uploaded files (up to 5)
+        // 1. Process multiple uploaded files (up to 5) with ImageKit Cloud
         if ($request->hasFile('photos')) {
             $uploadDir = public_path('uploads/grounds');
             if (!file_exists($uploadDir)) {
@@ -164,10 +164,15 @@ class GroundController extends Controller
             foreach ($request->file('photos') as $idx => $photoFile) {
                 if ($idx >= 5) break;
                 if ($photoFile && $photoFile->isValid()) {
-                    $ext = $photoFile->getClientOriginalExtension() ?: 'jpg';
-                    $filename = 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.' . $ext;
-                    $photoFile->move($uploadDir, $filename);
-                    $images[] = asset('uploads/grounds/' . $filename);
+                    $cloudUrl = $imageKit->upload($photoFile, '/cricapp/grounds');
+                    if ($cloudUrl) {
+                        $images[] = $cloudUrl;
+                    } else {
+                        $ext = $photoFile->getClientOriginalExtension() ?: 'jpg';
+                        $filename = 'ground_' . Auth::id() . '_' . time() . '_' . $idx . '.' . $ext;
+                        $photoFile->move($uploadDir, $filename);
+                        $images[] = asset('uploads/grounds/' . $filename);
+                    }
                 }
             }
         }
@@ -177,7 +182,8 @@ class GroundController extends Controller
             foreach ($request->input('photos_base64') as $b64) {
                 if (count($images) >= 5) break;
                 if (!empty($b64) && str_starts_with($b64, 'data:image/')) {
-                    $images[] = $b64;
+                    $cloudUrl = $imageKit->upload($b64, '/cricapp/grounds');
+                    $images[] = $cloudUrl ?: $b64;
                 }
             }
         }

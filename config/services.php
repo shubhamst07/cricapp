@@ -55,4 +55,10 @@ return [
         'app_certificate' => env('AGORA_APP_CERTIFICATE', ''),
     ],
 
+    'imagekit' => [
+        'public_key' => env('IMAGEKIT_PUBLIC_KEY', 'public_t65SBzKhS7mvo2WlfsobLFKsH7w='),
+        'private_key' => env('IMAGEKIT_PRIVATE_KEY', 'private_lumI6KJa9uDbXdM9lGqQkSb0z5I='),
+        'url_endpoint' => env('IMAGEKIT_URL_ENDPOINT', 'https://ik.imagekit.io/muuqkim6d'),
+    ],
+
 ];

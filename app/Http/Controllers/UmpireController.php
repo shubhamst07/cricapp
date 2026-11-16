@@ -139,7 +139,7 @@ class UmpireController extends Controller
     /**
      * Store or update umpire profile.
      */
-    public function storeProfile(Request $request): RedirectResponse
+    public function storeProfile(Request $request, \App\Services\ImageKitService $imageKit): RedirectResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -156,17 +156,22 @@ class UmpireController extends Controller
             'photo_url' => 'nullable|string|max:500',
         ]);
 
-        // Process uploaded profile photo
+        // Process uploaded profile photo via ImageKit Cloud
         if ($request->hasFile('photo') && $request->file('photo')->isValid()) {
-            $uploadDir = public_path('uploads/umpires');
-            if (!file_exists($uploadDir)) {
-                mkdir($uploadDir, 0775, true);
-            }
             $file = $request->file('photo');
-            $ext = $file->getClientOriginalExtension() ?: 'jpg';
-            $filename = 'umpire_' . Auth::id() . '_' . time() . '.' . $ext;
-            $file->move($uploadDir, $filename);
-            $validated['photo_url'] = asset('uploads/umpires/' . $filename);
+            $cloudUrl = $imageKit->upload($file, '/cricapp/umpires');
+            if ($cloudUrl) {
+                $validated['photo_url'] = $cloudUrl;
+            } else {
+                $uploadDir = public_path('uploads/umpires');
+                if (!file_exists($uploadDir)) {
+                    mkdir($uploadDir, 0775, true);
+                }
+                $ext = $file->getClientOriginalExtension() ?: 'jpg';
+                $filename = 'umpire_' . Auth::id() . '_' . time() . '.' . $ext;
+                $file->move($uploadDir, $filename);
+                $validated['photo_url'] = asset('uploads/umpires/' . $filename);
+            }
         }
 
         unset($validated['photo']);

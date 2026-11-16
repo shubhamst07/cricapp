@@ -148,16 +148,22 @@ class MatchPostController extends Controller
         // Set cooldown cache for 12 seconds
         \Illuminate\Support\Facades\Cache::put($rateKey, true, 12);
 
-        // Handle uploaded photo / meme file
+        // Handle uploaded photo / meme file via ImageKit Cloud
         if ($request->hasFile('image')) {
             $file = $request->file('image');
-            $uploadDir = public_path('uploads/match-memes');
-            if (!file_exists($uploadDir)) {
-                mkdir($uploadDir, 0775, true);
+            $imageKit = app(\App\Services\ImageKitService::class);
+            $cloudUrl = $imageKit->upload($file, '/cricapp/posts');
+            if ($cloudUrl) {
+                $mediaUrl = $cloudUrl;
+            } else {
+                $uploadDir = public_path('uploads/match-memes');
+                if (!file_exists($uploadDir)) {
+                    mkdir($uploadDir, 0775, true);
+                }
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $file->move($uploadDir, $filename);
+                $mediaUrl = '/uploads/match-memes/' . $filename;
             }
-            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            $file->move($uploadDir, $filename);
-            $mediaUrl = '/uploads/match-memes/' . $filename;
             $postType = 'meme';
         } elseif ($mediaUrl) {
             $postType = 'meme';

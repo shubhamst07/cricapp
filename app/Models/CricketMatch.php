@@ -78,7 +78,7 @@ class CricketMatch extends Model
     {
         if (empty($this->stream_url)) return false;
         $url = strtolower(trim($this->stream_url));
-        return str_ends_with($url, '.mp4') || str_ends_with($url, '.webm') || str_ends_with($url, '.mov') || str_contains($url, '/storage/recordings/') || str_contains($url, '/storage/');
+        return str_ends_with($url, '.mp4') || str_ends_with($url, '.webm') || str_ends_with($url, '.mov') || str_contains($url, 'imagekit.io') || str_contains($url, '/storage/recordings/') || str_contains($url, '/storage/');
     }
 
     public function user(): BelongsTo

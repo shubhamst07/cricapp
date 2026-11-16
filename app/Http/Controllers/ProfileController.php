@@ -82,7 +82,7 @@ class ProfileController extends Controller
     /**
      * Update the user's profile information.
      */
-    public function update(ProfileUpdateRequest $request): RedirectResponse|JsonResponse
+    public function update(ProfileUpdateRequest $request, \App\Services\ImageKitService $imageKit): RedirectResponse|JsonResponse
     {
         $user = $request->user() ?: Auth::user();
         if (!$user) {
@@ -92,16 +92,23 @@ class ProfileController extends Controller
         $validated = $request->validated();
 
         if ($request->filled('cropped_avatar')) {
-            $validated['avatar'] = $request->input('cropped_avatar');
+            $b64 = $request->input('cropped_avatar');
+            $cloudUrl = $imageKit->upload($b64, '/cricapp/avatars', 'avatar_' . $user->id . '_' . time() . '.png');
+            $validated['avatar'] = $cloudUrl ?: $b64;
         } elseif ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
-            $uploadDir = public_path('uploads/avatars');
-            if (!file_exists($uploadDir)) {
-                mkdir($uploadDir, 0775, true);
+            $cloudUrl = $imageKit->upload($file, '/cricapp/avatars');
+            if ($cloudUrl) {
+                $validated['avatar'] = $cloudUrl;
+            } else {
+                $uploadDir = public_path('uploads/avatars');
+                if (!file_exists($uploadDir)) {
+                    mkdir($uploadDir, 0775, true);
+                }
+                $filename = 'avatar_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+                $file->move($uploadDir, $filename);
+                $validated['avatar'] = 'uploads/avatars/' . $filename;
             }
-            $filename = 'avatar_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->move($uploadDir, $filename);
-            $validated['avatar'] = 'uploads/avatars/' . $filename;
         }
 
         $user->fill($validated);
@@ -126,7 +133,7 @@ class ProfileController extends Controller
     /**
      * Update cropped avatar directly.
      */
-    public function updateAvatar(Request $request): JsonResponse
+    public function updateAvatar(Request $request, \App\Services\ImageKitService $imageKit): JsonResponse
     {
         $user = $request->user() ?: Auth::user();
         if (!$user) {
@@ -136,7 +143,8 @@ class ProfileController extends Controller
         $avatarData = $request->input('avatar') ?: $request->input('cropped_avatar');
 
         if ($avatarData && str_starts_with($avatarData, 'data:image/')) {
-            $user->avatar = $avatarData;
+            $cloudUrl = $imageKit->upload($avatarData, '/cricapp/avatars', 'avatar_' . $user->id . '_' . time() . '.png');
+            $user->avatar = $cloudUrl ?: $avatarData;
             $user->save();
 
             return response()->json([
@@ -148,13 +156,18 @@ class ProfileController extends Controller
 
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
-            $uploadDir = public_path('uploads/avatars');
-            if (!file_exists($uploadDir)) {
-                mkdir($uploadDir, 0775, true);
+            $cloudUrl = $imageKit->upload($file, '/cricapp/avatars');
+            if ($cloudUrl) {
+                $user->avatar = $cloudUrl;
+            } else {
+                $uploadDir = public_path('uploads/avatars');
+                if (!file_exists($uploadDir)) {
+                    mkdir($uploadDir, 0775, true);
+                }
+                $filename = 'avatar_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+                $file->move($uploadDir, $filename);
+                $user->avatar = 'uploads/avatars/' . $filename;
             }
-            $filename = 'avatar_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->move($uploadDir, $filename);
-            $user->avatar = 'uploads/avatars/' . $filename;
             $user->save();
 
             return response()->json([
