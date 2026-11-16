@@ -79,6 +79,18 @@
     commentaryList: {{ json_encode($state['commentary'] ?? []) }},
     showCommentaryDrawer: false,
 
+    // Players Selection Modals
+    playerModalOpen: false,
+    playerModalMode: 'all', // 'all', 'striker', 'non_striker', 'bowler'
+    selectedStrikerId: '{{ $state['striker_id'] ?? '' }}',
+    selectedNonStrikerId: '{{ $state['non_striker_id'] ?? '' }}',
+    selectedBowlerId: '{{ $state['bowler_id'] ?? '' }}',
+
+    // Wicket Modal
+    wicketModalOpen: false,
+    wicketHowOut: 'bowled',
+    wicketNextBatterId: '',
+
     // Toast
     toastMsg: '',
     showToast(msg) {
@@ -364,18 +376,69 @@
                 }
 
                 if (data.over_completed) {
-                    setTimeout(() => { this.triggerBanner('over', '🔔 OVER COMPLETED'); }, 1200);
+                    setTimeout(() => { 
+                        this.triggerBanner('over', '🔔 OVER COMPLETED');
+                        setTimeout(() => { this.openPlayerModal('bowler'); }, 1400);
+                    }, 1200);
                 }
 
                 this.syncState(data);
+                this.showToast(data.message || 'Ball recorded');
             } else {
                 this.showToast(data.message || 'Scoring error');
+                if (data.needs_openers) {
+                    this.openPlayerModal('all');
+                } else if (data.needs_new_bowler) {
+                    this.openPlayerModal('bowler');
+                }
             }
         } catch(e) {
             console.error(e);
         } finally {
             this.isRecording = false;
         }
+    },
+
+    openPlayerModal(mode = 'all') {
+        this.playerModalMode = mode;
+        this.selectedStrikerId = this.striker ? this.striker.id : '{{ $state['striker_id'] ?? '' }}';
+        this.selectedNonStrikerId = this.nonStriker ? this.nonStriker.id : '{{ $state['non_striker_id'] ?? '' }}';
+        this.selectedBowlerId = this.bowler ? this.bowler.id : '{{ $state['bowler_id'] ?? '' }}';
+        this.playerModalOpen = true;
+    },
+
+    async submitPlayerSelection() {
+        if (this.playerModalMode === 'bowler') {
+            if (!this.selectedBowlerId) {
+                this.showToast('⚠️ Please select a bowler!');
+                return;
+            }
+            await this.recordBall('select_bowler', { bowler_id: this.selectedBowlerId });
+        } else {
+            if (!this.selectedStrikerId || !this.selectedNonStrikerId) {
+                this.showToast('⚠️ Please select both striker and non-striker!');
+                return;
+            }
+            if (this.selectedStrikerId == this.selectedNonStrikerId) {
+                this.showToast('⚠️ Striker and Non-Striker must be different players!');
+                return;
+            }
+            await this.recordBall('select_openers', {
+                striker_id: this.selectedStrikerId,
+                non_striker_id: this.selectedNonStrikerId,
+                bowler_id: this.selectedBowlerId || (this.bowler ? this.bowler.id : null)
+            });
+        }
+        this.playerModalOpen = false;
+    },
+
+    async submitWicket() {
+        await this.recordBall('wicket', {
+            how_out: this.wicketHowOut,
+            next_batsman_id: this.wicketNextBatterId || null
+        });
+        this.wicketModalOpen = false;
+        this.wicketNextBatterId = '';
     },
 
     syncState(data) {
@@ -552,6 +615,171 @@
                         Save & Load Stream ➔
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <!-- ============================================================== -->
+    <!-- MODAL: SELECT BATSMEN & BOWLER (LIVE BROADCAST STUDIO) -->
+    <!-- ============================================================== -->
+    @if($isOwner)
+    <div x-cloak x-show="playerModalOpen" 
+         class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+         @keydown.escape.window="playerModalOpen = false"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+        <div class="relative bg-slate-900 border border-white/20 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 text-slate-100"
+             @click.away="playerModalOpen = false">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-emerald-600 text-white font-black flex items-center justify-center text-sm">🏏</span>
+                    <div>
+                        <h3 class="font-black text-base sm:text-lg text-white" x-text="playerModalMode === 'bowler' ? 'Change Bowler 🎯' : 'Select Batsmen & Bowler 🏏'"></h3>
+                        <p class="text-[11px] text-slate-400" x-text="playerModalMode === 'bowler' ? 'Select bowler from {{ addslashes($activeBowlingTeam) }}' : 'Select active players for live TV broadcast overlay'"></p>
+                    </div>
+                </div>
+                <button type="button" @click="playerModalOpen = false" class="text-slate-400 hover:text-white font-bold p-1">✕</button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <!-- Striker Selection (shown if mode !== 'bowler') -->
+                <div x-show="playerModalMode !== 'bowler'">
+                    <label class="block text-emerald-400 font-extrabold mb-1.5 uppercase tracking-wider text-[10px] flex items-center justify-between">
+                        <span>🏏 Striker (Batter 1 - On Strike)</span>
+                        <span class="text-slate-400 font-normal">from {{ $activeBattingTeam }}</span>
+                    </label>
+                    <select x-model="selectedStrikerId" class="w-full bg-slate-950 border border-white/15 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white">
+                        <option value="">-- Choose Striker --</option>
+                        @foreach($battingSquad as $p)
+                            <option value="{{ $p->id }}">{{ $p->player_name }} ({{ $p->player_role }})</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Non-Striker Selection (shown if mode !== 'bowler') -->
+                <div x-show="playerModalMode !== 'bowler'">
+                    <label class="block text-indigo-300 font-extrabold mb-1.5 uppercase tracking-wider text-[10px] flex items-center justify-between">
+                        <span>🏃 Non-Striker (Batter 2)</span>
+                        <span class="text-slate-400 font-normal">from {{ $activeBattingTeam }}</span>
+                    </label>
+                    <select x-model="selectedNonStrikerId" class="w-full bg-slate-950 border border-white/15 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-white">
+                        <option value="">-- Choose Non-Striker --</option>
+                        @foreach($battingSquad as $p)
+                            <option value="{{ $p->id }}">{{ $p->player_name }} ({{ $p->player_role }})</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Bowler Selection -->
+                <div>
+                    <label class="block text-rose-400 font-extrabold mb-1.5 uppercase tracking-wider text-[10px] flex items-center justify-between">
+                        <span>🎯 Active Bowler</span>
+                        <span class="text-slate-400 font-normal">from {{ $activeBowlingTeam }}</span>
+                    </label>
+                    <select x-model="selectedBowlerId" class="w-full bg-slate-950 border border-white/15 focus:border-rose-500 rounded-xl px-3.5 py-2.5 text-xs text-white">
+                        <option value="">-- Choose Bowler --</option>
+                        @foreach($bowlingSquad as $p)
+                            <option value="{{ $p->id }}">{{ $p->player_name }} ({{ $p->player_role }})</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                @if($battingSquad->isEmpty() || $bowlingSquad->isEmpty())
+                    <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-start gap-2">
+                        <span class="text-base">ℹ️</span>
+                        <div>
+                            Players squad empty? Go to <a href="{{ route('matches.show', $match) }}" class="underline font-bold text-white hover:text-amber-200">Full Scorecard</a> to add players to {{ $match->team1_name }} and {{ $match->team2_name }}.
+                        </div>
+                    </div>
+                @endif
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                <button type="button" @click="playerModalOpen = false" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white">Cancel</button>
+                <button type="button" @click="submitPlayerSelection()" 
+                        class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 transition">
+                    Confirm & Update Overlay ⚡
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: WICKET & NEXT BATTER SELECTOR -->
+    <!-- ============================================================== -->
+    <div x-cloak x-show="wicketModalOpen" 
+         class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+         @keydown.escape.window="wicketModalOpen = false"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+        <div class="relative bg-slate-900 border border-white/20 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 text-slate-100"
+             @click.away="wicketModalOpen = false">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-rose-600 text-white font-black flex items-center justify-center text-sm">☝️</span>
+                    <div>
+                        <h3 class="font-black text-base sm:text-lg text-white">Wicket! Dismissal & Next Batter</h3>
+                        <p class="text-[11px] text-slate-400">Record dismissal and bring in the new batsman</p>
+                    </div>
+                </div>
+                <button type="button" @click="wicketModalOpen = false" class="text-slate-400 hover:text-white font-bold p-1">✕</button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <!-- How Out -->
+                <div>
+                    <label class="block text-rose-300 font-extrabold mb-1.5 uppercase tracking-wider text-[10px]">How Out</label>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <button type="button" @click="wicketHowOut = 'bowled'" 
+                                :class="wicketHowOut === 'bowled' ? 'bg-rose-600 text-white font-black border-rose-500' : 'bg-slate-950 text-slate-300 border-white/10'" 
+                                class="py-2 px-2 rounded-xl border text-center transition">Bowled</button>
+                        <button type="button" @click="wicketHowOut = 'caught'" 
+                                :class="wicketHowOut === 'caught' ? 'bg-rose-600 text-white font-black border-rose-500' : 'bg-slate-950 text-slate-300 border-white/10'" 
+                                class="py-2 px-2 rounded-xl border text-center transition">Caught</button>
+                        <button type="button" @click="wicketHowOut = 'lbw'" 
+                                :class="wicketHowOut === 'lbw' ? 'bg-rose-600 text-white font-black border-rose-500' : 'bg-slate-950 text-slate-300 border-white/10'" 
+                                class="py-2 px-2 rounded-xl border text-center transition">LBW</button>
+                        <button type="button" @click="wicketHowOut = 'run_out'" 
+                                :class="wicketHowOut === 'run_out' ? 'bg-rose-600 text-white font-black border-rose-500' : 'bg-slate-950 text-slate-300 border-white/10'" 
+                                class="py-2 px-2 rounded-xl border text-center transition">Run Out</button>
+                        <button type="button" @click="wicketHowOut = 'stumped'" 
+                                :class="wicketHowOut === 'stumped' ? 'bg-rose-600 text-white font-black border-rose-500' : 'bg-slate-950 text-slate-300 border-white/10'" 
+                                class="py-2 px-2 rounded-xl border text-center transition">Stumped</button>
+                        <button type="button" @click="wicketHowOut = 'hit_wicket'" 
+                                :class="wicketHowOut === 'hit_wicket' ? 'bg-rose-600 text-white font-black border-rose-500' : 'bg-slate-950 text-slate-300 border-white/10'" 
+                                class="py-2 px-2 rounded-xl border text-center transition">Hit Wicket</button>
+                    </div>
+                </div>
+
+                <!-- Next Batsman -->
+                <div>
+                    <label class="block text-emerald-400 font-extrabold mb-1.5 uppercase tracking-wider text-[10px]">Next Batsman In (from {{ $activeBattingTeam }})</label>
+                    <select x-model="wicketNextBatterId" class="w-full bg-slate-950 border border-white/15 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white">
+                        <option value="">-- Choose Next Batsman --</option>
+                        @foreach($availableNextBatsmen as $p)
+                            <option value="{{ $p->id }}">{{ $p->player_name }} ({{ $p->player_role }})</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                <button type="button" @click="wicketModalOpen = false" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white">Cancel</button>
+                <button type="button" @click="submitWicket()" 
+                        class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black text-xs shadow-lg shadow-rose-600/30 transition">
+                    Confirm Wicket ☝️
+                </button>
             </div>
         </div>
     </div>
@@ -788,20 +1016,34 @@
                     <!-- Middle Block: Active Batsmen on Crease (Cols: 5) -->
                     <div class="md:col-span-5 grid grid-cols-2 gap-2 border-b md:border-b-0 md:border-r border-white/10 pb-2 md:pb-0 md:pr-3 text-[11px]">
                         <!-- Striker -->
-                        <div class="p-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 truncate">
+                        <div @if($isOwner) @click="openPlayerModal('all')" @endif 
+                             class="p-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 truncate @if($isOwner) cursor-pointer hover:border-emerald-400 hover:bg-emerald-900/50 transition group @endif"
+                             @if($isOwner) title="Click to Change / Select Striker" @endif>
                             <div class="flex items-center justify-between text-[9px] font-bold text-emerald-400 mb-0.5">
                                 <span>🏏 STRIKER</span>
-                                <span>ON STRIKE</span>
+                                @if($isOwner)
+                                    <span class="group-hover:hidden">ON STRIKE</span>
+                                    <span class="hidden group-hover:inline text-[8px] bg-emerald-500/30 px-1 rounded text-white font-mono">✎ CHANGE</span>
+                                @else
+                                    <span>ON STRIKE</span>
+                                @endif
                             </div>
-                            <div class="font-black text-white truncate" x-text="striker ? striker.player_name : 'Striker'"></div>
+                            <div class="font-black text-white truncate" x-text="striker ? striker.player_name : 'Select Striker'"></div>
                             <div class="font-mono text-[10px] text-amber-300 font-bold mt-0.5" 
                                  x-text="striker ? (striker.runs_scored + '* (' + striker.balls_faced + 'b)') : '0* (0b)'"></div>
                         </div>
 
                         <!-- Non-Striker -->
-                        <div class="p-1.5 rounded-xl bg-black/40 border border-white/10 truncate">
-                            <div class="text-[9px] font-bold text-slate-400 mb-0.5">NON-STRIKER</div>
-                            <div class="font-black text-slate-200 truncate" x-text="nonStriker ? nonStriker.player_name : 'Non-Striker'"></div>
+                        <div @if($isOwner) @click="openPlayerModal('all')" @endif 
+                             class="p-1.5 rounded-xl bg-black/40 border border-white/10 truncate @if($isOwner) cursor-pointer hover:border-indigo-400 hover:bg-indigo-950/40 transition group @endif"
+                             @if($isOwner) title="Click to Change / Select Non-Striker" @endif>
+                            <div class="flex items-center justify-between text-[9px] font-bold text-slate-400 mb-0.5">
+                                <span>NON-STRIKER</span>
+                                @if($isOwner)
+                                    <span class="hidden group-hover:inline text-[8px] bg-indigo-500/30 px-1 rounded text-indigo-200 font-mono">✎ CHANGE</span>
+                                @endif
+                            </div>
+                            <div class="font-black text-slate-200 truncate" x-text="nonStriker ? nonStriker.player_name : 'Select Non-Striker'"></div>
                             <div class="font-mono text-[10px] text-slate-300 font-bold mt-0.5" 
                                  x-text="nonStriker ? (nonStriker.runs_scored + ' (' + nonStriker.balls_faced + 'b)') : '0 (0b)'"></div>
                         </div>
@@ -809,12 +1051,22 @@
 
                     <!-- Right Block: Bowler Figures & This Over Timeline (Cols: 3) -->
                     <div class="md:col-span-3 text-[11px] space-y-1">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[9px] font-bold text-rose-400 uppercase">🎯 BOWLER</span>
-                            <span class="font-mono text-[10px] text-white font-extrabold" 
-                                  x-text="bowler ? (bowler.wickets_taken + '/' + bowler.runs_conceded + ' (' + bowler.overs_bowled + ' ov)') : '0/0 (0.0)'"></span>
+                        <div @if($isOwner) @click="openPlayerModal('bowler')" @endif 
+                             class="p-1 rounded-lg @if($isOwner) cursor-pointer hover:bg-rose-950/40 border border-transparent hover:border-rose-500/40 transition group @endif"
+                             @if($isOwner) title="Click to Change / Select Bowler" @endif>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[9px] font-bold text-rose-400 uppercase">🎯 BOWLER</span>
+                                @if($isOwner)
+                                    <span class="hidden group-hover:inline text-[8px] bg-rose-500/30 px-1 rounded text-rose-200 font-mono">✎ CHANGE</span>
+                                    <span class="font-mono text-[10px] text-white font-extrabold group-hover:hidden" 
+                                          x-text="bowler ? (bowler.wickets_taken + '/' + bowler.runs_conceded + ' (' + bowler.overs_bowled + ' ov)') : '0/0 (0.0)'"></span>
+                                @else
+                                    <span class="font-mono text-[10px] text-white font-extrabold" 
+                                          x-text="bowler ? (bowler.wickets_taken + '/' + bowler.runs_conceded + ' (' + bowler.overs_bowled + ' ov)') : '0/0 (0.0)'"></span>
+                                @endif
+                            </div>
+                            <div class="font-black text-white truncate text-xs" x-text="bowler ? bowler.player_name : 'Select Bowler'"></div>
                         </div>
-                        <div class="font-black text-white truncate text-xs" x-text="bowler ? bowler.player_name : 'Select Bowler'"></div>
 
                         <!-- This Over Ticker Balls -->
                         <div class="flex items-center gap-1 overflow-x-auto pt-0.5">
@@ -871,10 +1123,20 @@
 
                     <!-- Row 2: Extras & Wicket -->
                     <div class="grid grid-cols-4 gap-1.5 text-[10px] font-bold">
-                        <button type="button" @click="recordBall('wide', { runs: 1 })" class="py-2 rounded-xl bg-amber-600/30 text-amber-300 border border-amber-500/40">Wide (WD)</button>
-                        <button type="button" @click="recordBall('no_ball', { runs: 1 })" class="py-2 rounded-xl bg-orange-600/30 text-orange-300 border border-orange-500/40">No Ball (NB)</button>
-                        <button type="button" @click="recordBall('swap_strike')" class="py-2 rounded-xl bg-white/10 text-slate-300">Swap Strike ⇄</button>
-                        <button type="button" @click="recordBall('wicket')" class="py-2 rounded-xl bg-red-600 text-white font-black">☝️ Wicket</button>
+                        <button type="button" @click="recordBall('wide', { runs: 1 })" class="py-2 rounded-xl bg-amber-600/30 text-amber-300 border border-amber-500/40 hover:bg-amber-600/40 transition">Wide (WD)</button>
+                        <button type="button" @click="recordBall('no_ball', { runs: 1 })" class="py-2 rounded-xl bg-orange-600/30 text-orange-300 border border-orange-500/40 hover:bg-orange-600/40 transition">No Ball (NB)</button>
+                        <button type="button" @click="recordBall('swap_strike')" class="py-2 rounded-xl bg-white/10 text-slate-300 hover:bg-white/20 transition">Swap Strike ⇄</button>
+                        <button type="button" @click="wicketModalOpen = true" class="py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black shadow-lg shadow-red-600/40 transition">☝️ Wicket</button>
+                    </div>
+
+                    <!-- Row 3: Player Management -->
+                    <div class="grid grid-cols-2 gap-1.5 text-[11px] font-extrabold pt-1.5 border-t border-white/10">
+                        <button type="button" @click="openPlayerModal('all')" class="py-2 px-3 rounded-xl bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 flex items-center justify-center gap-1.5 transition shadow-sm">
+                            <span>🏏 Change Batsmen</span>
+                        </button>
+                        <button type="button" @click="openPlayerModal('bowler')" class="py-2 px-3 rounded-xl bg-rose-600/25 hover:bg-rose-600/40 text-rose-300 border border-rose-500/40 flex items-center justify-center gap-1.5 transition shadow-sm">
+                            <span>🎯 Change Bowler</span>
+                        </button>
                     </div>
                 </div>
             @endif

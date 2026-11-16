@@ -403,6 +403,26 @@ class MatchController extends Controller
         $bowler = ($state['bowler_id'] ?? null) ? \App\Models\MatchPlayer::find($state['bowler_id']) : null;
 
         $activeInningNum = $state['batting_team_number'] ?? 1;
+        $activeBattingTeam = $activeInningNum == 1 ? $match->team1_name : $match->team2_name;
+        $activeBowlingTeam = $activeInningNum == 1 ? $match->team2_name : $match->team1_name;
+        $battingSquad = $activeInningNum == 1 ? $match->team1Players : $match->team2Players;
+        $bowlingSquad = $activeInningNum == 1 ? $match->team2Players : $match->team1Players;
+
+        $isPlayerOut = function($p) {
+            if (!$p) return true;
+            $d = strtolower(trim((string)$p->dismissal));
+            return !empty($d) && $d !== 'not out';
+        };
+
+        $currentStrikerId = $striker?->id;
+        $currentNonStrikerId = $nonStriker?->id;
+
+        $availableNextBatsmen = $battingSquad->filter(function ($pl) use ($currentStrikerId, $currentNonStrikerId, $isPlayerOut) {
+            if ($currentStrikerId && $pl->id == $currentStrikerId) return false;
+            if ($currentNonStrikerId && $pl->id == $currentNonStrikerId) return false;
+            return !$isPlayerOut($pl);
+        })->values();
+
         $score1 = $match->getScoreForTeam($match->team1_name);
         $score2 = $match->getScoreForTeam($match->team2_name);
         $currentScoreObj = $activeInningNum == 1 ? $score1 : $score2;
@@ -411,7 +431,12 @@ class MatchController extends Controller
         $agoraChannel = 'livecricket_match_' . $match->id;
         $isCameraLive = !empty($state['is_camera_live']);
 
-        return view('matches.broadcast', compact('match', 'state', 'striker', 'nonStriker', 'bowler', 'score1', 'score2', 'currentScoreObj', 'activeInningNum', 'isOwner', 'agoraAppId', 'agoraChannel', 'isCameraLive'));
+        return view('matches.broadcast', compact(
+            'match', 'state', 'striker', 'nonStriker', 'bowler', 
+            'score1', 'score2', 'currentScoreObj', 'activeInningNum', 
+            'isOwner', 'agoraAppId', 'agoraChannel', 'isCameraLive',
+            'battingSquad', 'bowlingSquad', 'activeBattingTeam', 'activeBowlingTeam', 'availableNextBatsmen'
+        ));
     }
 
     /**
@@ -870,6 +895,36 @@ class MatchController extends Controller
             return $this->cricHeroesResponse($match, "Bowler ready: {$validBowler->player_name}! 🎯");
         }
 
+        // Action: Select / Change Batsmen (Striker / Non-Striker)
+        if (in_array($action, ['select_batsmen', 'change_striker', 'change_non_striker'])) {
+            $battingTeamNum = $state['batting_team_number'] ?? 1;
+            if ($request->filled('striker_id')) {
+                $sId = (int) $request->input('striker_id');
+                $validStriker = $match->players()->where('team_number', $battingTeamNum)->find($sId);
+                if ($validStriker) {
+                    $state['striker_id'] = $sId;
+                }
+            }
+            if ($request->filled('non_striker_id')) {
+                $nsId = (int) $request->input('non_striker_id');
+                $validNonStriker = $match->players()->where('team_number', $battingTeamNum)->find($nsId);
+                if ($validNonStriker) {
+                    $state['non_striker_id'] = $nsId;
+                }
+            }
+            if ($request->filled('bowler_id')) {
+                $bId = (int) $request->input('bowler_id');
+                $bowlingTeamNum = $battingTeamNum == 1 ? 2 : 1;
+                $validBowler = $match->players()->where('team_number', $bowlingTeamNum)->find($bId);
+                if ($validBowler) {
+                    $state['bowler_id'] = $bId;
+                }
+            }
+            $match->update(['live_state' => $state]);
+
+            return $this->cricHeroesResponse($match, 'Active batsmen and bowler updated! 🏏');
+        }
+
         // Action: Swap Strike (Batter Strike Rotation)
         if ($action === 'swap_strike') {
             $tmp = $state['striker_id'];
@@ -969,7 +1024,7 @@ class MatchController extends Controller
         }
 
         // Check if current inning has already finished its total overs
-        if (!in_array($action, ['select_bowler', 'select_openers', 'switch_innings', 'undo'])) {
+        if (!in_array($action, ['select_bowler', 'select_openers', 'select_batsmen', 'change_striker', 'change_non_striker', 'switch_innings', 'undo'])) {
             if ($currentBalls >= $maxBalls) {
                 return response()->json([
                     'status' => 'error',
@@ -987,7 +1042,7 @@ class MatchController extends Controller
         $bowler = ($state['bowler_id'] ?? null) ? \App\Models\MatchPlayer::find($state['bowler_id']) : null;
 
         // CRITICAL SCORING VALIDATION: Reject scoring if bowler or batsmen are not selected
-        if (!in_array($action, ['select_bowler', 'select_openers', 'switch_innings', 'undo'])) {
+        if (!in_array($action, ['select_bowler', 'select_openers', 'select_batsmen', 'change_striker', 'change_non_striker', 'switch_innings', 'undo'])) {
             if (!$bowler || $bowler->match_id !== $match->id || $bowler->team_number == $battingTeamNumber) {
                 return response()->json([
                     'status' => 'error',
