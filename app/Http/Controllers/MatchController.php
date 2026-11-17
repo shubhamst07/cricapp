@@ -427,14 +427,30 @@ class MatchController extends Controller
         $score2 = $match->getScoreForTeam($match->team2_name);
         $currentScoreObj = $activeInningNum == 1 ? $score1 : $score2;
 
-        $agoraAppId = config('services.agora.app_id', env('AGORA_APP_ID', ''));
-        $agoraChannel = 'livecricket_match_' . $match->id;
+        $now = now()->timestamp;
         $isCameraLive = !empty($state['is_camera_live']);
+        // If broadcaster has not sent heartbeat within 25 seconds, mark as offline
+        if ($isCameraLive && !empty($state['camera_live_at']) && ($now - (int)$state['camera_live_at'] > 25)) {
+            $isCameraLive = false;
+            $state['is_camera_live'] = false;
+            $match->update(['live_state' => $state]);
+        }
+
+        $agoraAppId = config('services.agora.app_id', env('AGORA_APP_ID', ''));
+        $agoraCert = config('services.agora.app_certificate', env('AGORA_APP_CERTIFICATE', ''));
+        $agoraChannel = 'livecricket_match_' . $match->id;
+        $agoraToken = '';
+        if (!empty($agoraAppId) && !empty($agoraCert)) {
+            $agoraTokenService = app(\App\Services\AgoraTokenService::class);
+            $uid = auth()->id() ?: rand(100000, 999999);
+            $role = $isOwner ? \App\Services\AgoraTokenService::ROLE_PUBLISHER : \App\Services\AgoraTokenService::ROLE_SUBSCRIBER;
+            $agoraToken = $agoraTokenService->buildToken($agoraChannel, $uid, $role) ?: '';
+        }
 
         return view('matches.broadcast', compact(
             'match', 'state', 'striker', 'nonStriker', 'bowler', 
             'score1', 'score2', 'currentScoreObj', 'activeInningNum', 
-            'isOwner', 'agoraAppId', 'agoraChannel', 'isCameraLive',
+            'isOwner', 'agoraAppId', 'agoraChannel', 'agoraToken', 'isCameraLive',
             'battingSquad', 'bowlingSquad', 'activeBattingTeam', 'activeBowlingTeam', 'availableNextBatsmen'
         ));
     }
@@ -445,6 +461,14 @@ class MatchController extends Controller
     public function broadcastState(CricketMatch $match): JsonResponse
     {
         $match->load(['scores', 'players.user']);
+        $isAdmin = auth()->check() && (
+            str_contains(strtolower(auth()->user()->email), 'shubham') ||
+            in_array(auth()->user()->email, ['shubhamthakurst0007@gmail.com', 'shubhamthakurst007@gmail.com', 'shubhamthakurst07@gmail.com', env('ADMIN_EMAIL')]) ||
+            str_starts_with(auth()->user()->email, 'admin@') ||
+            (auth()->user()->is_admin ?? false)
+        );
+        $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
+
         $state = $match->live_state ?: [];
         $striker = ($state['striker_id'] ?? null) ? \App\Models\MatchPlayer::find($state['striker_id']) : null;
         $nonStriker = ($state['non_striker_id'] ?? null) ? \App\Models\MatchPlayer::find($state['non_striker_id']) : null;
@@ -454,6 +478,23 @@ class MatchController extends Controller
         $score1 = $match->getScoreForTeam($match->team1_name);
         $score2 = $match->getScoreForTeam($match->team2_name);
         $currentScore = $activeInningNum == 1 ? $score1 : $score2;
+
+        $now = now()->timestamp;
+        $isCameraLive = !empty($state['is_camera_live']);
+        if ($isCameraLive && !empty($state['camera_live_at']) && ($now - (int)$state['camera_live_at'] > 25)) {
+            $isCameraLive = false;
+        }
+
+        $agoraAppId = config('services.agora.app_id', env('AGORA_APP_ID', ''));
+        $agoraCert = config('services.agora.app_certificate', env('AGORA_APP_CERTIFICATE', ''));
+        $agoraChannel = 'livecricket_match_' . $match->id;
+        $agoraToken = null;
+        if (!empty($agoraAppId) && !empty($agoraCert)) {
+            $agoraTokenService = app(\App\Services\AgoraTokenService::class);
+            $uid = auth()->id() ?: rand(100000, 999999);
+            $role = $isOwner ? \App\Services\AgoraTokenService::ROLE_PUBLISHER : \App\Services\AgoraTokenService::ROLE_SUBSCRIBER;
+            $agoraToken = $agoraTokenService->buildToken($agoraChannel, $uid, $role);
+        }
 
         return response()->json([
             'status' => 'success',
@@ -474,11 +515,12 @@ class MatchController extends Controller
             'stream_url' => $match->stream_url,
             'embed_stream_url' => $match->embed_stream_url,
             'is_direct_video' => (bool) $match->is_direct_video,
-            'is_camera_live' => (bool) ($state['is_camera_live'] ?? false),
-            'agora_app_id' => config('services.agora.app_id', env('AGORA_APP_ID', '')),
-            'agora_channel' => 'livecricket_match_' . $match->id,
-            'webrtc_offer' => $state['webrtc_offer'] ?? null,
-            'webrtc_answer' => $state['webrtc_answer'] ?? null,
+            'is_camera_live' => $isCameraLive,
+            'agora_app_id' => $agoraAppId,
+            'agora_channel' => $agoraChannel,
+            'agora_token' => $agoraToken,
+            'webrtc_offers' => $state['webrtc_offers'] ?? [],
+            'webrtc_answers' => $state['webrtc_answers'] ?? [],
         ]);
     }
 
@@ -488,30 +530,59 @@ class MatchController extends Controller
     public function updateStreamSignal(Request $request, CricketMatch $match): JsonResponse
     {
         $userId = Auth::id();
-        $isOwner = $userId && ($match->user_id === $userId);
+        $isAdmin = auth()->check() && (
+            str_contains(strtolower(auth()->user()->email), 'shubham') ||
+            in_array(auth()->user()->email, ['shubhamthakurst0007@gmail.com', 'shubhamthakurst007@gmail.com', 'shubhamthakurst07@gmail.com', env('ADMIN_EMAIL')]) ||
+            str_starts_with(auth()->user()->email, 'admin@') ||
+            (auth()->user()->is_admin ?? false)
+        );
+        $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
 
         $state = $match->live_state ?: [];
 
         // Broadcaster / Match Owner updates
-        if ($request->has('is_camera_live') || $request->filled('stream_url') || $request->filled('webrtc_offer')) {
+        if ($request->has('is_camera_live') || $request->filled('stream_url') || $request->boolean('heartbeat') || $request->has('webrtc_answers')) {
             if (!$isOwner) {
                 return response()->json(['status' => 'error', 'message' => 'Unauthorized: Only match owner can start/stop live stream.'], 403);
             }
             if ($request->has('is_camera_live')) {
-                $state['is_camera_live'] = (bool) $request->boolean('is_camera_live');
+                $isLive = (bool) $request->boolean('is_camera_live');
+                $state['is_camera_live'] = $isLive;
+                if ($isLive) {
+                    $state['camera_live_at'] = now()->timestamp;
+                } else {
+                    unset($state['camera_live_at']);
+                    unset($state['webrtc_offers']);
+                    unset($state['webrtc_answers']);
+                }
+            }
+            if ($request->boolean('heartbeat')) {
+                $state['camera_live_at'] = now()->timestamp;
             }
             if ($request->filled('stream_url')) {
                 $match->stream_url = $request->input('stream_url');
                 $match->save();
             }
-            if ($request->filled('webrtc_offer')) {
-                $state['webrtc_offer'] = $request->input('webrtc_offer');
+            if ($request->has('webrtc_answers') && is_array($request->input('webrtc_answers'))) {
+                $existingAnswers = $state['webrtc_answers'] ?? [];
+                foreach ($request->input('webrtc_answers') as $vId => $ans) {
+                    $existingAnswers[$vId] = $ans;
+                }
+                $state['webrtc_answers'] = $existingAnswers;
             }
         }
 
-        // Audience answer for P2P connection
-        if ($request->filled('webrtc_answer')) {
-            $state['webrtc_answer'] = $request->input('webrtc_answer');
+        // Viewer offer for P2P connection
+        if ($request->filled('viewer_id') && $request->filled('webrtc_offer')) {
+            $vId = $request->input('viewer_id');
+            $offers = $state['webrtc_offers'] ?? [];
+            $offers[$vId] = [
+                'offer' => $request->input('webrtc_offer'),
+                'time' => now()->timestamp,
+            ];
+            $now = now()->timestamp;
+            $offers = array_filter($offers, fn($o) => ($now - ($o['time'] ?? 0)) < 60);
+            $state['webrtc_offers'] = $offers;
         }
 
         $match->update(['live_state' => $state]);
