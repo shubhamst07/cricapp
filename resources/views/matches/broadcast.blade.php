@@ -1285,7 +1285,7 @@
             <!-- 4. RECORDED MATCH VIDEO REPLAY (Full match video saved permanently) -->
             <template x-if="isDirectVideo && savedVideoServerUrl && !streamActive && !isCameraLive">
                 <div class="absolute inset-0 w-full h-full z-0 flex items-center justify-center bg-black">
-                    <video x-show="!videoLoadFailed" :src="savedVideoServerUrl" @error="videoLoadFailed = true" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
+                    <video x-show="!videoLoadFailed" :src="savedVideoServerUrl" x-on:error="videoLoadFailed = true" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
                     <div x-show="videoLoadFailed" class="flex flex-col items-center justify-center p-6 text-center z-10 text-slate-400">
                         <div class="text-3xl mb-2">📹</div>
                         <div class="text-sm font-bold text-white mb-1">Previous Recording Stored in Cloud</div>
