@@ -341,9 +341,14 @@
             // 1. Try Agora WebRTC Live Broadcast (ONLY if BOTH App ID and Token are configured)
             if (typeof AgoraRTC !== 'undefined' && this.agoraAppId && this.agoraToken) {
                 try {
-                    this.agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-                    await this.agoraClient.setClientRole('host');
-                    await this.agoraClient.join(this.agoraAppId, this.agoraChannel, this.agoraToken || null, 0);
+                    if (window._agoraClient) {
+                        try { await window._agoraClient.leave(); } catch(e) {}
+                        window._agoraClient = null;
+                    }
+                    const hostClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+                    window._agoraClient = hostClient;
+                    await hostClient.setClientRole('host');
+                    await hostClient.join(this.agoraAppId, this.agoraChannel, this.agoraToken || null, 0);
 
                     const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
                         { AEC: true, ANS: true },
@@ -352,7 +357,7 @@
                     this.localAudioTrack = audioTrack;
                     this.localVideoTrack = videoTrack;
 
-                    await this.agoraClient.publish([audioTrack, videoTrack]);
+                    await hostClient.publish([audioTrack, videoTrack]);
 
                     const previewDiv = document.getElementById('broadcasterAgoraPreview');
                     if (previewDiv) {
@@ -370,9 +375,9 @@
                 } catch(agoraErr) {
                     console.warn('Agora WebRTC connect notice (will use Direct WebRTC P2P stream):', agoraErr);
                     this.hasAgoraStream = false;
-                    if (this.agoraClient) {
-                        try { await this.agoraClient.leave(); } catch(e) {}
-                        this.agoraClient = null;
+                    if (window._agoraClient) {
+                        try { await window._agoraClient.leave(); } catch(e) {}
+                        window._agoraClient = null;
                     }
                 }
             }
@@ -507,9 +512,9 @@
                 this.localVideoTrack.close();
                 this.localVideoTrack = null;
             }
-            if (this.agoraClient) {
-                await this.agoraClient.leave();
-                this.agoraClient = null;
+            if (window._agoraClient) {
+                try { await window._agoraClient.leave(); } catch(e) {}
+                window._agoraClient = null;
             }
             if (window.localMediaStream) {
                 window.localMediaStream.getTracks().forEach(track => track.stop());
@@ -572,21 +577,22 @@
         let agoraAttempted = false;
         if (typeof AgoraRTC !== 'undefined' && appId && channel && token) {
             try {
-                if (this.agoraClient) {
-                    try { await this.agoraClient.leave(); } catch(e) {}
-                    this.agoraClient = null;
+                if (window._agoraClient) {
+                    try { await window._agoraClient.leave(); } catch(e) {}
+                    window._agoraClient = null;
                 }
 
-                this.agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-                await this.agoraClient.setClientRole('audience');
+                const audClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+                window._agoraClient = audClient;
+                await audClient.setClientRole('audience');
 
-                const subscribeUser = async (user, mediaType) => {
+                audClient.on('user-published', async (user, mediaType) => {
                     try {
-                        await this.agoraClient.subscribe(user, mediaType);
+                        await audClient.subscribe(user, mediaType);
                         if (mediaType === 'video') {
+                            this.hasAgoraStream = true;
                             const container = document.getElementById('audienceAgoraVideo');
                             if (container && user.videoTrack) {
-                                this.hasAgoraStream = true;
                                 user.videoTrack.play(container);
                             }
                         }
@@ -601,36 +607,23 @@
                     } catch(subErr) {
                         console.warn('Agora subscribe notice for ' + (user?.uid || 'unknown') + ':', subErr);
                     }
-                };
-
-                this.agoraClient.on('user-published', async (user, mediaType) => {
-                    await subscribeUser(user, mediaType);
                 });
 
-                this.agoraClient.on('user-unpublished', (user, mediaType) => {
+                audClient.on('user-unpublished', (user, mediaType) => {
                     if (mediaType === 'video') {
                         this.hasAgoraStream = false;
                     }
                 });
 
-                await this.agoraClient.join(appId, channel, token || null, 0);
+                await audClient.join(appId, channel, token || null, 0);
                 this.viewerConnected = true;
                 agoraAttempted = true;
-
-                // Subscribe to any existing published users in channel immediately
-                if (this.agoraClient.remoteUsers && this.agoraClient.remoteUsers.length > 0) {
-                    for (const rUser of this.agoraClient.remoteUsers) {
-                        if (rUser.hasVideo) {
-                            await subscribeUser(rUser, 'video');
-                        }
-                        if (rUser.hasAudio) {
-                            await subscribeUser(rUser, 'audio');
-                        }
-                    }
-                }
             } catch(e) {
                 console.warn('Audience Agora stream connect notice (initiating Direct WebRTC P2P fallback):', e);
-                this.agoraClient = null;
+                if (window._agoraClient) {
+                    try { await window._agoraClient.leave(); } catch(err) {}
+                    window._agoraClient = null;
+                }
                 agoraAttempted = false;
             } finally {
                 this.isConnectingAudience = false;
@@ -1284,14 +1277,14 @@
             @if(!$isOwner)
                 <div x-show="isCameraLive || hasAgoraStream || hasP2pStream" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
                     <!-- Agora Cloud Stream Container -->
-                    <div id="audienceAgoraVideo" x-show="hasAgoraStream" class="w-full h-full object-cover"></div>
+                    <div id="audienceAgoraVideo" class="absolute inset-0 w-full h-full object-cover"></div>
 
                     <!-- Direct WebRTC P2P Stream Video -->
                     <video id="audienceP2pVideo" x-show="!hasAgoraStream && hasP2pStream" autoplay playsinline muted 
-                           class="w-full h-full object-cover"></video>
+                           class="absolute inset-0 w-full h-full object-cover"></video>
 
                     <!-- Stream Connecting / Buffering Loader -->
-                    <div x-show="!hasAgoraStream && !hasP2pStream" class="flex flex-col items-center justify-center p-6 text-center z-10">
+                    <div x-show="!hasAgoraStream && !hasP2pStream" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-black">
                         <div class="w-12 h-12 rounded-full border-4 border-red-500 border-t-transparent animate-spin mb-3"></div>
                         <div class="text-sm font-black text-white flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>

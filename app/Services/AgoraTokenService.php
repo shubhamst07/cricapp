@@ -42,13 +42,10 @@ class AgoraTokenService
 
             $privileges = [
                 $privilegeJoinChannel => $issueTs + $expire,
+                $privilegePublishAudio => $issueTs + $expire,
+                $privilegePublishVideo => $issueTs + $expire,
+                $privilegePublishData => $issueTs + $expire,
             ];
-
-            if ($role === self::ROLE_PUBLISHER) {
-                $privileges[$privilegePublishAudio] = $issueTs + $expire;
-                $privileges[$privilegePublishVideo] = $issueTs + $expire;
-                $privileges[$privilegePublishData] = $issueTs + $expire;
-            }
 
             // Pack service privileges
             ksort($privileges);
