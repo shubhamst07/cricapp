@@ -146,15 +146,24 @@
     videoDeletingId: null,
     streamOpen: true,
 
+    fixVideoUrl(url) {
+        if (!url) return '';
+        if (url.includes('imagekit.io') && (url.includes('.webm') || url.includes('.mp4') || url.includes('.mov')) && !url.includes('tr=orig')) {
+            return url.includes('?') ? (url + '&tr=orig') : (url + '?tr=orig');
+        }
+        return url;
+    },
+
     selectAndPlayVideo(video) {
-        this.activeVideoUrl = video.url;
+        const url = this.fixVideoUrl(video.url);
+        this.activeVideoUrl = url;
         this.activeVideoTitle = video.title || 'Match Video Replay';
         this.showScoreboardOverlayOnVideo = true;
         this.streamOpen = true;
         this.$nextTick(() => {
             const videoEl = document.getElementById('scorecardMatchVideoPlayer');
             if (videoEl) {
-                videoEl.src = video.url;
+                videoEl.src = url;
                 videoEl.play().catch(() => {});
             }
         });
@@ -700,7 +709,7 @@
                 <!-- 1. Active Video Replay Player with TV Scoreboard Overlay & App Watermark -->
                 <template x-if="activeVideoUrl">
                     <div class="relative w-full aspect-video rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl group">
-                        <video id="scorecardMatchVideoPlayer" :src="activeVideoUrl" controls playsinline class="w-full h-full object-contain"></video>
+                        <video id="scorecardMatchVideoPlayer" :src="fixVideoUrl(activeVideoUrl)" controls playsinline class="w-full h-full object-contain"></video>
 
                         <!-- App Logo & TV Replay Watermark Overlay -->
                         <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-white/20 shadow-2xl pointer-events-none">
@@ -828,7 +837,7 @@
                                             <span x-text="activeVideoUrl === video.url ? 'Watching Now' : 'Watch Replay'"></span>
                                         </button>
 
-                                        <a :href="video.url" :download="'Match_{{ $match->id }}_video_' + (video.id || index) + '.webm'" target="_blank"
+                                        <a :href="fixVideoUrl(video.url)" :download="'Match_{{ $match->id }}_video_' + (video.id || index) + '.webm'" target="_blank"
                                            class="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white font-bold text-xs transition flex items-center justify-center" title="Download video to gallery">
                                             <span>📥</span>
                                         </a>

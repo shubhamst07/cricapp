@@ -2072,7 +2072,9 @@ class MatchController extends Controller
         try {
             $cloudUrl = $imageKit->upload($file, '/cricapp/recordings', $filename);
             if ($cloudUrl && !str_contains($cloudUrl, 'error') && !str_contains($cloudUrl, 'ELIMIT')) {
-                // If cloud URL is healthy, use it
+                if (str_contains($cloudUrl, 'imagekit.io') && !str_contains($cloudUrl, 'tr=orig')) {
+                    $cloudUrl = str_contains($cloudUrl, '?') ? "{$cloudUrl}&tr=orig" : "{$cloudUrl}?tr=orig";
+                }
                 $videoUrl = $cloudUrl;
             }
         } catch (\Throwable $e) {

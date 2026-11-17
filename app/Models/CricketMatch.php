@@ -77,6 +77,20 @@ class CricketMatch extends Model
     }
 
     /**
+     * Accessor for stream_url: auto-append ?tr=orig for ImageKit videos to bypass transformation limits.
+     */
+    public function getStreamUrlAttribute($value): ?string
+    {
+        if (empty($value)) return $value;
+        if (str_contains($value, 'imagekit.io') && preg_match('/\.(webm|mp4|mov|mkv)/i', $value)) {
+            if (!str_contains($value, 'tr=orig')) {
+                return str_contains($value, '?') ? "{$value}&tr=orig" : "{$value}?tr=orig";
+            }
+        }
+        return $value;
+    }
+
+    /**
      * Check if the stream_url points to a recorded direct video file (MP4/WebM/storage).
      */
     public function getIsDirectVideoAttribute(): bool
@@ -94,11 +108,30 @@ class CricketMatch extends Model
         $state = $this->live_state ?: [];
         $videos = $state['videos'] ?? [];
 
+        $fixUrl = function(?string $url): ?string {
+            if (!$url) return null;
+            if (str_contains($url, 'imagekit.io') && preg_match('/\.(webm|mp4|mov|mkv)/i', $url)) {
+                if (!str_contains($url, 'tr=orig')) {
+                    return str_contains($url, '?') ? "{$url}&tr=orig" : "{$url}?tr=orig";
+                }
+            }
+            return $url;
+        };
+
+        foreach ($videos as &$v) {
+            if (!empty($v['url'])) {
+                $v['url'] = $fixUrl($v['url']);
+            }
+        }
+        unset($v);
+
         // Ensure legacy stream_url is included if present and is direct video
-        if (!empty($this->stream_url) && $this->is_direct_video) {
+        $streamUrl = $this->stream_url;
+        if (!empty($streamUrl) && $this->is_direct_video) {
+            $streamUrl = $fixUrl($streamUrl);
             $exists = false;
             foreach ($videos as $v) {
-                if (($v['url'] ?? '') === $this->stream_url) {
+                if (($v['url'] ?? '') === $streamUrl) {
                     $exists = true;
                     break;
                 }
@@ -106,7 +139,7 @@ class CricketMatch extends Model
             if (!$exists) {
                 array_unshift($videos, [
                     'id' => 'vid_legacy_' . $this->id,
-                    'url' => $this->stream_url,
+                    'url' => $streamUrl,
                     'title' => 'Match Live Recording (Full)',
                     'score_snapshot' => $this->team1_name . ' vs ' . $this->team2_name,
                     'duration' => 'Replay',

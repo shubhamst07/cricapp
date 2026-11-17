@@ -110,6 +110,11 @@ class ImageKitService
                 $json = $response->json();
                 $url = $json['url'] ?? null;
                 if ($url) {
+                    if (preg_match('/\.(webm|mp4|mov|mkv)$/i', parse_url($url, PHP_URL_PATH) ?? '')) {
+                        if (!str_contains($url, 'tr=orig')) {
+                            $url = str_contains($url, '?') ? "{$url}&tr=orig" : "{$url}?tr=orig";
+                        }
+                    }
                     return $url;
                 }
             }

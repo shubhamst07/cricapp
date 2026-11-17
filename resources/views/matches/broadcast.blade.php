@@ -84,10 +84,19 @@
     showScoreboardOverlayOnVideo: true,
     videoDeletingId: null,
 
+    fixVideoUrl(url) {
+        if (!url) return '';
+        if (url.includes('imagekit.io') && (url.includes('.webm') || url.includes('.mp4') || url.includes('.mov')) && !url.includes('tr=orig')) {
+            return url.includes('?') ? (url + '&tr=orig') : (url + '?tr=orig');
+        }
+        return url;
+    },
+
     selectAndPlayVideo(video) {
-        this.activeVideoUrl = video.url;
+        const url = this.fixVideoUrl(video.url);
+        this.activeVideoUrl = url;
         this.activeVideoTitle = video.title || 'Match Replay';
-        this.savedVideoServerUrl = video.url;
+        this.savedVideoServerUrl = url;
         this.isDirectVideo = true;
         this.videoLoadFailed = false;
         this.streamSource = 'camera';
@@ -1376,7 +1385,7 @@
             <!-- 4. RECORDED MATCH VIDEO REPLAY (Full match video saved permanently) -->
             <template x-if="isDirectVideo && savedVideoServerUrl && !streamActive && !isCameraLive">
                 <div class="absolute inset-0 w-full h-full z-0 flex items-center justify-center bg-black">
-                    <video x-show="!videoLoadFailed" :src="savedVideoServerUrl" x-on:error="videoLoadFailed = true" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
+                    <video x-show="!videoLoadFailed" :src="fixVideoUrl(savedVideoServerUrl)" x-on:error="videoLoadFailed = true" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
                     
                     <!-- App Logo & TV Replay Watermark Overlay -->
                     <div x-show="!videoLoadFailed" class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-white/20 shadow-2xl pointer-events-none">
@@ -1930,7 +1939,7 @@
                                     <span>Watch Replay</span>
                                 </button>
 
-                                <a :href="video.url" :download="'Match_{{ $match->id }}_video_' + (video.id || index) + '.webm'" target="_blank"
+                                <a :href="fixVideoUrl(video.url)" :download="'Match_{{ $match->id }}_video_' + (video.id || index) + '.webm'" target="_blank"
                                    class="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white font-bold text-xs transition flex items-center justify-center" title="Download video to gallery">
                                     <span>📥</span>
                                 </a>
