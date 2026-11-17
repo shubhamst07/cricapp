@@ -52,6 +52,11 @@ class CricketMatch extends Model
         if (empty($this->stream_url)) return null;
         $url = trim($this->stream_url);
 
+        // Direct video files should NOT be treated as embed stream links
+        if (preg_match('/\.(mp4|webm|mov|mkv)$/i', parse_url($url, PHP_URL_PATH) ?? '') || str_contains($url, 'imagekit.io')) {
+            return null;
+        }
+
         // YouTube: youtu.be/ID, youtube.com/watch?v=ID, youtube.com/live/ID, etc.
         if (preg_match('/(?:youtube\.com\/(?:watch\?.*v=|live\/|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/i', $url, $matches)) {
             return "https://www.youtube-nocookie.com/embed/{$matches[1]}?autoplay=1&mute=1&playsinline=1&rel=0";
@@ -68,7 +73,7 @@ class CricketMatch extends Model
             return "https://player.twitch.tv/?channel={$matches[1]}&parent={$host}";
         }
 
-        return $url;
+        return null;
     }
 
     /**

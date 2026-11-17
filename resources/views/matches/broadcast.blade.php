@@ -73,6 +73,7 @@
     isUploadingRecording: false,
     uploadProgressText: '',
     savedVideoServerUrl: '{{ addslashes($match->stream_url ?? '') }}',
+    videoLoadFailed: false,
     isDirectVideo: {{ $match->is_direct_video ? 'true' : 'false' }},
 
     formatRecordedSize(bytes) {
@@ -336,8 +337,8 @@
         try {
             if (this.isBroadcasting) return;
 
-            // 1. Try Agora WebRTC Live Broadcast (if App ID available)
-            if (typeof AgoraRTC !== 'undefined' && this.agoraAppId) {
+            // 1. Try Agora WebRTC Live Broadcast (ONLY if BOTH App ID and Token are configured)
+            if (typeof AgoraRTC !== 'undefined' && this.agoraAppId && this.agoraToken) {
                 try {
                     this.agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
                     await this.agoraClient.setClientRole('host');
@@ -560,7 +561,7 @@
         const token = data.agora_token || this.agoraToken;
 
         let agoraAttempted = false;
-        if (typeof AgoraRTC !== 'undefined' && appId && channel) {
+        if (typeof AgoraRTC !== 'undefined' && appId && channel && token) {
             try {
                 this.agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
                 await this.agoraClient.setClientRole('audience');
@@ -1284,8 +1285,13 @@
             <!-- 4. RECORDED MATCH VIDEO REPLAY (Full match video saved permanently) -->
             <template x-if="isDirectVideo && savedVideoServerUrl && !streamActive && !isCameraLive">
                 <div class="absolute inset-0 w-full h-full z-0 flex items-center justify-center bg-black">
-                    <video :src="savedVideoServerUrl" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
-                    <div class="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center gap-2 pointer-events-none shadow-xl">
+                    <video x-show="!videoLoadFailed" :src="savedVideoServerUrl" @error="videoLoadFailed = true" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
+                    <div x-show="videoLoadFailed" class="flex flex-col items-center justify-center p-6 text-center z-10 text-slate-400">
+                        <div class="text-3xl mb-2">📹</div>
+                        <div class="text-sm font-bold text-white mb-1">Previous Recording Stored in Cloud</div>
+                        <p class="text-xs max-w-sm">Video replay bandwidth limit reached on cloud storage. As soon as the match organizer starts a new live broadcast, the real-time live stream will appear here!</p>
+                    </div>
+                    <div x-show="!videoLoadFailed" class="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center gap-2 pointer-events-none shadow-xl">
                         <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                         <span>📼 MATCH VIDEO REPLAY</span>
                     </div>
