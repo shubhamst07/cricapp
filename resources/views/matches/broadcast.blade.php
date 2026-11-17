@@ -1325,9 +1325,26 @@
                 <div class="absolute inset-0 w-full h-full z-0 flex items-center justify-center bg-black">
                     <video x-show="!videoLoadFailed" :src="savedVideoServerUrl" x-on:error="videoLoadFailed = true" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
                     <div x-show="videoLoadFailed" class="flex flex-col items-center justify-center p-6 text-center z-10 text-slate-400">
-                        <div class="text-3xl mb-2">📹</div>
-                        <div class="text-sm font-bold text-white mb-1">Previous Recording Stored in Cloud</div>
-                        <p class="text-xs max-w-sm">Video replay bandwidth limit reached on cloud storage. As soon as the match organizer starts a new live broadcast, the real-time live stream will appear here!</p>
+                        <div class="w-14 h-14 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-2 text-red-500">
+                            📹
+                        </div>
+                        <div class="text-sm font-bold text-white mb-1">Live Camera Stream is Currently Offline</div>
+                        <p class="text-xs max-w-sm text-slate-400 mb-4 leading-relaxed">The match organizer has not started live camera broadcasting yet. As soon as they go live, the video feed will appear here automatically in real time!</p>
+                        <div class="flex items-center gap-3">
+                            @if($isOwner)
+                                <button type="button" @click="startCamera()" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-xl shadow-red-600/30">
+                                    <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                                    <span>🔴 Start Live Camera Broadcast</span>
+                                </button>
+                            @else
+                                @guest
+                                    <a href="{{ route('login') }}" class="px-4 py-2.5 rounded-2xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-red-300 font-bold text-xs transition flex items-center gap-1.5">
+                                        <span>🔐</span>
+                                        <span>Match Organizer? Log In to Go Live</span>
+                                    </a>
+                                @endguest
+                            @endif
+                        </div>
                     </div>
                     <div x-show="!videoLoadFailed" class="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center gap-2 pointer-events-none shadow-xl">
                         <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
