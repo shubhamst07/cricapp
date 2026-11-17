@@ -123,5 +123,6 @@ Route::get('/matches/{match}/broadcast', [MatchController::class, 'broadcast'])-
 Route::get('/matches/{match}/broadcast/state', [MatchController::class, 'broadcastState'])->name('matches.broadcast.state');
 Route::post('/matches/{match}/stream-signal', [MatchController::class, 'updateStreamSignal'])->name('matches.stream-signal');
 Route::post('/matches/{match}/recording', [MatchController::class, 'uploadRecording'])->name('matches.upload-recording');
+Route::delete('/matches/{match}/recordings/{videoId}', [MatchController::class, 'deleteRecording'])->name('matches.delete-recording');
 
 require __DIR__.'/auth.php';

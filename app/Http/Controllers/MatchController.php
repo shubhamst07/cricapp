@@ -449,10 +449,11 @@ class MatchController extends Controller
             $agoraToken = $agoraTokenService->buildToken($agoraChannel, 0, $role) ?: '';
         }
 
+        $videos = $match->videos;
         return view('matches.broadcast', compact(
             'match', 'state', 'striker', 'nonStriker', 'bowler', 
             'score1', 'score2', 'currentScoreObj', 'activeInningNum', 
-            'isOwner', 'agoraAppId', 'agoraChannel', 'agoraToken', 'isCameraLive',
+            'isOwner', 'agoraAppId', 'agoraChannel', 'agoraToken', 'isCameraLive', 'videos',
             'battingSquad', 'bowlingSquad', 'activeBattingTeam', 'activeBowlingTeam', 'availableNextBatsmen'
         ));
     }
@@ -519,6 +520,7 @@ class MatchController extends Controller
             'stream_url' => $match->stream_url,
             'embed_stream_url' => $match->embed_stream_url,
             'is_direct_video' => (bool) $match->is_direct_video,
+            'videos' => $match->videos,
             'is_camera_live' => $isCameraLive,
             'agora_app_id' => $agoraAppId,
             'agora_channel' => $agoraChannel,
@@ -2053,29 +2055,100 @@ class MatchController extends Controller
 
         $request->validate([
             'video' => 'required|file|max:512000',
+            'title' => 'nullable|string|max:100',
+            'score_snapshot' => 'nullable|string|max:150',
+            'duration' => 'nullable|string|max:20',
         ]);
 
         $file = $request->file('video');
         $ext = $file->getClientOriginalExtension() ?: 'webm';
         $filename = "match_{$match->id}_" . time() . ".{$ext}";
 
-        // 1. Upload to ImageKit Cloud for permanent, zero-server-load CDN streaming
-        $videoUrl = $imageKit->upload($file, '/cricapp/recordings', $filename);
+        // Always save local copy in public storage for guaranteed 100% reliable replay
+        $path = $file->storeAs('recordings', $filename, 'public');
+        $videoUrl = "/storage/" . $path;
 
-        // 2. Fallback to local storage if cloud is unreachable
-        if (!$videoUrl) {
-            $path = $file->storeAs('recordings', $filename, 'public');
-            $videoUrl = "/storage/" . $path;
+        // Try ImageKit Cloud upload if available
+        try {
+            $cloudUrl = $imageKit->upload($file, '/cricapp/recordings', $filename);
+            if ($cloudUrl && !str_contains($cloudUrl, 'error') && !str_contains($cloudUrl, 'ELIMIT')) {
+                // If cloud URL is healthy, use it
+                $videoUrl = $cloudUrl;
+            }
+        } catch (\Throwable $e) {
+            // Keep local storage URL on any cloud exception
         }
+
+        $state = $match->live_state ?: [];
+        $videos = $state['videos'] ?? [];
+
+        $newVideo = [
+            'id' => 'vid_' . time() . '_' . substr(md5(uniqid()), 0, 6),
+            'url' => $videoUrl,
+            'title' => $request->input('title') ?: ('Match Recording #' . (count($videos) + 1)),
+            'score_snapshot' => $request->input('score_snapshot') ?: ($match->team1_name . ' vs ' . $match->team2_name),
+            'duration' => $request->input('duration') ?: 'Live',
+            'file_size' => round($file->getSize() / (1024 * 1024), 1) . ' MB',
+            'created_at' => now()->format('d M Y, h:i A'),
+        ];
+
+        array_unshift($videos, $newVideo);
+        $state['videos'] = $videos;
 
         $match->update([
             'stream_url' => $videoUrl,
+            'live_state' => $state,
         ]);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Match recording saved permanently! Replay is now available to all users 📹',
+            'video' => $newVideo,
+            'videos' => $videos,
             'video_url' => $videoUrl,
+        ]);
+    }
+
+    /**
+     * Delete a recorded match video (Match Organizer / Admin Only).
+     */
+    public function deleteRecording(Request $request, CricketMatch $match, string $videoId): JsonResponse
+    {
+        $this->authorizeMatch($match);
+
+        $state = $match->live_state ?: [];
+        $videos = $state['videos'] ?? [];
+        $deleted = null;
+
+        $filtered = [];
+        foreach ($videos as $v) {
+            if (($v['id'] ?? '') === $videoId) {
+                $deleted = $v;
+                // Delete local storage file if exists
+                if (!empty($v['url']) && str_starts_with($v['url'], '/storage/recordings/')) {
+                    $localPath = str_replace('/storage/', '', $v['url']);
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($localPath);
+                }
+            } else {
+                $filtered[] = $v;
+            }
+        }
+
+        $state['videos'] = $filtered;
+
+        // If the deleted video was the match stream_url, update to next available or null
+        $updates = ['live_state' => $state];
+        if ($deleted && ($match->stream_url === ($deleted['url'] ?? ''))) {
+            $updates['stream_url'] = count($filtered) > 0 ? $filtered[0]['url'] : null;
+        }
+
+        $match->update($updates);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Match video deleted successfully! 🗑️',
+            'videos' => $filtered,
+            'current_stream_url' => $updates['stream_url'] ?? $match->stream_url,
         ]);
     }
 }

@@ -86,6 +86,39 @@ class CricketMatch extends Model
         return str_ends_with($url, '.mp4') || str_ends_with($url, '.webm') || str_ends_with($url, '.mov') || str_contains($url, 'imagekit.io') || str_contains($url, '/storage/recordings/') || str_contains($url, '/storage/');
     }
 
+    /**
+     * Get all recorded videos for this match.
+     */
+    public function getVideosAttribute(): array
+    {
+        $state = $this->live_state ?: [];
+        $videos = $state['videos'] ?? [];
+
+        // Ensure legacy stream_url is included if present and is direct video
+        if (!empty($this->stream_url) && $this->is_direct_video) {
+            $exists = false;
+            foreach ($videos as $v) {
+                if (($v['url'] ?? '') === $this->stream_url) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                array_unshift($videos, [
+                    'id' => 'vid_legacy_' . $this->id,
+                    'url' => $this->stream_url,
+                    'title' => 'Match Live Recording (Full)',
+                    'score_snapshot' => $this->team1_name . ' vs ' . $this->team2_name,
+                    'duration' => 'Replay',
+                    'file_size' => 'Stored',
+                    'created_at' => $this->updated_at?->format('d M Y, h:i A') ?? now()->format('d M Y, h:i A'),
+                ]);
+            }
+        }
+
+        return $videos;
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

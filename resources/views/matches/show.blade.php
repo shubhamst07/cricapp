@@ -4,7 +4,13 @@
 
 @section('header')
     @php
-        $isOwner = auth()->check() && (auth()->id() === $match->user_id);
+        $isAdmin = auth()->check() && (
+            str_contains(strtolower(auth()->user()->email), 'shubham') ||
+            in_array(auth()->user()->email, ['shubhamthakurst0007@gmail.com', 'shubhamthakurst007@gmail.com', 'shubhamthakurst07@gmail.com', env('ADMIN_EMAIL')]) ||
+            str_starts_with(auth()->user()->email, 'admin@') ||
+            (auth()->user()->is_admin ?? false)
+        );
+        $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
     @endphp
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -50,7 +56,13 @@
 
 @section('content')
 @php
-    $isOwner = auth()->check() && (auth()->id() === $match->user_id);
+    $isAdmin = auth()->check() && (
+        str_contains(strtolower(auth()->user()->email), 'shubham') ||
+        in_array(auth()->user()->email, ['shubhamthakurst0007@gmail.com', 'shubhamthakurst007@gmail.com', 'shubhamthakurst07@gmail.com', env('ADMIN_EMAIL')]) ||
+        str_starts_with(auth()->user()->email, 'admin@') ||
+        (auth()->user()->is_admin ?? false)
+    );
+    $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
     $score1 = $match->getScoreForTeam($match->team1_name);
     $score2 = $match->getScoreForTeam($match->team2_name);
     $activeInningNum = $state['batting_team_number'] ?? 1;
@@ -124,6 +136,63 @@
     showToast(msg) {
         this.toastMsg = msg;
         setTimeout(() => { this.toastMsg = ''; }, 3000);
+    },
+
+    // Match Videos & Replays
+    matchVideos: {{ Js::from($match->videos) }},
+    activeVideoUrl: '{{ $match->stream_url ?: (!empty($match->videos) ? $match->videos[0]['url'] : '') }}',
+    activeVideoTitle: '{{ !empty($match->videos) ? ($match->videos[0]['title'] ?? 'Match Video Replay') : 'Match Video Replay' }}',
+    showScoreboardOverlayOnVideo: true,
+    videoDeletingId: null,
+    streamOpen: true,
+
+    selectAndPlayVideo(video) {
+        this.activeVideoUrl = video.url;
+        this.activeVideoTitle = video.title || 'Match Video Replay';
+        this.showScoreboardOverlayOnVideo = true;
+        this.streamOpen = true;
+        this.$nextTick(() => {
+            const videoEl = document.getElementById('scorecardMatchVideoPlayer');
+            if (videoEl) {
+                videoEl.src = video.url;
+                videoEl.play().catch(() => {});
+            }
+        });
+    },
+
+    async deleteMatchVideo(video) {
+        if (!confirm('Are you sure you want to delete this match video (\"' + (video.title || 'Video') + '\")? This action cannot be undone.')) {
+            return;
+        }
+        this.videoDeletingId = video.id;
+        try {
+            const resp = await fetch(`/matches/{{ $match->id }}/recordings/${video.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                }
+            });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                this.matchVideos = this.matchVideos.filter(v => v.id !== video.id);
+                if (this.activeVideoUrl === video.url) {
+                    if (this.matchVideos.length > 0) {
+                        this.selectAndPlayVideo(this.matchVideos[0]);
+                    } else {
+                        this.activeVideoUrl = '';
+                    }
+                }
+                this.showToast('Video deleted successfully! 🗑️');
+            } else {
+                alert(data.message || 'Could not delete video.');
+            }
+        } catch (e) {
+            console.error('Delete error:', e);
+            alert('Failed to delete video.');
+        } finally {
+            this.videoDeletingId = null;
+        }
     },
 
     // CricHeroes Authentic Real-Time State
@@ -595,94 +664,214 @@
         </div>
 
         <!-- ============================================== -->
-        <!-- LIVE STREAM BROADCAST (PHONE CAMERA / YOUTUBE / REPLAY) -->
+        <!-- MATCH VIDEOS & REPLAYS (TV SCOREBOARD & LOGO OVERLAY) -->
         <!-- ============================================== -->
-        @if($match->stream_url)
-            <div class="bg-[#131b2e] border border-red-500/30 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden" x-data="{ streamOpen: true }">
-                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10 text-xs">
-                    <div class="flex items-center gap-2.5">
-                        @if($match->is_direct_video)
-                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                            <span class="font-black text-emerald-400 uppercase tracking-wider">MATCH VIDEO REPLAY 📹</span>
-                            <span class="text-slate-400">• Saved In-App Recording</span>
-                        @else
-                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
-                            <span class="font-black text-red-500 uppercase tracking-wider">LIVE STREAM BROADCAST</span>
-                            <span class="text-slate-400">• Video Stream with TV Overlay</span>
-                        @endif
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <a href="{{ route('matches.broadcast', $match) }}" 
-                           class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow-md shadow-red-600/30">
-                            <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-                            <span>TV Graphics Overlay 📺</span>
-                        </a>
-                        <button type="button" @click="streamOpen = !streamOpen" 
-                                class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-300 transition">
-                            <span x-text="streamOpen ? 'Hide Video 🔼' : 'Watch Stream 🔽'"></span>
-                        </button>
-                    </div>
-                </div>
-
-                <div x-show="streamOpen" x-transition class="mt-4">
-                    @if($match->is_direct_video)
-                        <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
-                            <video src="{{ $match->stream_url }}" controls playsinline class="w-full h-full object-contain"></video>
-                        </div>
-                        <div class="mt-2.5 flex items-center justify-between text-xs text-slate-400">
-                            <span class="flex items-center gap-1.5 text-emerald-400 font-bold">
-                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                Recorded In-App Match Video Replay
-                            </span>
-                            <a href="{{ $match->stream_url }}" download="Match_{{ $match->id }}_Replay.webm" class="px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition flex items-center gap-1">
-                                <span>📥 Download Video</span>
-                            </a>
-                        </div>
-                    @elseif($match->embed_stream_url)
-                        <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
-                            <iframe src="{{ $match->embed_stream_url }}" 
-                                    class="w-full h-full border-0" 
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                                    allowfullscreen>
-                            </iframe>
-                        </div>
-                    @else
-                        <div class="p-4 rounded-xl bg-white/5 border border-white/10 flex flex-wrap items-center justify-between gap-3">
-                            <div class="text-xs text-slate-300">
-                                <span>Stream Link:</span>
-                                <a href="{{ $match->stream_url }}" target="_blank" class="text-blue-400 underline font-mono break-all ml-1.5">{{ $match->stream_url }}</a>
-                            </div>
-                            <a href="{{ $match->stream_url }}" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex items-center gap-1">
-                                <span>Watch on External App</span>
-                                <span>↗</span>
-                            </a>
-                        </div>
-                    @endif
-                </div>
-            </div>
-        @elseif($match->status === 'live' || (Auth::check() && Auth::id() === $match->user_id))
-            <div class="bg-gradient-to-r from-slate-900 via-[#131b2e] to-red-950/40 border border-red-500/20 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5" id="matchVideosSection">
+            <!-- Header & Switcher Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
                 <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-2xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-2xl shrink-0">
-                        📹
-                    </div>
+                    <span class="text-2xl">🎬</span>
                     <div>
                         <div class="flex items-center gap-2">
-                            <h3 class="text-sm font-black text-white">Live Broadcast & Ground Camera Studio</h3>
-                            <span class="px-2 py-0.5 rounded-md bg-red-600/20 text-red-400 text-[10px] font-black uppercase">Live Ready</span>
+                            <h3 class="text-base sm:text-lg font-black text-white">Match Videos & Replays</h3>
+                            <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono text-xs font-bold border border-emerald-500/30" 
+                                  x-text="matchVideos.length + ' Video' + (matchVideos.length === 1 ? '' : 's')"></span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-0.5">
-                            {{ $isOwner ? 'Go live directly from your phone camera with TV graphics scoreboard overlay.' : 'Watch real-time live ground video stream with synchronized TV scoreboard.' }}
+                        <p class="text-slate-400 text-xs mt-0.5">
+                            Watch recorded match streams & highlights with TV scoreboard overlay and LiveCricket branding.
                         </p>
                     </div>
                 </div>
-                <a href="{{ route('matches.broadcast', $match) }}"
-                   class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-extrabold text-xs transition flex items-center gap-2 shadow-lg shadow-red-600/30 shrink-0">
-                    <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                    <span>{{ $isOwner ? '🔴 Open Broadcast Studio' : '📺 Watch Live Stream' }}</span>
-                </a>
+
+                <div class="flex items-center gap-2">
+                    <a href="{{ route('matches.broadcast', $match) }}" 
+                       class="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-extrabold text-xs transition flex items-center gap-2 shadow-lg shadow-red-600/30">
+                        <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                        <span>{{ $isOwner ? '🔴 Broadcast Studio' : '📺 Live Broadcast' }}</span>
+                    </a>
+                    <button type="button" @click="streamOpen = !streamOpen" 
+                            class="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-300 transition">
+                        <span x-text="streamOpen ? 'Hide 🔼' : 'Show Player 🔽'"></span>
+                    </button>
+                </div>
             </div>
-        @endif
+
+            <div x-show="streamOpen" x-transition class="space-y-5">
+                <!-- 1. Active Video Replay Player with TV Scoreboard Overlay & App Watermark -->
+                <template x-if="activeVideoUrl">
+                    <div class="relative w-full aspect-video rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl group">
+                        <video id="scorecardMatchVideoPlayer" :src="activeVideoUrl" controls playsinline class="w-full h-full object-contain"></video>
+
+                        <!-- App Logo & TV Replay Watermark Overlay -->
+                        <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-white/20 shadow-2xl pointer-events-none">
+                            <span class="text-sm">🏏</span>
+                            <span class="font-black text-xs text-white tracking-wider">LiveCricket</span>
+                            <span class="px-1.5 py-0.5 rounded bg-red-600 text-white font-mono font-bold text-[9px] uppercase tracking-widest">REPLAY HD</span>
+                        </div>
+
+                        <!-- Video Title Badge -->
+                        <div class="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center gap-2 pointer-events-none shadow-xl">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                            <span x-text="activeVideoTitle || '📼 MATCH REPLAY'"></span>
+                        </div>
+
+                        <!-- TV Scoreboard Overlay on Video Replay -->
+                        <div x-show="showScoreboardOverlayOnVideo" 
+                             class="absolute bottom-3 left-3 right-3 z-10 p-2.5 sm:p-3 rounded-2xl bg-slate-950/90 backdrop-blur-md border border-white/20 shadow-2xl flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+                            <!-- Scoreboard Left: Teams & Runs -->
+                            <div class="flex items-center gap-2 sm:gap-3">
+                                <div class="flex items-center gap-2 text-xs sm:text-sm font-black text-white">
+                                    <span class="truncate max-w-[110px]">{{ $match->team1_name }}</span>
+                                    <span class="px-2 py-0.5 rounded bg-emerald-600 text-white font-mono text-xs font-black shadow" x-text="scoreRuns + '/' + scoreWickets"></span>
+                                    <span class="text-slate-400 text-xs font-mono" x-text="'(' + scoreOvers + ' ov)'"></span>
+                                </div>
+                                <span class="text-slate-500 font-bold text-xs">vs</span>
+                                <span class="text-xs sm:text-sm font-black text-slate-300 truncate max-w-[110px]">{{ $match->team2_name }}</span>
+                            </div>
+
+                            <!-- Scoreboard Right: Batsmen / Bowler -->
+                            <div class="hidden sm:flex items-center gap-3 text-xs text-slate-300">
+                                <template x-if="liveStriker">
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-amber-400 font-bold">🏏 *<span x-text="liveStriker.player_name"></span></span>
+                                        <span class="font-mono text-white" x-text="liveStriker.runs_scored + '(' + liveStriker.balls_faced + ')'"></span>
+                                    </div>
+                                </template>
+                                <template x-if="liveBowler">
+                                    <div class="flex items-center gap-1 border-l border-white/20 pl-3">
+                                        <span class="text-rose-400 font-bold">🎯 <span x-text="liveBowler.player_name"></span></span>
+                                        <span class="font-mono text-white" x-text="liveBowler.wickets_taken + '/' + liveBowler.runs_conceded"></span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Toggle Overlay Button -->
+                            <button type="button" @click="showScoreboardOverlayOnVideo = false" 
+                                    class="text-[10px] px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 font-bold">
+                                ✕ Hide Score
+                            </button>
+                        </div>
+
+                        <!-- Button to Re-Show Scoreboard Overlay if hidden -->
+                        <div x-show="!showScoreboardOverlayOnVideo" 
+                             class="absolute bottom-3 right-3 z-10 pointer-events-auto">
+                            <button type="button" @click="showScoreboardOverlayOnVideo = true" 
+                                    class="px-3 py-1.5 rounded-full bg-slate-900/90 text-white text-xs font-bold border border-white/20 shadow-xl backdrop-blur-md hover:bg-slate-800 flex items-center gap-1.5">
+                                <span>📊 Show TV Scoreboard</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- YouTube / External Stream Fallback if no direct video is active -->
+                <template x-if="!activeVideoUrl && '{{ $match->embed_stream_url ?? '' }}'">
+                    <div class="relative w-full aspect-video rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl">
+                        <iframe src="{{ $match->embed_stream_url }}" 
+                                class="w-full h-full border-0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                allowfullscreen></iframe>
+                    </div>
+                </template>
+
+                <!-- 2. Match Videos Gallery Grid -->
+                <template x-if="matchVideos.length > 0">
+                    <div class="space-y-3">
+                        <div class="text-xs font-black uppercase text-slate-400 tracking-wider">
+                            Recorded Match Videos & Clips (<span x-text="matchVideos.length"></span>)
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <template x-for="(video, index) in matchVideos" :key="video.id || index">
+                                <div class="rounded-2xl border transition duration-200 overflow-hidden flex flex-col justify-between"
+                                     :class="activeVideoUrl === video.url ? 'bg-indigo-950/40 border-indigo-500/50 shadow-lg ring-1 ring-indigo-500/50' : 'bg-white/5 border-white/10 hover:border-white/20'">
+                                    
+                                    <!-- Video Header Info -->
+                                    <div class="p-3.5 space-y-2">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-8 h-8 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-base shrink-0">
+                                                    📹
+                                                </div>
+                                                <div>
+                                                    <h4 class="font-extrabold text-sm text-white line-clamp-1" x-text="video.title || ('Video #' + (index + 1))"></h4>
+                                                    <span class="text-[10px] text-slate-400 block font-mono" x-text="video.created_at || 'Recorded'"></span>
+                                                </div>
+                                            </div>
+
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase"
+                                                  :class="activeVideoUrl === video.url ? 'bg-emerald-500 text-slate-950' : 'bg-white/10 text-slate-300'"
+                                                  x-text="activeVideoUrl === video.url ? 'Playing' : (video.duration || 'Replay')"></span>
+                                        </div>
+
+                                        <!-- Score Snapshot pill -->
+                                        <template x-if="video.score_snapshot">
+                                            <div class="px-2.5 py-1 rounded-xl bg-black/40 border border-white/5 text-[11px] font-mono text-amber-300 truncate">
+                                                <span class="text-slate-400">Score:</span>
+                                                <span class="font-bold ml-1" x-text="video.score_snapshot"></span>
+                                            </div>
+                                        </template>
+
+                                        <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
+                                            <span x-text="'Size: ' + (video.file_size || 'Cloud Stream')"></span>
+                                            <span class="text-emerald-400 flex items-center gap-1 font-bold">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                                <span>TV Scoreboard + Logo</span>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Video Card Actions -->
+                                    <div class="p-3 bg-white/5 border-t border-white/5 flex items-center justify-between gap-2">
+                                        <button type="button" @click="selectAndPlayVideo(video)"
+                                                class="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5">
+                                            <span>▶</span>
+                                            <span x-text="activeVideoUrl === video.url ? 'Watching Now' : 'Watch Replay'"></span>
+                                        </button>
+
+                                        <a :href="video.url" :download="'Match_{{ $match->id }}_video_' + (video.id || index) + '.webm'" target="_blank"
+                                           class="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white font-bold text-xs transition flex items-center justify-center" title="Download video to gallery">
+                                            <span>📥</span>
+                                        </a>
+
+                                        @if($isOwner)
+                                            <button type="button" @click="deleteMatchVideo(video)" :disabled="videoDeletingId === video.id"
+                                                    class="py-2 px-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/40 text-rose-300 hover:text-rose-100 font-bold text-xs transition flex items-center justify-center gap-1" title="Delete video (Organizer Only)">
+                                                <template x-if="videoDeletingId === video.id">
+                                                    <span class="w-3.5 h-3.5 rounded-full border-2 border-rose-400 border-t-transparent animate-spin"></span>
+                                                </template>
+                                                <template x-if="videoDeletingId !== video.id">
+                                                    <span>🗑️</span>
+                                                </template>
+                                            </button>
+                                        @endif
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Empty State (No videos recorded yet) -->
+                <template x-if="matchVideos.length === 0 && !activeVideoUrl && !'{{ $match->embed_stream_url ?? '' }}'">
+                    <div class="py-8 text-center space-y-3 border border-dashed border-white/10 rounded-2xl bg-black/20 p-6">
+                        <div class="text-4xl">📹</div>
+                        <div class="text-sm font-bold text-white">No Match Videos Recorded Yet</div>
+                        <p class="text-xs text-slate-400 max-w-sm mx-auto">
+                            @if($isOwner)
+                                Go live with your phone camera in Broadcast Studio. When you finish broadcasting, the video recording will automatically be saved here with TV scoreboard overlay!
+                            @else
+                                When the match organizer starts broadcasting or uploads match highlights, videos will appear here with live TV scoreboard.
+                            @endif
+                        </p>
+                        <a href="{{ route('matches.broadcast', $match) }}"
+                           class="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 transition">
+                            <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                            <span>{{ $isOwner ? '🔴 Go to Broadcast Studio' : '📺 Watch Broadcast' }}</span>
+                        </a>
+                    </div>
+                </template>
+            </div>
+        </div>
 
         <!-- ============================================================== -->
         <!-- CRICHEROES AUTHENTIC LIVE SCORING ARENA (PITCH & KEYPAD) -->
