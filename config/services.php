@@ -51,8 +51,8 @@ return [
     ],
 
     'agora' => [
-        'app_id' => env('AGORA_APP_ID', ''),
-        'app_certificate' => env('AGORA_APP_CERTIFICATE', ''),
+        'app_id' => env('AGORA_APP_ID', 'f4929bb36b5a4d3a972226ad8b6ce599'),
+        'app_certificate' => env('AGORA_APP_CERTIFICATE', '19b692f8de2a41598b57b55e1755997e'),
     ],
 
     'imagekit' => [
