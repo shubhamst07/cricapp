@@ -442,9 +442,8 @@ class MatchController extends Controller
         $agoraToken = '';
         if (!empty($agoraAppId) && !empty($agoraCert)) {
             $agoraTokenService = app(\App\Services\AgoraTokenService::class);
-            $uid = auth()->id() ?: rand(100000, 999999);
             $role = $isOwner ? \App\Services\AgoraTokenService::ROLE_PUBLISHER : \App\Services\AgoraTokenService::ROLE_SUBSCRIBER;
-            $agoraToken = $agoraTokenService->buildToken($agoraChannel, $uid, $role) ?: '';
+            $agoraToken = $agoraTokenService->buildToken($agoraChannel, 0, $role) ?: '';
         }
 
         return view('matches.broadcast', compact(
@@ -491,9 +490,8 @@ class MatchController extends Controller
         $agoraToken = null;
         if (!empty($agoraAppId) && !empty($agoraCert)) {
             $agoraTokenService = app(\App\Services\AgoraTokenService::class);
-            $uid = auth()->id() ?: rand(100000, 999999);
             $role = $isOwner ? \App\Services\AgoraTokenService::ROLE_PUBLISHER : \App\Services\AgoraTokenService::ROLE_SUBSCRIBER;
-            $agoraToken = $agoraTokenService->buildToken($agoraChannel, $uid, $role);
+            $agoraToken = $agoraTokenService->buildToken($agoraChannel, 0, $role);
         }
 
         return response()->json([

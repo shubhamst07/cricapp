@@ -342,7 +342,7 @@
                 try {
                     this.agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
                     await this.agoraClient.setClientRole('host');
-                    await this.agoraClient.join(this.agoraAppId, this.agoraChannel, this.agoraToken || null, null);
+                    await this.agoraClient.join(this.agoraAppId, this.agoraChannel, this.agoraToken || null, 0);
 
                     const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
                         { AEC: true, ANS: true },
@@ -591,7 +591,7 @@
                     }
                 });
 
-                await this.agoraClient.join(appId, channel, token || null, null);
+                await this.agoraClient.join(appId, channel, token || null, 0);
                 this.viewerConnected = true;
                 agoraAttempted = true;
             } catch(e) {
@@ -894,7 +894,7 @@
             }
         }, 1800);
     }
-}" x-init="startPolling(); window.addEventListener('beforeunload', () => { if (isBroadcaster && streamActive) { navigator.sendBeacon('{{ route('matches.stream-signal', $match) }}', new Blob([JSON.stringify({ is_camera_live: false, _token: '{{ csrf_token() }}' })], { type: 'application/json' })); } });">
+}" x-init="startPolling(); if (!isBroadcaster && isCameraLive) { connectAudienceStream({ agora_app_id: agoraAppId, agora_channel: agoraChannel, agora_token: agoraToken }); } window.addEventListener('beforeunload', () => { if (isBroadcaster && streamActive) { navigator.sendBeacon('{{ route('matches.stream-signal', $match) }}', new Blob([JSON.stringify({ is_camera_live: false, _token: '{{ csrf_token() }}' })], { type: 'application/json' })); } });">
 
     <!-- Floating Notification -->
     <div x-cloak x-show="toastMsg" x-transition 
