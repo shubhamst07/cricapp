@@ -161,7 +161,7 @@
     },
 
     async deleteMatchVideo(video) {
-        if (!confirm('Are you sure you want to delete this match video (\"' + (video.title || 'Video') + '\")? This action cannot be undone.')) {
+        if (!confirm('Are you sure you want to delete this match video: ' + (video.title || 'Video') + '? This action cannot be undone.')) {
             return;
         }
         this.videoDeletingId = video.id;
