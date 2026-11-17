@@ -12,41 +12,41 @@
         );
         $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
     @endphp
-    <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <a href="{{ route('matches.index') }}" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition" title="Back to My Matches">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ route('matches.index') }}" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition shrink-0" title="Back to My Matches">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
             </a>
-            <div>
-                <span class="text-[11px] font-black uppercase text-red-600 dark:text-rose-400 tracking-wider">CRICHEROES MATCH ARENA</span>
-                <h2 class="font-black text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight">
+            <div class="min-w-0">
+                <span class="text-[10px] sm:text-[11px] font-black uppercase text-red-600 dark:text-rose-400 tracking-wider block">CRICHEROES MATCH ARENA</span>
+                <h2 class="font-black text-lg sm:text-2xl text-slate-900 dark:text-white leading-tight truncate">
                     {{ $match->team1_name }} vs {{ $match->team2_name }}
                 </h2>
             </div>
         </div>
 
-        <div class="flex items-center gap-2">
-            <a href="{{ route('matches.broadcast', $match) }}" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-red-600/30">
+        <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <a href="{{ route('matches.broadcast', $match) }}" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-red-600/30">
                 <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
                 <span>{{ $isOwner ? 'Go Live 🎥' : 'Watch Broadcast 📺' }}</span>
             </a>
             @if($isOwner)
                 <form method="POST" action="{{ route('matches.rematch', $match) }}" onsubmit="return confirm('Start Rematch with identical squads? 🏏');" class="inline">
                     @csrf
-                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1 shadow-sm">
-                        <span>Rematch 🔁</span>
+                    <button type="submit" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border dark:border-emerald-500/30 text-emerald-700 text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <span>🔁</span><span>Rematch</span>
                     </button>
                 </form>
-                <a href="{{ route('matches.edit', $match) }}" class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition">
-                    Match Settings
+                <a href="{{ route('matches.edit', $match) }}" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-200 text-gray-700 text-xs font-bold transition flex items-center gap-1">
+                    <span>⚙️</span><span>Settings</span>
                 </a>
-                <form method="POST" action="{{ route('matches.destroy', $match) }}" onsubmit="return confirm('Delete this match?');">
+                <form method="POST" action="{{ route('matches.destroy', $match) }}" onsubmit="return confirm('Delete this match permanently? This action cannot be undone.');" class="inline">
                     @csrf
                     @method('DELETE')
-                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition">
-                        Delete
+                    <button type="submit" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400 dark:border dark:border-rose-500/30 text-rose-600 text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <span>🗑️</span><span>Delete</span>
                     </button>
                 </form>
             @endif
@@ -444,6 +444,37 @@
     editSyncTeam: true,
     isSavingPlayer: false,
 
+    // CricHeroes Player Career Profile Modal State
+    careerModalOpen: false,
+    careerLoading: false,
+    careerError: '',
+    careerTab: 'batting',
+    careerData: null,
+
+    async openCareerModal(playerId) {
+        if (!playerId) return;
+        this.careerModalOpen = true;
+        this.careerLoading = true;
+        this.careerError = '';
+        this.careerTab = 'batting';
+        this.careerData = null;
+        try {
+            const res = await fetch(`/matches/{{ $match->id }}/players/${playerId}/career`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            if (!res.ok) throw new Error('Could not fetch player career data');
+            const data = await res.json();
+            this.careerData = data;
+        } catch (e) {
+            console.error('Failed to load player career data:', e);
+            this.careerError = 'Unable to load player career stats at the moment.';
+        } finally {
+            this.careerLoading = false;
+        }
+    },
+
     openPlayerModal(p) {
         this.selectedPlayer = p;
         this.editRuns = parseInt(p.runs_scored || 0);
@@ -535,37 +566,69 @@
                 </div>
             </div>
 
-            <!-- Teams Big Scores Row -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
-                <!-- Team 1 -->
-                <div class="p-5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between"
-                     :class="scorecardInning === 1 ? 'ring-2 ring-blue-500/40 bg-blue-900/10' : ''">
-                    <div>
-                        <span class="text-[10px] font-bold text-blue-400 uppercase">Team 1</span>
-                        <div class="font-extrabold text-white text-lg sm:text-xl mt-0.5">{{ $match->team1_name }}</div>
-                        <div class="text-xs text-slate-400 mt-1">Overs: {{ $score1 ? $score1->formatted_overs : '0.0' }} / {{ $match->total_overs }}</div>
+            <!-- Teams Big Scores Row (Interactive Innings Switcher) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 my-6">
+                <!-- Team 1 Card (Clickable 1st Innings) -->
+                <button type="button" 
+                        @click="scorecardInning = 1"
+                        class="p-4 sm:p-5 rounded-2xl border flex items-center justify-between text-left transition w-full cursor-pointer group"
+                        :class="scorecardInning === 1 
+                            ? 'bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/50 shadow-lg shadow-blue-500/20' 
+                            : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 opacity-70 hover:opacity-100'">
+                    <div class="min-w-0 pr-3">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded"
+                                  :class="scorecardInning === 1 ? 'bg-blue-600 text-white' : 'bg-white/10 text-blue-300'">
+                                1st Innings
+                            </span>
+                            <span x-show="scorecardInning === 1" class="text-[10px] text-blue-400 font-bold flex items-center gap-1">
+                                <span>🏏 Active</span>
+                            </span>
+                            <span x-show="scorecardInning !== 1" class="text-[10px] text-slate-400 group-hover:text-white transition">
+                                <span>Tap to view ➔</span>
+                            </span>
+                        </div>
+                        <div class="font-extrabold text-white text-base sm:text-xl mt-1.5 truncate">{{ $match->team1_name }}</div>
+                        <div class="text-xs text-slate-400 mt-1 font-mono">Overs: {{ $score1 ? $score1->formatted_overs : '0.0' }} / {{ $match->total_overs }}</div>
                     </div>
-                    <div class="text-right">
-                        <div class="text-3xl sm:text-4xl font-black text-white font-mono">
+                    <div class="text-right shrink-0">
+                        <div class="text-3xl sm:text-4xl font-black font-mono transition"
+                             :class="scorecardInning === 1 ? 'text-white' : 'text-slate-300'">
                             {{ $score1 ? "{$score1->runs}/{$score1->wickets}" : '0/0' }}
                         </div>
                     </div>
-                </div>
+                </button>
 
-                <!-- Team 2 -->
-                <div class="p-5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between"
-                     :class="scorecardInning === 2 ? 'ring-2 ring-rose-500/40 bg-rose-900/10' : ''">
-                    <div>
-                        <span class="text-[10px] font-bold text-rose-400 uppercase">Team 2</span>
-                        <div class="font-extrabold text-white text-lg sm:text-xl mt-0.5">{{ $match->team2_name }}</div>
-                        <div class="text-xs text-slate-400 mt-1">Overs: {{ $score2 ? $score2->formatted_overs : '0.0' }} / {{ $match->total_overs }}</div>
+                <!-- Team 2 Card (Clickable 2nd Innings) -->
+                <button type="button" 
+                        @click="scorecardInning = 2"
+                        class="p-4 sm:p-5 rounded-2xl border flex items-center justify-between text-left transition w-full cursor-pointer group"
+                        :class="scorecardInning === 2 
+                            ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/50 shadow-lg shadow-rose-500/20' 
+                            : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 opacity-70 hover:opacity-100'">
+                    <div class="min-w-0 pr-3">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded"
+                                  :class="scorecardInning === 2 ? 'bg-rose-600 text-white' : 'bg-white/10 text-rose-300'">
+                                2nd Innings
+                            </span>
+                            <span x-show="scorecardInning === 2" class="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                                <span>🎯 Active</span>
+                            </span>
+                            <span x-show="scorecardInning !== 2" class="text-[10px] text-slate-400 group-hover:text-white transition">
+                                <span>Tap to view ➔</span>
+                            </span>
+                        </div>
+                        <div class="font-extrabold text-white text-base sm:text-xl mt-1.5 truncate">{{ $match->team2_name }}</div>
+                        <div class="text-xs text-slate-400 mt-1 font-mono">Overs: {{ $score2 ? $score2->formatted_overs : '0.0' }} / {{ $match->total_overs }}</div>
                     </div>
-                    <div class="text-right">
-                        <div class="text-3xl sm:text-4xl font-black text-white font-mono">
+                    <div class="text-right shrink-0">
+                        <div class="text-3xl sm:text-4xl font-black font-mono transition"
+                             :class="scorecardInning === 2 ? 'text-white' : 'text-slate-300'">
                             {{ $score2 ? "{$score2->runs}/{$score2->wickets}" : '0/0' }}
                         </div>
                     </div>
-                </div>
+                </button>
             </div>
 
             <!-- Match Situation Strip -->
@@ -924,8 +987,11 @@
                             </span>
                             <span class="text-emerald-400 font-mono text-[10px] font-bold">STRIKER</span>
                         </div>
-                        <div class="font-black text-white text-base sm:text-lg truncate mt-1" 
-                             x-text="liveStriker ? liveStriker.player_name : 'Select Striker'"></div>
+                        <button type="button" 
+                             @click="liveStriker && openCareerModal(liveStriker.id)"
+                             title="View Career Profile"
+                             class="font-black text-white hover:text-emerald-400 text-base sm:text-lg truncate mt-1 text-left block w-full transition cursor-pointer" 
+                             x-text="liveStriker ? liveStriker.player_name : 'Select Striker'"></button>
                         <div class="mt-2 text-xs font-mono flex items-baseline justify-between">
                             <span class="text-xl font-black text-amber-300" 
                                   x-text="liveStriker ? (liveStriker.runs_scored + '*' ) : '0*'"></span>
@@ -950,8 +1016,11 @@
                                 <span>🔄 Swap Strike</span>
                             </button>
                         </div>
-                        <div class="font-black text-white text-base sm:text-lg truncate mt-1" 
-                             x-text="liveNonStriker ? liveNonStriker.player_name : 'Select Non-Striker'"></div>
+                        <button type="button" 
+                             @click="liveNonStriker && openCareerModal(liveNonStriker.id)"
+                             title="View Career Profile"
+                             class="font-black text-white hover:text-blue-400 text-base sm:text-lg truncate mt-1 text-left block w-full transition cursor-pointer" 
+                             x-text="liveNonStriker ? liveNonStriker.player_name : 'Select Non-Striker'"></button>
                         <div class="mt-2 text-xs font-mono flex items-baseline justify-between">
                             <span class="text-xl font-black text-slate-200" 
                                   x-text="liveNonStriker ? liveNonStriker.runs_scored : '0'"></span>
@@ -978,9 +1047,11 @@
                                 <span x-text="(!liveBowler || !liveBowler.id) ? '+ Select Bowler ⚠️' : (needsNewBowler ? 'New Bowler 🎯' : 'Change 🔄')"></span>
                             </button>
                         </div>
-                        <div class="font-black text-white text-base sm:text-lg truncate mt-1 cursor-pointer" 
-                             @click="(!liveBowler || !liveBowler.id || needsNewBowler) ? (bowlerModalOpen = true) : null"
-                             x-text="liveBowler ? liveBowler.player_name : '⚠️ Tap to Select Bowler'"></div>
+                        <button type="button" 
+                             @click="(!liveBowler || !liveBowler.id || needsNewBowler) ? (bowlerModalOpen = true) : openCareerModal(liveBowler.id)"
+                             title="View Career Profile"
+                             class="font-black text-white hover:text-rose-400 text-base sm:text-lg truncate mt-1 text-left block w-full transition cursor-pointer" 
+                             x-text="liveBowler ? liveBowler.player_name : '⚠️ Tap to Select Bowler'"></button>
                         <div class="mt-2 text-xs font-mono flex items-baseline justify-between">
                             <span class="text-xl font-black text-rose-400" 
                                   x-text="liveBowler ? (liveBowler.wickets_taken + '/' + liveBowler.runs_conceded) : '0/0'"></span>
@@ -1285,22 +1356,16 @@
                     <p class="text-slate-400 text-xs">Detailed individual batting & bowling cards with strike rates, maidens, and economy.</p>
                 </div>
 
-                <!-- Innings Switcher Tabs -->
-                <div class="flex items-center gap-2 p-1 bg-black/40 rounded-xl border border-white/10 self-start sm:self-auto">
-                    <button type="button" 
-                            @click="scorecardInning = 1"
-                            :class="scorecardInning === 1 ? 'bg-red-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
-                            class="px-4 py-2 rounded-lg text-xs transition flex items-center gap-1.5">
-                        <span>1st Innings: {{ $match->team1_name }}</span>
-                        <span class="px-1.5 py-0.2 rounded-md bg-black/30 font-mono text-[10px]">{{ $score1 ? "{$score1->runs}/{$score1->wickets}" : '0/0' }}</span>
-                    </button>
-                    <button type="button" 
-                            @click="scorecardInning = 2"
-                            :class="scorecardInning === 2 ? 'bg-red-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
-                            class="px-4 py-2 rounded-lg text-xs transition flex items-center gap-1.5">
-                        <span>2nd Innings: {{ $match->team2_name }}</span>
-                        <span class="px-1.5 py-0.2 rounded-md bg-black/30 font-mono text-[10px]">{{ $score2 ? "{$score2->runs}/{$score2->wickets}" : '0/0' }}</span>
-                    </button>
+                <!-- Sleek Active Inning Indicator Badge -->
+                <div class="self-start sm:self-auto flex items-center gap-2">
+                    <span class="px-3.5 py-1.5 rounded-xl text-xs font-black border flex items-center gap-2 shadow-sm transition"
+                          :class="scorecardInning === 1 
+                              ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' 
+                              : 'bg-rose-600/20 text-rose-300 border-rose-500/40'">
+                        <span class="w-2 h-2 rounded-full animate-pulse"
+                              :class="scorecardInning === 1 ? 'bg-blue-400' : 'bg-rose-400'"></span>
+                        <span x-text="scorecardInning === 1 ? '🏏 1st Innings: {{ $match->team1_name }}' : '🎯 2nd Innings: {{ $match->team2_name }}'"></span>
+                    </span>
                 </div>
             </div>
 
@@ -1321,15 +1386,14 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-white/5 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
                                 <tr>
-                                    <th class="py-3 px-4">Batter</th>
-                                    <th class="py-3 px-3">Dismissal</th>
-                                    <th class="py-3 px-3 text-right">R</th>
-                                    <th class="py-3 px-3 text-right">B</th>
-                                    <th class="py-3 px-3 text-right">4s</th>
-                                    <th class="py-3 px-3 text-right">6s</th>
-                                    <th class="py-3 px-3 text-right">SR</th>
+                                    <th class="py-2.5 px-2.5 sm:px-4 text-left">Batter</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">R</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">B</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">4s</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">6s</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">SR</th>
                                     @if($isOwner)
-                                        <th class="py-3 px-4 text-center">Score</th>
+                                        <th class="py-2.5 px-1 sm:px-2 text-center w-8 sm:w-16">Edit</th>
                                     @endif
                                 </tr>
                             </thead>
@@ -1345,67 +1409,70 @@
                                     @endphp
                                     <tr class="hover:bg-white/5 transition"
                                         :class="liveStriker && liveStriker.id === {{ $p->id }} ? 'bg-emerald-950/20' : ''">
-                                        <td class="py-3 px-4">
+                                        <td class="py-2.5 px-2 sm:px-4">
                                             <div class="flex items-center gap-2">
-                                                <div class="w-6 h-6 rounded-md bg-blue-600/30 text-blue-300 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                                <button type="button" 
+                                                        @click="openCareerModal({{ $p->id }})" 
+                                                        title="View {{ $p->player_name }}'s Career Profile"
+                                                        class="w-7 h-7 rounded-lg bg-blue-600/30 hover:bg-blue-600/60 text-blue-300 font-bold text-[11px] flex items-center justify-center shrink-0 border border-blue-500/20 transition cursor-pointer">
                                                     {{ strtoupper(substr($p->player_name, 0, 1)) }}
-                                                </div>
-                                                <div>
-                                                    <div class="font-extrabold text-white flex items-center gap-1.5">
-                                                        @if($p->user_id)
-                                                            <a href="{{ route('profile.user', $p->user_id) }}" class="hover:underline text-blue-400">
-                                                                {{ $p->player_name }}
-                                                            </a>
-                                                        @else
-                                                            <span>{{ $p->player_name }}</span>
-                                                        @endif
+                                                </button>
+                                                <div class="min-w-0">
+                                                    <button type="button" 
+                                                            @click="openCareerModal({{ $p->id }})"
+                                                            title="View {{ $p->player_name }}'s Career Profile"
+                                                            class="font-extrabold text-white hover:text-blue-400 text-left flex items-center gap-1 transition group truncate max-w-[130px] sm:max-w-none cursor-pointer">
+                                                        <span class="truncate group-hover:underline">{{ $p->player_name }}</span>
                                                         <template x-if="liveStriker && liveStriker.id === {{ $p->id }}">
-                                                            <span class="px-1 rounded bg-emerald-600 text-[8px] font-black text-white">*</span>
+                                                            <span class="px-1 rounded bg-emerald-600 text-[8px] font-black text-white shrink-0">*</span>
                                                         </template>
-                                                        @if($p->is_captain)<span class="px-1 rounded bg-red-600 text-[8px] font-black text-white">C</span>@endif
-                                                        @if($p->is_wicketkeeper)<span class="px-1 rounded bg-amber-600 text-[8px] font-black text-white">WK</span>@endif
+                                                        @if($p->is_captain)<span class="px-1 rounded bg-red-600 text-[8px] font-black text-white shrink-0">C</span>@endif
+                                                        @if($p->is_wicketkeeper)<span class="px-1 rounded bg-amber-600 text-[8px] font-black text-white shrink-0">WK</span>@endif
+                                                    </button>
+                                                    <div class="text-[10px] leading-tight truncate max-w-[140px] sm:max-w-none mt-0.5">
+                                                        @if(!$pHasBatted)
+                                                            <span class="text-slate-500 italic">yet to bat</span>
+                                                        @elseif($p->dismissal === 'not out' || empty($p->dismissal))
+                                                            <span class="text-emerald-400 font-bold">not out</span>
+                                                        @elseif($p->dismissal === 'dnb')
+                                                            <span class="text-slate-500 italic">did not bat</span>
+                                                        @else
+                                                            <span class="text-slate-300 font-medium">{{ $p->dismissal }}</span>
+                                                        @endif
+                                                        @if($p->player_role)
+                                                            <span class="text-slate-500">• {{ $p->player_role }}</span>
+                                                        @endif
                                                     </div>
-                                                    <div class="text-[9px] text-slate-400">{{ $p->player_role }}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-3 text-slate-300 text-[11px]">
-                                            @if(!$pHasBatted)
-                                                <span class="text-slate-500 italic">yet to bat</span>
-                                            @elseif($p->dismissal === 'not out' || empty($p->dismissal))
-                                                <span class="text-emerald-400 font-bold">not out</span>
-                                            @elseif($p->dismissal === 'dnb')
-                                                <span class="text-slate-500 italic">did not bat</span>
-                                            @else
-                                                <span class="text-slate-400">{{ $p->dismissal }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="py-3 px-3 text-right font-black font-mono text-sm">
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right font-black font-mono text-xs sm:text-sm">
                                             @if($p->runs_scored >= 100)
-                                                <span class="px-2 py-0.5 rounded-md bg-purple-600 text-white shadow-xs">{{ $p->runs_scored }}</span>
+                                                <span class="px-1.5 py-0.5 rounded-md bg-purple-600 text-white shadow-xs">{{ $p->runs_scored }}</span>
                                             @elseif($p->runs_scored >= 50)
-                                                <span class="px-2 py-0.5 rounded-md bg-amber-600 text-white shadow-xs">{{ $p->runs_scored }}</span>
+                                                <span class="px-1.5 py-0.5 rounded-md bg-amber-600 text-white shadow-xs">{{ $p->runs_scored }}</span>
                                             @else
                                                 <span class="text-white">{{ $p->runs_scored }}</span>
                                             @endif
                                         </td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $p->balls_faced }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $p->fours }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $p->sixes }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $p->strike_rate }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $p->balls_faced }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $p->fours }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $p->sixes }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono font-bold">{{ $p->strike_rate }}</td>
                                         @if($isOwner)
-                                            <td class="py-3 px-4 text-center">
+                                            <td class="py-2.5 px-1 sm:px-2 text-center">
                                                 <button type="button" 
                                                         @click="openPlayerModal({{ json_encode($p) }})"
-                                                        class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition flex items-center gap-1 mx-auto">
-                                                    <span>✏️ Score</span>
+                                                        title="Edit Player Score"
+                                                        class="p-1 sm:px-2 sm:py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition flex items-center justify-center gap-1 mx-auto">
+                                                    <span>✏️</span><span class="hidden sm:inline">Score</span>
                                                 </button>
                                             </td>
                                         @endif
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="py-4 text-center text-slate-500 italic">No players in {{ $match->team1_name }} squad.</td>
+                                        <td colspan="{{ $isOwner ? 7 : 6 }}" class="py-4 text-center text-slate-500 italic">No players in {{ $match->team1_name }} squad.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -1422,9 +1489,12 @@
                         <div class="p-3 bg-white/5 rounded-2xl border border-white/5 text-xs flex items-center gap-2 flex-wrap">
                             <span class="text-slate-400 font-bold uppercase text-[10px] tracking-wider shrink-0">Yet to Bat:</span>
                             @foreach($yetToBat1 as $yb)
-                                <span class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs border border-white/5 font-medium">
+                                <button type="button" 
+                                        @click="openCareerModal({{ $yb->id }})"
+                                        title="View {{ $yb->player_name }}'s Career Profile"
+                                        class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-white/5 font-medium transition cursor-pointer">
                                     {{ $yb->player_name }}
-                                </span>
+                                </button>
                             @endforeach
                         </div>
                     @endif
@@ -1442,14 +1512,14 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-white/5 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
                                 <tr>
-                                    <th class="py-3 px-4">Bowler</th>
-                                    <th class="py-3 px-3 text-right">O</th>
-                                    <th class="py-3 px-3 text-right">M</th>
-                                    <th class="py-3 px-3 text-right">R</th>
-                                    <th class="py-3 px-3 text-right">W</th>
-                                    <th class="py-3 px-3 text-right">ECO</th>
+                                    <th class="py-2.5 px-2.5 sm:px-4 text-left">Bowler</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">O</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">M</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">R</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">W</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">ECO</th>
                                     @if($isOwner)
-                                        <th class="py-3 px-4 text-center">Score</th>
+                                        <th class="py-2.5 px-1 sm:px-2 text-center w-8 sm:w-16">Edit</th>
                                     @endif
                                 </tr>
                             </thead>
@@ -1457,53 +1527,54 @@
                                 @forelse($match->team2Players as $b)
                                     <tr class="hover:bg-white/5 transition"
                                         :class="liveBowler && liveBowler.id === {{ $b->id }} ? 'bg-rose-950/20' : ''">
-                                        <td class="py-3 px-4">
+                                        <td class="py-2.5 px-2 sm:px-4">
                                             <div class="flex items-center gap-2">
-                                                <div class="w-6 h-6 rounded-md bg-rose-600/30 text-rose-300 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                                <button type="button" 
+                                                        @click="openCareerModal({{ $b->id }})" 
+                                                        title="View {{ $b->player_name }}'s Career Profile"
+                                                        class="w-7 h-7 rounded-lg bg-rose-600/30 hover:bg-rose-600/60 text-rose-300 font-bold text-[11px] flex items-center justify-center shrink-0 border border-rose-500/20 transition cursor-pointer">
                                                     {{ strtoupper(substr($b->player_name, 0, 1)) }}
-                                                </div>
-                                                <div>
-                                                    <div class="font-extrabold text-white flex items-center gap-1.5">
-                                                        @if($b->user_id)
-                                                            <a href="{{ route('profile.user', $b->user_id) }}" class="hover:underline text-rose-400">
-                                                                {{ $b->player_name }}
-                                                            </a>
-                                                        @else
-                                                            <span>{{ $b->player_name }}</span>
-                                                        @endif
+                                                </button>
+                                                <div class="min-w-0">
+                                                    <button type="button" 
+                                                            @click="openCareerModal({{ $b->id }})"
+                                                            title="View {{ $b->player_name }}'s Career Profile"
+                                                            class="font-extrabold text-white hover:text-rose-400 text-left flex items-center gap-1 transition group truncate max-w-[130px] sm:max-w-none cursor-pointer">
+                                                        <span class="truncate group-hover:underline">{{ $b->player_name }}</span>
                                                         <template x-if="liveBowler && liveBowler.id === {{ $b->id }}">
-                                                            <span class="px-1 rounded bg-rose-600 text-[8px] font-black text-white">ACTIVE</span>
+                                                            <span class="px-1 rounded bg-rose-600 text-[8px] font-black text-white shrink-0">ACTIVE</span>
                                                         </template>
-                                                        @if($b->is_captain)<span class="px-1 rounded bg-red-600 text-[8px] font-black text-white">C</span>@endif
-                                                    </div>
-                                                    <div class="text-[9px] text-slate-400">{{ $b->player_role }}</div>
+                                                        @if($b->is_captain)<span class="px-1 rounded bg-red-600 text-[8px] font-black text-white shrink-0">C</span>@endif
+                                                    </button>
+                                                    <div class="text-[10px] text-slate-400 truncate max-w-[140px] sm:max-w-none mt-0.5">{{ $b->player_role }}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->formatted_overs ?: '0.0' }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->maidens }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->runs_conceded }}</td>
-                                        <td class="py-3 px-3 text-right font-black font-mono text-sm">
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $b->formatted_overs ?: '0.0' }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $b->maidens }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $b->runs_conceded }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right font-black font-mono text-xs sm:text-sm">
                                             @if($b->wickets_taken > 0)
-                                                <span class="px-2 py-0.5 rounded-md bg-rose-600 text-white shadow-xs">{{ $b->wickets_taken }}</span>
+                                                <span class="px-1.5 py-0.5 rounded-md bg-rose-600 text-white shadow-xs">{{ $b->wickets_taken }}</span>
                                             @else
                                                 <span class="text-slate-400">0</span>
                                             @endif
                                         </td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->economy_rate }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $b->economy_rate }}</td>
                                         @if($isOwner)
-                                            <td class="py-3 px-4 text-center">
+                                            <td class="py-2.5 px-1 sm:px-2 text-center">
                                                 <button type="button" 
                                                         @click="openPlayerModal({{ json_encode($b) }})"
-                                                        class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition flex items-center gap-1 mx-auto">
-                                                    <span>✏️ Score</span>
+                                                        title="Edit Bowler Score"
+                                                        class="p-1 sm:px-2 sm:py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition flex items-center justify-center gap-1 mx-auto">
+                                                    <span>✏️</span><span class="hidden sm:inline">Score</span>
                                                 </button>
                                             </td>
                                         @endif
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7" class="py-4 text-center text-slate-500 italic">No bowlers in {{ $match->team2_name }} squad.</td>
+                                        <td colspan="{{ $isOwner ? 7 : 6 }}" class="py-4 text-center text-slate-500 italic">No bowlers in {{ $match->team2_name }} squad.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -1529,15 +1600,14 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-white/5 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
                                 <tr>
-                                    <th class="py-3 px-4">Batter</th>
-                                    <th class="py-3 px-3">Dismissal</th>
-                                    <th class="py-3 px-3 text-right">R</th>
-                                    <th class="py-3 px-3 text-right">B</th>
-                                    <th class="py-3 px-3 text-right">4s</th>
-                                    <th class="py-3 px-3 text-right">6s</th>
-                                    <th class="py-3 px-3 text-right">SR</th>
+                                    <th class="py-2.5 px-2.5 sm:px-4 text-left">Batter</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">R</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">B</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">4s</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">6s</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">SR</th>
                                     @if($isOwner)
-                                        <th class="py-3 px-4 text-center">Score</th>
+                                        <th class="py-2.5 px-1 sm:px-2 text-center w-8 sm:w-16">Edit</th>
                                     @endif
                                 </tr>
                             </thead>
@@ -1553,67 +1623,70 @@
                                     @endphp
                                     <tr class="hover:bg-white/5 transition"
                                         :class="liveStriker && liveStriker.id === {{ $p->id }} ? 'bg-rose-950/20' : ''">
-                                        <td class="py-3 px-4">
+                                        <td class="py-2.5 px-2 sm:px-4">
                                             <div class="flex items-center gap-2">
-                                                <div class="w-6 h-6 rounded-md bg-rose-600/30 text-rose-300 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                                <button type="button" 
+                                                        @click="openCareerModal({{ $p->id }})" 
+                                                        title="View {{ $p->player_name }}'s Career Profile"
+                                                        class="w-7 h-7 rounded-lg bg-rose-600/30 hover:bg-rose-600/60 text-rose-300 font-bold text-[11px] flex items-center justify-center shrink-0 border border-rose-500/20 transition cursor-pointer">
                                                     {{ strtoupper(substr($p->player_name, 0, 1)) }}
-                                                </div>
-                                                <div>
-                                                    <div class="font-extrabold text-white flex items-center gap-1.5">
-                                                        @if($p->user_id)
-                                                            <a href="{{ route('profile.user', $p->user_id) }}" class="hover:underline text-rose-400">
-                                                                {{ $p->player_name }}
-                                                            </a>
-                                                        @else
-                                                            <span>{{ $p->player_name }}</span>
-                                                        @endif
+                                                </button>
+                                                <div class="min-w-0">
+                                                    <button type="button" 
+                                                            @click="openCareerModal({{ $p->id }})"
+                                                            title="View {{ $p->player_name }}'s Career Profile"
+                                                            class="font-extrabold text-white hover:text-rose-400 text-left flex items-center gap-1 transition group truncate max-w-[130px] sm:max-w-none cursor-pointer">
+                                                        <span class="truncate group-hover:underline">{{ $p->player_name }}</span>
                                                         <template x-if="liveStriker && liveStriker.id === {{ $p->id }}">
-                                                            <span class="px-1 rounded bg-rose-600 text-[8px] font-black text-white">*</span>
+                                                            <span class="px-1 rounded bg-rose-600 text-[8px] font-black text-white shrink-0">*</span>
                                                         </template>
-                                                        @if($p->is_captain)<span class="px-1 rounded bg-red-600 text-[8px] font-black text-white">C</span>@endif
-                                                        @if($p->is_wicketkeeper)<span class="px-1 rounded bg-amber-600 text-[8px] font-black text-white">WK</span>@endif
+                                                        @if($p->is_captain)<span class="px-1 rounded bg-red-600 text-[8px] font-black text-white shrink-0">C</span>@endif
+                                                        @if($p->is_wicketkeeper)<span class="px-1 rounded bg-amber-600 text-[8px] font-black text-white shrink-0">WK</span>@endif
+                                                    </button>
+                                                    <div class="text-[10px] leading-tight truncate max-w-[140px] sm:max-w-none mt-0.5">
+                                                        @if(!$p2HasBatted)
+                                                            <span class="text-slate-500 italic">yet to bat</span>
+                                                        @elseif($p->dismissal === 'not out' || empty($p->dismissal))
+                                                            <span class="text-emerald-400 font-bold">not out</span>
+                                                        @elseif($p->dismissal === 'dnb')
+                                                            <span class="text-slate-500 italic">did not bat</span>
+                                                        @else
+                                                            <span class="text-slate-300 font-medium">{{ $p->dismissal }}</span>
+                                                        @endif
+                                                        @if($p->player_role)
+                                                            <span class="text-slate-500">• {{ $p->player_role }}</span>
+                                                        @endif
                                                     </div>
-                                                    <div class="text-[9px] text-slate-400">{{ $p->player_role }}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-3 text-slate-300 text-[11px]">
-                                            @if(!$p2HasBatted)
-                                                <span class="text-slate-500 italic">yet to bat</span>
-                                            @elseif($p->dismissal === 'not out' || empty($p->dismissal))
-                                                <span class="text-emerald-400 font-bold">not out</span>
-                                            @elseif($p->dismissal === 'dnb')
-                                                <span class="text-slate-500 italic">did not bat</span>
-                                            @else
-                                                <span class="text-slate-400">{{ $p->dismissal }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="py-3 px-3 text-right font-black font-mono text-sm">
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right font-black font-mono text-xs sm:text-sm">
                                             @if($p->runs_scored >= 100)
-                                                <span class="px-2 py-0.5 rounded-md bg-purple-600 text-white shadow-xs">{{ $p->runs_scored }}</span>
+                                                <span class="px-1.5 py-0.5 rounded-md bg-purple-600 text-white shadow-xs">{{ $p->runs_scored }}</span>
                                             @elseif($p->runs_scored >= 50)
-                                                <span class="px-2 py-0.5 rounded-md bg-amber-600 text-white shadow-xs">{{ $p->runs_scored }}</span>
+                                                <span class="px-1.5 py-0.5 rounded-md bg-amber-600 text-white shadow-xs">{{ $p->runs_scored }}</span>
                                             @else
                                                 <span class="text-white">{{ $p->runs_scored }}</span>
                                             @endif
                                         </td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $p->balls_faced }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $p->fours }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $p->sixes }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $p->strike_rate }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $p->balls_faced }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $p->fours }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $p->sixes }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono font-bold">{{ $p->strike_rate }}</td>
                                         @if($isOwner)
-                                            <td class="py-3 px-4 text-center">
+                                            <td class="py-2.5 px-1 sm:px-2 text-center">
                                                 <button type="button" 
                                                         @click="openPlayerModal({{ json_encode($p) }})"
-                                                        class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition flex items-center gap-1 mx-auto">
-                                                    <span>✏️ Score</span>
+                                                        title="Edit Player Score"
+                                                        class="p-1 sm:px-2 sm:py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition flex items-center justify-center gap-1 mx-auto">
+                                                    <span>✏️</span><span class="hidden sm:inline">Score</span>
                                                 </button>
                                             </td>
                                         @endif
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="py-4 text-center text-slate-500 italic">No players in {{ $match->team2_name }} squad.</td>
+                                        <td colspan="{{ $isOwner ? 7 : 6 }}" class="py-4 text-center text-slate-500 italic">No players in {{ $match->team2_name }} squad.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -1630,9 +1703,12 @@
                         <div class="p-3 bg-white/5 rounded-2xl border border-white/5 text-xs flex items-center gap-2 flex-wrap">
                             <span class="text-slate-400 font-bold uppercase text-[10px] tracking-wider shrink-0">Yet to Bat:</span>
                             @foreach($yetToBat2 as $yb)
-                                <span class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs border border-white/5 font-medium">
+                                <button type="button" 
+                                        @click="openCareerModal({{ $yb->id }})"
+                                        title="View {{ $yb->player_name }}'s Career Profile"
+                                        class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-white/5 font-medium transition cursor-pointer">
                                     {{ $yb->player_name }}
-                                </span>
+                                </button>
                             @endforeach
                         </div>
                     @endif
@@ -1650,64 +1726,65 @@
                         <table class="w-full text-left text-xs">
                             <thead class="bg-white/5 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
                                 <tr>
-                                    <th class="py-3 px-4">Bowler</th>
-                                    <th class="py-3 px-3 text-right">O</th>
-                                    <th class="py-3 px-3 text-right">M</th>
-                                    <th class="py-3 px-3 text-right">R</th>
-                                    <th class="py-3 px-3 text-right">W</th>
-                                    <th class="py-3 px-3 text-right">ECO</th>
+                                    <th class="py-2.5 px-2.5 sm:px-4 text-left">Bowler</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">O</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">M</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">R</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">W</th>
+                                    <th class="py-2.5 px-1.5 sm:px-3 text-right">ECO</th>
                                     @if($isOwner)
-                                        <th class="py-3 px-4 text-center">Score</th>
+                                        <th class="py-2.5 px-1 sm:px-2 text-center w-8 sm:w-16">Edit</th>
                                     @endif
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-white/5">
                                 @forelse($match->team1Players as $b)
                                     <tr class="hover:bg-white/5 transition">
-                                        <td class="py-3 px-4">
+                                        <td class="py-2.5 px-2 sm:px-4">
                                             <div class="flex items-center gap-2">
-                                                <div class="w-6 h-6 rounded-md bg-blue-600/30 text-blue-300 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                                <button type="button" 
+                                                        @click="openCareerModal({{ $b->id }})" 
+                                                        title="View {{ $b->player_name }}'s Career Profile"
+                                                        class="w-7 h-7 rounded-lg bg-blue-600/30 hover:bg-blue-600/60 text-blue-300 font-bold text-[11px] flex items-center justify-center shrink-0 border border-blue-500/20 transition cursor-pointer">
                                                     {{ strtoupper(substr($b->player_name, 0, 1)) }}
-                                                </div>
-                                                <div>
-                                                    <div class="font-extrabold text-white flex items-center gap-1.5">
-                                                        @if($b->user_id)
-                                                            <a href="{{ route('profile.user', $b->user_id) }}" class="hover:underline text-blue-400">
-                                                                {{ $b->player_name }}
-                                                            </a>
-                                                        @else
-                                                            <span>{{ $b->player_name }}</span>
-                                                        @endif
-                                                        @if($b->is_captain)<span class="px-1 rounded bg-red-600 text-[8px] font-black text-white">C</span>@endif
-                                                    </div>
-                                                    <div class="text-[9px] text-slate-400">{{ $b->player_role }}</div>
+                                                </button>
+                                                <div class="min-w-0">
+                                                    <button type="button" 
+                                                            @click="openCareerModal({{ $b->id }})"
+                                                            title="View {{ $b->player_name }}'s Career Profile"
+                                                            class="font-extrabold text-white hover:text-blue-400 text-left flex items-center gap-1 transition group truncate max-w-[130px] sm:max-w-none cursor-pointer">
+                                                        <span class="truncate group-hover:underline">{{ $b->player_name }}</span>
+                                                        @if($b->is_captain)<span class="px-1 rounded bg-red-600 text-[8px] font-black text-white shrink-0">C</span>@endif
+                                                    </button>
+                                                    <div class="text-[10px] text-slate-400 truncate max-w-[140px] sm:max-w-none mt-0.5">{{ $b->player_role }}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->formatted_overs ?: '0.0' }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->maidens }}</td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->runs_conceded }}</td>
-                                        <td class="py-3 px-3 text-right font-black font-mono text-sm">
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $b->formatted_overs ?: '0.0' }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $b->maidens }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $b->runs_conceded }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right font-black font-mono text-xs sm:text-sm">
                                             @if($b->wickets_taken > 0)
-                                                <span class="px-2 py-0.5 rounded-md bg-rose-600 text-white shadow-xs">{{ $b->wickets_taken }}</span>
+                                                <span class="px-1.5 py-0.5 rounded-md bg-rose-600 text-white shadow-xs">{{ $b->wickets_taken }}</span>
                                             @else
                                                 <span class="text-slate-400">0</span>
                                             @endif
                                         </td>
-                                        <td class="py-3 px-3 text-right text-slate-300 font-mono">{{ $b->economy_rate }}</td>
+                                        <td class="py-2.5 px-1.5 sm:px-3 text-right text-slate-300 font-mono">{{ $b->economy_rate }}</td>
                                         @if($isOwner)
-                                            <td class="py-3 px-4 text-center">
+                                            <td class="py-2.5 px-1 sm:px-2 text-center">
                                                 <button type="button" 
                                                         @click="openPlayerModal({{ json_encode($b) }})"
-                                                        class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition flex items-center gap-1 mx-auto">
-                                                    <span>✏️ Score</span>
+                                                        title="Edit Bowler Score"
+                                                        class="p-1 sm:px-2 sm:py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition flex items-center justify-center gap-1 mx-auto">
+                                                    <span>✏️</span><span class="hidden sm:inline">Score</span>
                                                 </button>
                                             </td>
                                         @endif
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7" class="py-4 text-center text-slate-500 italic">No bowlers in {{ $match->team1_name }} squad.</td>
+                                        <td colspan="{{ $isOwner ? 7 : 6 }}" class="py-4 text-center text-slate-500 italic">No bowlers in {{ $match->team1_name }} squad.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -2293,6 +2370,257 @@
         </div>
     </div>
 @endif
+
+    <!-- ============================================================== -->
+    <!-- MODAL 5: CRICHEROES PLAYER CAREER PROFILE & PASSPORT MODAL -->
+    <!-- ============================================================== -->
+    <div x-cloak x-show="careerModalOpen" 
+         class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md"
+         @keydown.escape.window="careerModalOpen = false">
+        <div class="relative bg-slate-900 border border-white/15 rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto"
+             @click.away="careerModalOpen = false">
+            
+            <!-- Close Button -->
+            <button type="button" @click="careerModalOpen = false" 
+                    class="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center font-bold text-sm transition z-20">
+                ✕
+            </button>
+
+            <!-- Loading Spinner State -->
+            <template x-if="careerLoading">
+                <div class="py-16 flex flex-col items-center justify-center gap-3">
+                    <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-xs font-bold text-slate-300">Loading CricHeroes Career Passport...</p>
+                </div>
+            </template>
+
+            <!-- Error State -->
+            <template x-if="!careerLoading && careerError">
+                <div class="py-10 text-center space-y-3">
+                    <div class="text-3xl">⚠️</div>
+                    <p class="text-xs text-rose-400 font-bold" x-text="careerError"></p>
+                    <button type="button" @click="careerModalOpen = false" class="px-4 py-2 rounded-xl bg-white/10 text-xs font-bold text-white hover:bg-white/20">Close</button>
+                </div>
+            </template>
+
+            <!-- Loaded Career Profile Content -->
+            <template x-if="!careerLoading && careerData">
+                <div class="space-y-4">
+                    <!-- Player Header Card -->
+                    <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-blue-900/40 via-slate-900 to-slate-950 border border-blue-500/30 flex items-start gap-3.5 relative overflow-hidden">
+                        <div class="absolute -right-6 -bottom-6 text-7xl opacity-5 pointer-events-none select-none">🏏</div>
+                        <img :src="careerData.player.avatar_url" 
+                             :alt="careerData.player.name" 
+                             class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-blue-400/40 shadow-lg shrink-0">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="px-2 py-0.5 rounded bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[9px] font-black uppercase tracking-wider">
+                                    PLAYER PASSPORT
+                                </span>
+                                <template x-if="careerData.player.is_captain">
+                                    <span class="px-1.5 py-0.5 rounded bg-red-600 text-white text-[9px] font-black">CAPTAIN</span>
+                                </template>
+                                <template x-if="careerData.player.is_wicketkeeper">
+                                    <span class="px-1.5 py-0.5 rounded bg-amber-600 text-white text-[9px] font-black">WK</span>
+                                </template>
+                            </div>
+                            <h3 class="text-base sm:text-lg font-black text-white truncate mt-1" x-text="careerData.player.name"></h3>
+                            <div class="text-xs text-slate-300 flex items-center gap-1.5 flex-wrap mt-0.5">
+                                <span class="text-blue-400 font-bold" x-text="careerData.player.role"></span>
+                                <span class="text-slate-500">•</span>
+                                <span class="text-slate-300 truncate" x-text="careerData.player.team"></span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                                <span x-text="'📍 ' + careerData.player.city"></span>
+                                <template x-if="careerData.player.profile_url">
+                                    <a :href="careerData.player.profile_url" 
+                                       class="text-blue-400 hover:text-blue-300 hover:underline font-bold flex items-center gap-1 text-[11px]">
+                                        <span>Full Social Profile</span>
+                                        <span>➔</span>
+                                    </a>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Career Navigation Tabs -->
+                    <div class="flex items-center gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5 text-xs font-bold">
+                        <button type="button" 
+                                @click="careerTab = 'batting'"
+                                class="flex-1 py-2 rounded-lg transition text-center flex items-center justify-center gap-1.5"
+                                :class="careerTab === 'batting' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+                            <span>🏏 Batting</span>
+                        </button>
+                        <button type="button" 
+                                @click="careerTab = 'bowling'"
+                                class="flex-1 py-2 rounded-lg transition text-center flex items-center justify-center gap-1.5"
+                                :class="careerTab === 'bowling' ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+                            <span>🎯 Bowling</span>
+                        </button>
+                        <button type="button" 
+                                @click="careerTab = 'matches'"
+                                class="flex-1 py-2 rounded-lg transition text-center flex items-center justify-center gap-1.5"
+                                :class="careerTab === 'matches' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+                            <span>📋 Recent Form</span>
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: BATTING CAREER STATS -->
+                    <div x-show="careerTab === 'batting'" class="space-y-3">
+                        <!-- Key Highlights Strip -->
+                        <div class="grid grid-cols-4 gap-2 text-center">
+                            <div class="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Runs</div>
+                                <div class="text-base sm:text-lg font-black text-amber-300 font-mono" x-text="careerData.batting.runs"></div>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Highest</div>
+                                <div class="text-base sm:text-lg font-black text-white font-mono" x-text="careerData.batting.highest"></div>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Average</div>
+                                <div class="text-base sm:text-lg font-black text-emerald-400 font-mono" x-text="careerData.batting.average"></div>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">SR</div>
+                                <div class="text-base sm:text-lg font-black text-blue-400 font-mono" x-text="careerData.batting.strike_rate"></div>
+                            </div>
+                        </div>
+
+                        <!-- Complete Batting Metrics Grid -->
+                        <div class="p-3.5 rounded-2xl bg-white/5 border border-white/5">
+                            <div class="grid grid-cols-3 sm:grid-cols-4 gap-2.5 text-xs">
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Matches</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.batting.matches"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Innings</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.batting.innings"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Balls Faced</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.batting.balls"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Not Outs</span>
+                                    <span class="font-black text-emerald-400 font-mono text-sm" x-text="careerData.batting.not_outs"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Fours (4s)</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.batting.fours"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Sixes (6s)</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.batting.sixes"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Fifties (50s)</span>
+                                    <span class="font-black text-amber-400 font-mono text-sm" x-text="careerData.batting.fifties"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Hundreds (100s)</span>
+                                    <span class="font-black text-purple-400 font-mono text-sm" x-text="careerData.batting.hundreds"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: BOWLING CAREER STATS -->
+                    <div x-show="careerTab === 'bowling'" class="space-y-3">
+                        <!-- Key Highlights Strip -->
+                        <div class="grid grid-cols-4 gap-2 text-center">
+                            <div class="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Wickets</div>
+                                <div class="text-base sm:text-lg font-black text-rose-400 font-mono" x-text="careerData.bowling.wickets"></div>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Best</div>
+                                <div class="text-base sm:text-lg font-black text-white font-mono" x-text="careerData.bowling.best"></div>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Economy</div>
+                                <div class="text-base sm:text-lg font-black text-emerald-400 font-mono" x-text="careerData.bowling.economy"></div>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                                <div class="text-[10px] text-slate-400 font-bold uppercase">Average</div>
+                                <div class="text-base sm:text-lg font-black text-blue-400 font-mono" x-text="careerData.bowling.average"></div>
+                            </div>
+                        </div>
+
+                        <!-- Complete Bowling Metrics Grid -->
+                        <div class="p-3.5 rounded-2xl bg-white/5 border border-white/5">
+                            <div class="grid grid-cols-3 sm:grid-cols-4 gap-2.5 text-xs">
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Innings Bowled</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.bowling.innings"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Overs</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.bowling.overs"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Maidens</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.bowling.maidens"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Runs Conceded</span>
+                                    <span class="font-black text-white font-mono text-sm" x-text="careerData.bowling.runs_conceded"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: RECENT MATCHES FORM -->
+                    <div x-show="careerTab === 'matches'" class="space-y-2">
+                        <template x-if="careerData.recent_matches && careerData.recent_matches.length > 0">
+                            <div class="space-y-2">
+                                <template x-for="rm in careerData.recent_matches" :key="rm.match_id">
+                                    <div class="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between gap-3 text-xs">
+                                        <div class="min-w-0">
+                                            <div class="font-bold text-white truncate" x-text="rm.title"></div>
+                                            <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                                <span x-text="rm.date"></span>
+                                                <span>•</span>
+                                                <span class="text-slate-300" x-text="rm.team"></span>
+                                            </div>
+                                        </div>
+                                        <div class="text-right shrink-0">
+                                            <div class="font-mono font-bold text-amber-300" x-text="rm.runs + ' (' + rm.balls + 'b)'"></div>
+                                            <div class="text-[10px] font-mono text-slate-400" x-text="rm.overs + ' ov, ' + rm.wickets + '/' + rm.runs_conceded"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <template x-if="!careerData.recent_matches || careerData.recent_matches.length === 0">
+                            <div class="py-8 text-center text-slate-500 italic text-xs">
+                                No recent match history recorded for this player yet.
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Modal Bottom Actions -->
+                    <div class="flex items-center justify-between gap-3 pt-3 border-t border-white/10">
+                        <template x-if="careerData.player.profile_url">
+                            <a :href="careerData.player.profile_url" 
+                               class="px-4 py-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 text-xs font-bold transition flex items-center gap-1.5">
+                                <span>📱 Social Profile</span>
+                            </a>
+                        </template>
+                        <template x-if="!careerData.player.profile_url">
+                            <span class="text-[10px] text-slate-500 italic">Unregistered / Guest Squad Member</span>
+                        </template>
+                        <button type="button" @click="careerModalOpen = false" 
+                                class="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+        </div>
+    </div>
 
 </div>
 @endsection

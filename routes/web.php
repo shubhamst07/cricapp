@@ -119,6 +119,7 @@ Route::get('/umpires/{umpire}', [UmpireController::class, 'show'])->name('umpire
 
 // Show individual match (MUST be after /matches/create so 'create' is not treated as a wildcard ID)
 Route::get('/matches/{match}', [MatchController::class, 'show'])->name('matches.show');
+Route::get('/matches/{match}/players/{player}/career', [MatchController::class, 'playerCareer'])->name('matches.players.career');
 Route::get('/matches/{match}/broadcast', [MatchController::class, 'broadcast'])->name('matches.broadcast');
 Route::get('/matches/{match}/broadcast/state', [MatchController::class, 'broadcastState'])->name('matches.broadcast.state');
 Route::post('/matches/{match}/stream-signal', [MatchController::class, 'updateStreamSignal'])->name('matches.stream-signal');
