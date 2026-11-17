@@ -50,6 +50,7 @@
     localVideoTrack: null,
     hasAgoraStream: false,
     viewerConnected: false,
+    isConnectingAudience: false,
     streamActive: {{ $isCameraLive ? 'true' : 'false' }},
     isBroadcasting: false,
 
@@ -359,6 +360,13 @@
                     }
                     this.hasAgoraStream = true;
                     this.broadcastMode = 'agora';
+
+                    // Re-use Agora's tracks for recording & P2P fallback without secondary getUserMedia lock
+                    try {
+                        window.localMediaStream = new MediaStream([videoTrack.getMediaStreamTrack(), audioTrack.getMediaStreamTrack()]);
+                    } catch(streamWrapErr) {
+                        console.warn('MediaStream wrap notice:', streamWrapErr);
+                    }
                 } catch(agoraErr) {
                     console.warn('Agora WebRTC connect notice (will use Direct WebRTC P2P stream):', agoraErr);
                     this.hasAgoraStream = false;
@@ -369,8 +377,8 @@
                 }
             }
 
-            // Always acquire local camera media stream (for live preview, recording & Direct WebRTC fallback)
-            if (!window.localMediaStream) {
+            // Fallback: only acquire local camera media stream via getUserMedia if Agora was NOT used
+            if (!this.hasAgoraStream && !window.localMediaStream) {
                 const constraints = {
                     video: {
                         facingMode: { ideal: this.facingMode },
@@ -554,7 +562,8 @@
 
     // Audience In-App Live Stream Subscriber (Agora Cloud + Direct WebRTC P2P Fallback)
     async connectAudienceStream(data) {
-        if (this.viewerConnected || this.isBroadcaster) return;
+        if (this.viewerConnected || this.isBroadcaster || this.isConnectingAudience) return;
+        this.isConnectingAudience = true;
 
         const appId = data.agora_app_id || this.agoraAppId;
         const channel = data.agora_channel || this.agoraChannel;
@@ -563,26 +572,39 @@
         let agoraAttempted = false;
         if (typeof AgoraRTC !== 'undefined' && appId && channel && token) {
             try {
+                if (this.agoraClient) {
+                    try { await this.agoraClient.leave(); } catch(e) {}
+                    this.agoraClient = null;
+                }
+
                 this.agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
                 await this.agoraClient.setClientRole('audience');
 
+                const subscribeUser = async (user, mediaType) => {
+                    try {
+                        await this.agoraClient.subscribe(user, mediaType);
+                        if (mediaType === 'video') {
+                            const container = document.getElementById('audienceAgoraVideo');
+                            if (container && user.videoTrack) {
+                                this.hasAgoraStream = true;
+                                user.videoTrack.play(container);
+                            }
+                        }
+                        if (mediaType === 'audio') {
+                            try {
+                                await user.audioTrack.play();
+                                this.audienceMuted = false;
+                            } catch(e) {
+                                this.audienceMuted = true;
+                            }
+                        }
+                    } catch(subErr) {
+                        console.warn('Agora subscribe notice for ' + (user?.uid || 'unknown') + ':', subErr);
+                    }
+                };
+
                 this.agoraClient.on('user-published', async (user, mediaType) => {
-                    await this.agoraClient.subscribe(user, mediaType);
-                    if (mediaType === 'video') {
-                        const container = document.getElementById('audienceAgoraVideo');
-                        if (container) {
-                            user.videoTrack.play(container);
-                            this.hasAgoraStream = true;
-                        }
-                    }
-                    if (mediaType === 'audio') {
-                        try {
-                            await user.audioTrack.play();
-                            this.audienceMuted = false;
-                        } catch(e) {
-                            this.audienceMuted = true;
-                        }
-                    }
+                    await subscribeUser(user, mediaType);
                 });
 
                 this.agoraClient.on('user-unpublished', (user, mediaType) => {
@@ -594,11 +616,27 @@
                 await this.agoraClient.join(appId, channel, token || null, 0);
                 this.viewerConnected = true;
                 agoraAttempted = true;
+
+                // Subscribe to any existing published users in channel immediately
+                if (this.agoraClient.remoteUsers && this.agoraClient.remoteUsers.length > 0) {
+                    for (const rUser of this.agoraClient.remoteUsers) {
+                        if (rUser.hasVideo) {
+                            await subscribeUser(rUser, 'video');
+                        }
+                        if (rUser.hasAudio) {
+                            await subscribeUser(rUser, 'audio');
+                        }
+                    }
+                }
             } catch(e) {
                 console.warn('Audience Agora stream connect notice (initiating Direct WebRTC P2P fallback):', e);
                 this.agoraClient = null;
                 agoraAttempted = false;
+            } finally {
+                this.isConnectingAudience = false;
             }
+        } else {
+            this.isConnectingAudience = false;
         }
 
         // If Agora is not connected or failed, initiate Direct WebRTC P2P immediately
@@ -1244,7 +1282,7 @@
 
             <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (Real-time Video from Organizer's Phone Camera: Agora + Direct WebRTC P2P) -->
             @if(!$isOwner)
-                <div x-show="isCameraLive" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
+                <div x-show="isCameraLive || hasAgoraStream || hasP2pStream" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
                     <!-- Agora Cloud Stream Container -->
                     <div id="audienceAgoraVideo" x-show="hasAgoraStream" class="w-full h-full object-cover"></div>
 

@@ -430,10 +430,13 @@ class MatchController extends Controller
         $now = now()->timestamp;
         $isCameraLive = !empty($state['is_camera_live']);
         // If broadcaster has not sent heartbeat within 25 seconds, mark as offline
-        if ($isCameraLive && !empty($state['camera_live_at']) && ($now - (int)$state['camera_live_at'] > 25)) {
-            $isCameraLive = false;
-            $state['is_camera_live'] = false;
-            $match->update(['live_state' => $state]);
+        if ($isCameraLive) {
+            $lastHeartbeat = (int) ($state['camera_live_at'] ?? 0);
+            if ($lastHeartbeat === 0 || ($now - $lastHeartbeat > 25)) {
+                $isCameraLive = false;
+                $state['is_camera_live'] = false;
+                $match->update(['live_state' => $state]);
+            }
         }
 
         $agoraAppId = config('services.agora.app_id', env('AGORA_APP_ID', ''));
@@ -480,8 +483,11 @@ class MatchController extends Controller
 
         $now = now()->timestamp;
         $isCameraLive = !empty($state['is_camera_live']);
-        if ($isCameraLive && !empty($state['camera_live_at']) && ($now - (int)$state['camera_live_at'] > 25)) {
-            $isCameraLive = false;
+        if ($isCameraLive) {
+            $lastHeartbeat = (int) ($state['camera_live_at'] ?? 0);
+            if ($lastHeartbeat === 0 || ($now - $lastHeartbeat > 25)) {
+                $isCameraLive = false;
+            }
         }
 
         $agoraAppId = config('services.agora.app_id', env('AGORA_APP_ID', ''));
