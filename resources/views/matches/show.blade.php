@@ -726,20 +726,18 @@
 
                         <!-- TV Scoreboard Overlay on Video Replay -->
                         <div x-show="showScoreboardOverlayOnVideo" 
-                             class="absolute bottom-3 left-3 right-3 z-10 p-2.5 sm:p-3 rounded-2xl bg-slate-950/90 backdrop-blur-md border border-white/20 shadow-2xl flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+                             class="absolute bottom-2 left-2 right-2 sm:bottom-3 sm:left-3 sm:right-3 z-10 p-1.5 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-950/90 backdrop-blur-md border border-white/20 shadow-2xl flex items-center justify-between gap-1.5 sm:gap-2 pointer-events-auto">
                             <!-- Scoreboard Left: Teams & Runs -->
-                            <div class="flex items-center gap-2 sm:gap-3">
-                                <div class="flex items-center gap-2 text-xs sm:text-sm font-black text-white">
-                                    <span class="truncate max-w-[110px]">{{ $match->team1_name }}</span>
-                                    <span class="px-2 py-0.5 rounded bg-emerald-600 text-white font-mono text-xs font-black shadow" x-text="scoreRuns + '/' + scoreWickets"></span>
-                                    <span class="text-slate-400 text-xs font-mono" x-text="'(' + scoreOvers + ' ov)'"></span>
-                                </div>
-                                <span class="text-slate-500 font-bold text-xs">vs</span>
-                                <span class="text-xs sm:text-sm font-black text-slate-300 truncate max-w-[110px]">{{ $match->team2_name }}</span>
+                            <div class="flex items-center gap-1.5 sm:gap-3 text-[11px] sm:text-sm font-black text-white min-w-0">
+                                <span class="truncate max-w-[80px] sm:max-w-[110px]">{{ $match->team1_name }}</span>
+                                <span class="px-1.5 sm:px-2 py-0.5 rounded bg-emerald-600 text-white font-mono text-[10px] sm:text-xs font-black shadow shrink-0" x-text="scoreRuns + '/' + scoreWickets"></span>
+                                <span class="text-slate-400 text-[10px] sm:text-xs font-mono shrink-0" x-text="'(' + scoreOvers + ' ov)'"></span>
+                                <span class="text-slate-500 font-bold text-[10px] sm:text-xs">vs</span>
+                                <span class="text-slate-300 truncate max-w-[80px] sm:max-w-[110px]">{{ $match->team2_name }}</span>
                             </div>
 
                             <!-- Scoreboard Right: Batsmen / Bowler -->
-                            <div class="hidden sm:flex items-center gap-3 text-xs text-slate-300">
+                            <div class="hidden md:flex items-center gap-3 text-xs text-slate-300">
                                 <template x-if="liveStriker">
                                     <div class="flex items-center gap-1">
                                         <span class="text-amber-400 font-bold">🏏 *<span x-text="liveStriker.player_name"></span></span>
@@ -756,16 +754,16 @@
 
                             <!-- Toggle Overlay Button -->
                             <button type="button" @click="showScoreboardOverlayOnVideo = false" 
-                                    class="text-[10px] px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 font-bold">
-                                ✕ Hide Score
+                                    class="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 font-bold shrink-0">
+                                ✕ Hide
                             </button>
                         </div>
 
                         <!-- Button to Re-Show Scoreboard Overlay if hidden -->
                         <div x-show="!showScoreboardOverlayOnVideo" 
-                             class="absolute bottom-3 right-3 z-10 pointer-events-auto">
+                             class="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-10 pointer-events-auto">
                             <button type="button" @click="showScoreboardOverlayOnVideo = true" 
-                                    class="px-3 py-1.5 rounded-full bg-slate-900/90 text-white text-xs font-bold border border-white/20 shadow-xl backdrop-blur-md hover:bg-slate-800 flex items-center gap-1.5">
+                                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-slate-900/90 text-white text-[10px] sm:text-xs font-bold border border-white/20 shadow-xl backdrop-blur-md hover:bg-slate-800 flex items-center gap-1.5">
                                 <span>📊 Show TV Scoreboard</span>
                             </button>
                         </div>

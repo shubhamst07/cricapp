@@ -82,6 +82,7 @@
     activeVideoUrl: '{{ addslashes($match->stream_url ?? '') }}',
     activeVideoTitle: '{{ addslashes(($videos[0]['title'] ?? null) ?: 'Match Video Replay') }}',
     showScoreboardOverlayOnVideo: true,
+    hideMobileScoreboard: false,
     videoDeletingId: null,
 
     fixVideoUrl(url) {
@@ -1396,16 +1397,14 @@
 
                     <!-- TV Scoreboard Overlay on Video Replay -->
                     <div x-show="!videoLoadFailed && showScoreboardOverlayOnVideo" 
-                         class="absolute bottom-3 left-3 right-3 z-10 p-2.5 sm:p-3 rounded-2xl bg-slate-950/90 backdrop-blur-md border border-white/20 shadow-2xl flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+                         class="absolute bottom-2 left-2 right-2 sm:bottom-3 sm:left-3 sm:right-3 z-10 p-1.5 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-950/90 backdrop-blur-md border border-white/20 shadow-2xl flex items-center justify-between gap-1.5 sm:gap-2 pointer-events-auto">
                         <!-- Scoreboard Left: Teams & Runs -->
-                        <div class="flex items-center gap-2 sm:gap-3">
-                            <div class="flex items-center gap-2 text-xs sm:text-sm font-black text-white">
-                                <span class="truncate max-w-[110px]" x-text="team1Name"></span>
-                                <span class="px-2 py-0.5 rounded bg-emerald-600 text-white font-mono text-xs font-black shadow" x-text="scoreRuns + '/' + scoreWickets"></span>
-                                <span class="text-slate-400 text-xs font-mono" x-text="'(' + scoreOvers + ' ov)'"></span>
-                            </div>
-                            <span class="text-slate-500 font-bold text-xs">vs</span>
-                            <span class="text-xs sm:text-sm font-black text-slate-300 truncate max-w-[110px]" x-text="team2Name"></span>
+                        <div class="flex items-center gap-1.5 sm:gap-3 text-[11px] sm:text-sm font-black text-white min-w-0">
+                            <span class="truncate max-w-[80px] sm:max-w-[110px]" x-text="team1Name"></span>
+                            <span class="px-1.5 sm:px-2 py-0.5 rounded bg-emerald-600 text-white font-mono text-[10px] sm:text-xs font-black shadow shrink-0" x-text="scoreRuns + '/' + scoreWickets"></span>
+                            <span class="text-slate-400 text-[10px] sm:text-xs font-mono shrink-0" x-text="'(' + scoreOvers + ' ov)'"></span>
+                            <span class="text-slate-500 font-bold text-[10px] sm:text-xs">vs</span>
+                            <span class="text-slate-300 truncate max-w-[80px] sm:max-w-[110px]" x-text="team2Name"></span>
                         </div>
 
                         <!-- Scoreboard Right: Batsmen / Bowler -->
@@ -1426,16 +1425,16 @@
 
                         <!-- Toggle Overlay Button -->
                         <button type="button" @click="showScoreboardOverlayOnVideo = false" 
-                                class="text-[10px] px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 font-bold">
-                            ✕ Hide Score
+                                class="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 font-bold shrink-0">
+                            ✕ Hide
                         </button>
                     </div>
 
                     <!-- Button to Re-Show Scoreboard Overlay if hidden -->
                     <div x-show="!videoLoadFailed && !showScoreboardOverlayOnVideo" 
-                         class="absolute bottom-3 right-3 z-10 pointer-events-auto">
+                         class="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-10 pointer-events-auto">
                         <button type="button" @click="showScoreboardOverlayOnVideo = true" 
-                                class="px-3 py-1.5 rounded-full bg-slate-900/90 text-white text-xs font-bold border border-white/20 shadow-xl backdrop-blur-md hover:bg-slate-800 flex items-center gap-1.5">
+                                class="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-slate-900/90 text-white text-[10px] sm:text-xs font-bold border border-white/20 shadow-xl backdrop-blur-md hover:bg-slate-800 flex items-center gap-1.5">
                             <span>📊 Show TV Scoreboard</span>
                         </button>
                     </div>
@@ -1676,11 +1675,55 @@
             <!-- ============================================================== -->
             <!-- TV GRAPHICS OVERLAY: SIGNATURE LOWER THIRD (BOTTOM SCOREBOARD) -->
             <!-- ============================================================== -->
-            <div class="relative z-10 p-2 sm:p-4 bg-gradient-to-t from-black/95 via-black/85 to-transparent pointer-events-none">
-                <div class="bg-gradient-to-r from-slate-900/95 via-slate-950/95 to-indigo-950/95 backdrop-blur-md rounded-2xl border-2 border-white/15 p-2 sm:p-3 shadow-2xl grid grid-cols-1 md:grid-cols-12 gap-2 sm:gap-3 items-center pointer-events-auto">
+            <div class="relative z-10 p-1.5 sm:p-4 bg-gradient-to-t from-black/95 via-black/75 to-transparent pointer-events-none">
+                
+                <!-- 1. MOBILE COMPACT TICKER (SCREEN < md): Only ~32px, Leaves 100% of Pitch Clear! -->
+                <div x-show="!hideMobileScoreboard" class="block md:hidden bg-gradient-to-r from-slate-950/90 via-slate-900/90 to-indigo-950/90 backdrop-blur-md rounded-xl border border-white/20 px-2.5 py-1.5 shadow-2xl pointer-events-auto">
+                    <div class="flex items-center justify-between gap-1.5 text-[11px]">
+                        <!-- Left: Live Score -->
+                        <div class="flex items-center gap-1.5 font-mono min-w-0">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                            <span class="font-extrabold text-white truncate max-w-[80px]" x-text="activeBattingTeam"></span>
+                            <span class="font-black text-amber-300 shrink-0" x-text="scoreRuns + '/' + scoreWickets"></span>
+                            <span class="text-[10px] text-slate-400 font-bold shrink-0" x-text="'(' + scoreOvers + ' ov)'"></span>
+                        </div>
+
+                        <!-- Right: Striker / Bowler Snapshot & Collapse Button -->
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <template x-if="striker">
+                                <span class="text-[10px] text-emerald-300 font-bold font-mono">
+                                    🏏*<span x-text="striker.player_name ? striker.player_name.split(' ')[0] : ''"></span> <span class="text-white" x-text="striker.runs_scored"></span>
+                                </span>
+                            </template>
+                            <template x-if="bowler">
+                                <span class="text-[10px] text-rose-300 font-bold font-mono border-l border-white/20 pl-1.5">
+                                    🎯<span x-text="bowler.player_name ? bowler.player_name.split(' ')[0] : ''"></span> <span class="text-white" x-text="bowler.wickets_taken + '/' + bowler.runs_conceded"></span>
+                                </span>
+                            </template>
+                            <button type="button" @click="hideMobileScoreboard = true" 
+                                    class="ml-1 px-1.5 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white text-[9px] font-bold" 
+                                    title="Hide Overlay / Full Pitch View">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Minimized floating badge when user tapped ✕ on mobile -->
+                <div x-show="hideMobileScoreboard" class="block md:hidden pointer-events-auto">
+                    <button type="button" @click="hideMobileScoreboard = false" 
+                            class="px-2.5 py-1 rounded-full bg-slate-950/90 border border-white/20 text-white text-[10px] font-bold shadow-xl backdrop-blur-md flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span x-text="scoreRuns + '/' + scoreWickets + ' (' + scoreOvers + ' ov)'"></span>
+                        <span class="text-emerald-400">📊 Show</span>
+                    </button>
+                </div>
+
+                <!-- 2. TABLET & DESKTOP FULL TV GRAPHICS SCOREBOARD (SCREEN >= md) -->
+                <div class="hidden md:grid bg-gradient-to-r from-slate-900/95 via-slate-950/95 to-indigo-950/95 backdrop-blur-md rounded-2xl border-2 border-white/15 p-2 sm:p-3 shadow-2xl md:grid-cols-12 gap-2 sm:gap-3 items-center pointer-events-auto">
                     
                     <!-- Left Block: Team Name & Giant Live Score (Cols: 4) -->
-                    <div class="md:col-span-4 flex items-center justify-between border-b md:border-b-0 md:border-r border-white/10 pb-2 md:pb-0 md:pr-3">
+                    <div class="md:col-span-4 flex items-center justify-between border-r border-white/10 pr-3">
                         <div>
                             <div class="text-[10px] font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
                                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1702,7 +1745,7 @@
                     </div>
 
                     <!-- Middle Block: Active Batsmen on Crease (Cols: 5) -->
-                    <div class="md:col-span-5 grid grid-cols-2 gap-2 border-b md:border-b-0 md:border-r border-white/10 pb-2 md:pb-0 md:pr-3 text-[11px]">
+                    <div class="md:col-span-5 grid grid-cols-2 gap-2 border-r border-white/10 pr-3 text-[11px]">
                         <!-- Striker -->
                         <div @if($isOwner) @click="openPlayerModal('all')" @endif 
                              class="p-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 truncate @if($isOwner) cursor-pointer hover:border-emerald-400 hover:bg-emerald-900/50 transition group @endif"
@@ -1809,12 +1852,15 @@
                         <button type="button" @click="recordBall('run', { runs: 6 })" class="py-2.5 rounded-xl bg-purple-600 text-white">6 💥</button>
                     </div>
 
-                    <!-- Row 2: Extras & Wicket -->
-                    <div class="grid grid-cols-4 gap-1.5 text-[10px] font-bold">
+                    <!-- Row 2: Extras, Wicket & Undo -->
+                    <div class="grid grid-cols-5 gap-1.5 text-[10px] font-bold">
                         <button type="button" @click="recordBall('wide', { runs: 1 })" class="py-2 rounded-xl bg-amber-600/30 text-amber-300 border border-amber-500/40 hover:bg-amber-600/40 transition">Wide (WD)</button>
                         <button type="button" @click="recordBall('no_ball', { runs: 1 })" class="py-2 rounded-xl bg-orange-600/30 text-orange-300 border border-orange-500/40 hover:bg-orange-600/40 transition">No Ball (NB)</button>
-                        <button type="button" @click="recordBall('swap_strike')" class="py-2 rounded-xl bg-white/10 text-slate-300 hover:bg-white/20 transition">Swap Strike ⇄</button>
-                        <button type="button" @click="wicketModalOpen = true" class="py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black shadow-lg shadow-red-600/40 transition">☝️ Wicket</button>
+                        <button type="button" @click="recordBall('swap_strike')" class="py-2 rounded-xl bg-white/10 text-slate-300 hover:bg-white/20 transition">Rotate ⇄</button>
+                        <button type="button" @click="wicketModalOpen = true" class="py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black shadow-lg shadow-red-600/40 transition">☝️ Out</button>
+                        <button type="button" @click="recordBall('undo')" class="py-2 rounded-xl bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 border border-rose-500/50 font-black transition flex items-center justify-center gap-1 shadow-sm" title="Undo last delivery">
+                            <span>↩️ Undo</span>
+                        </button>
                     </div>
 
                     <!-- Row 3: Player Management -->
@@ -1829,6 +1875,72 @@
                 </div>
             @endif
 
+        </div>
+
+        <!-- Mobile Live Match Details Card (Below Video on Phones: Never Blocks the Pitch!) -->
+        <div class="block md:hidden p-3.5 rounded-2xl bg-[#131b2e] border border-white/10 shadow-xl space-y-2.5">
+            <!-- Row 1: Striker & Non-Striker -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <!-- Striker -->
+                <div @if($isOwner) @click="openPlayerModal('all')" @endif 
+                     class="p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/40 truncate @if($isOwner) cursor-pointer @endif">
+                    <div class="flex items-center justify-between text-[9px] font-bold text-emerald-400 mb-0.5">
+                        <span>🏏 ON STRIKE</span>
+                        @if($isOwner)<span class="text-[8px] bg-emerald-500/30 px-1 rounded text-white font-mono">✎</span>@endif
+                    </div>
+                    <div class="font-black text-white truncate text-xs" x-text="striker ? striker.player_name : 'Select Striker'"></div>
+                    <div class="font-mono text-[11px] text-amber-300 font-bold mt-0.5" 
+                         x-text="striker ? (striker.runs_scored + '* (' + striker.balls_faced + 'b)') : '0* (0b)'"></div>
+                </div>
+
+                <!-- Non-Striker -->
+                <div @if($isOwner) @click="openPlayerModal('all')" @endif 
+                     class="p-2 rounded-xl bg-black/40 border border-white/10 truncate @if($isOwner) cursor-pointer @endif">
+                    <div class="flex items-center justify-between text-[9px] font-bold text-slate-400 mb-0.5">
+                        <span>NON-STRIKER</span>
+                        @if($isOwner)<span class="text-[8px] bg-indigo-500/30 px-1 rounded text-indigo-200 font-mono">✎</span>@endif
+                    </div>
+                    <div class="font-black text-slate-200 truncate text-xs" x-text="nonStriker ? nonStriker.player_name : 'Select Non-Striker'"></div>
+                    <div class="font-mono text-[11px] text-slate-300 font-bold mt-0.5" 
+                         x-text="nonStriker ? (nonStriker.runs_scored + ' (' + nonStriker.balls_faced + 'b)') : '0 (0b)'"></div>
+                </div>
+            </div>
+
+            <!-- Row 2: Bowler & Over Timeline -->
+            <div class="p-2.5 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between gap-2 text-xs">
+                <div @if($isOwner) @click="openPlayerModal('bowler')" @endif 
+                     class="min-w-0 @if($isOwner) cursor-pointer @endif">
+                    <div class="flex items-center gap-1.5 text-[9px] font-bold text-rose-400 uppercase">
+                        <span>🎯 BOWLER</span>
+                        @if($isOwner)<span class="text-[8px] bg-rose-500/30 px-1 rounded text-rose-200 font-mono">✎</span>@endif
+                    </div>
+                    <div class="font-black text-white truncate text-xs mt-0.5" x-text="bowler ? bowler.player_name : 'Select Bowler'"></div>
+                    <div class="font-mono text-[10px] text-slate-300 font-bold" 
+                         x-text="bowler ? (bowler.wickets_taken + '/' + bowler.runs_conceded + ' (' + bowler.overs_bowled + ' ov)') : '0/0 (0.0)'"></div>
+                </div>
+
+                <!-- This Over Balls -->
+                <div class="text-right shrink-0">
+                    <span class="text-[9px] font-bold text-slate-400 uppercase block mb-1">This Over</span>
+                    <div class="flex items-center gap-1">
+                        <template x-for="(ball, idx) in thisOver" :key="idx">
+                            <span :class="{
+                                    'bg-blue-600 text-white': ball === '4',
+                                    'bg-purple-600 text-white': ball === '6',
+                                    'bg-rose-600 text-white font-black': ball === 'W',
+                                    'bg-amber-600 text-white': ball.includes('WD') || ball.includes('NB'),
+                                    'bg-slate-800 text-slate-300': ball === '0',
+                                    'bg-slate-700 text-white': ball !== '0' && ball !== '4' && ball !== '6' && ball !== 'W' && !ball.includes('WD') && !ball.includes('NB')
+                                  }"
+                                  class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold shadow-sm" 
+                                  x-text="ball"></span>
+                        </template>
+                        <template x-if="!thisOver || thisOver.length === 0">
+                            <span class="text-[10px] text-slate-500 font-mono">Yet to start</span>
+                        </template>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Broadcast Info & Guide Card -->
