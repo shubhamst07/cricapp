@@ -287,11 +287,16 @@
                 @foreach($meetup->activeParticipants as $index => $participant)
                     @php
                         $isThisOrganizer = $participant->user_id === $meetup->user_id;
+                        $profileUrl = $participant->user_id ? route('profile.user', $participant->user_id) : null;
                     @endphp
-                    <div class="p-3.5 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-between gap-3 relative overflow-hidden group hover:border-amber-500/30 transition">
-                        <div class="flex items-center gap-3 min-w-0">
+                    <div class="p-3.5 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-between gap-3 relative overflow-hidden group hover:border-amber-500/30 hover:bg-slate-850 transition">
+                        @if($profileUrl)
+                            <a href="{{ $profileUrl }}" class="flex items-center gap-3 min-w-0 flex-1 group/player cursor-pointer" title="View {{ $participant->player_name }}'s Player Passport">
+                        @else
+                            <div class="flex items-center gap-3 min-w-0 flex-1">
+                        @endif
                             <!-- Avatar / Number -->
-                            <div class="w-10 h-10 rounded-xl {{ $isThisOrganizer ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-white font-bold' }} flex items-center justify-center text-sm shrink-0 shadow-md">
+                            <div class="w-10 h-10 rounded-xl {{ $isThisOrganizer ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-white font-bold' }} flex items-center justify-center text-sm shrink-0 shadow-md group-hover/player:scale-105 group-hover/player:ring-2 group-hover/player:ring-amber-400/50 transition">
                                 @if($isThisOrganizer)
                                     👑
                                 @else
@@ -299,35 +304,53 @@
                                 @endif
                             </div>
 
-                            <div class="min-w-0">
-                                <div class="font-bold text-sm text-white truncate flex items-center gap-1.5">
-                                    <span>{{ $participant->player_name }}</span>
+                            <div class="min-w-0 flex-1">
+                                <div class="font-bold text-sm text-white truncate flex items-center gap-1.5 group-hover/player:text-amber-400 transition-colors">
+                                    <span class="truncate">{{ $participant->player_name }}</span>
                                     @if($isThisOrganizer)
-                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-black bg-amber-500/20 text-amber-300">Host</span>
+                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-black bg-amber-500/20 text-amber-300 shrink-0">Host</span>
+                                    @endif
+                                    @if($profileUrl)
+                                        <span class="text-xs text-amber-400 opacity-60 group-hover/player:opacity-100 group-hover/player:translate-x-0.5 transition shrink-0">↗</span>
                                     @endif
                                 </div>
                                 <div class="text-xs text-slate-400 truncate flex items-center gap-1 mt-0.5">
                                     <span>{{ $participant->player_role ?: 'All-Rounder' }}</span>
                                     @if($participant->notes)
-                                        <span class="text-slate-500">• {{ $participant->notes }}</span>
+                                        <span class="text-slate-500 truncate">• {{ $participant->notes }}</span>
                                     @endif
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- Organizer Remove Option -->
-                        @if($isOrganizer && !$isThisOrganizer)
-                            <form action="{{ route('meetups.participants.remove', [$meetup, $participant]) }}" method="POST"
-                                  onsubmit="return confirm('Remove {{ $participant->player_name }} from squad?');">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit"
-                                        title="Remove player"
-                                        class="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-white/5 text-xs transition">
-                                    ✕
-                                </button>
-                            </form>
+                        @if($profileUrl)
+                            </a>
+                        @else
+                            </div>
                         @endif
+
+                        <div class="flex items-center gap-1 shrink-0">
+                            @if($profileUrl)
+                                <a href="{{ $profileUrl }}"
+                                   title="View {{ $participant->player_name }}'s Profile"
+                                   class="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-amber-400 py-1 px-2 rounded-lg bg-white/5 hover:bg-white/10 transition">
+                                    <span>Profile</span>
+                                    <span class="text-[10px]">↗</span>
+                                </a>
+                            @endif
+
+                            <!-- Organizer Remove Option -->
+                            @if($isOrganizer && !$isThisOrganizer)
+                                <form action="{{ route('meetups.participants.remove', [$meetup, $participant]) }}" method="POST"
+                                      onsubmit="return confirm('Remove {{ $participant->player_name }} from squad?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit"
+                                            title="Remove player"
+                                            class="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-white/5 text-xs transition">
+                                        ✕
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
                     </div>
                 @endforeach
 
@@ -421,19 +444,44 @@
 
             <!-- Organizer Info Card -->
             <div class="p-5 sm:p-7 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-4">
-                <h3 class="font-black text-base text-white flex items-center gap-2">
-                    <span>👑 Organizer Information</span>
-                </h3>
-
-                <div class="flex items-center gap-3.5 bg-slate-900/60 p-4 rounded-2xl border border-white/5">
-                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-slate-950 font-black text-lg flex items-center justify-center shrink-0 shadow-lg">
-                        {{ strtoupper(substr($meetup->user->name, 0, 1)) }}
-                    </div>
-                    <div class="min-w-0">
-                        <div class="font-black text-white text-base truncate">{{ $meetup->user->name }}</div>
-                        <div class="text-xs text-slate-400">Match Organizer • {{ $meetup->city }}</div>
-                    </div>
+                <div class="flex items-center justify-between">
+                    <h3 class="font-black text-base text-white flex items-center gap-2">
+                        <span>👑 Organizer Information</span>
+                    </h3>
+                    @if($meetup->user_id)
+                        <a href="{{ route('profile.user', $meetup->user_id) }}" class="text-[11px] text-amber-400 font-bold hover:underline flex items-center gap-1">
+                            <span>Profile</span>
+                            <span>↗</span>
+                        </a>
+                    @endif
                 </div>
+
+                @if($meetup->user_id)
+                    <a href="{{ route('profile.user', $meetup->user_id) }}"
+                       title="View {{ $meetup->user->name }}'s Player Passport"
+                       class="flex items-center gap-3.5 bg-slate-900/60 hover:bg-slate-900/90 p-4 rounded-2xl border border-white/5 hover:border-amber-500/30 transition group cursor-pointer block">
+                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-slate-950 font-black text-lg flex items-center justify-center shrink-0 shadow-lg group-hover:scale-105 transition-transform">
+                            {{ strtoupper(substr($meetup->user->name, 0, 1)) }}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-black text-white text-base truncate group-hover:text-amber-400 transition-colors flex items-center gap-1.5">
+                                <span>{{ $meetup->user->name }}</span>
+                                <span class="text-xs text-amber-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition">↗</span>
+                            </div>
+                            <div class="text-xs text-slate-400">Match Organizer • {{ $meetup->city }}</div>
+                        </div>
+                    </a>
+                @else
+                    <div class="flex items-center gap-3.5 bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-slate-950 font-black text-lg flex items-center justify-center shrink-0 shadow-lg">
+                            {{ strtoupper(substr($meetup->user->name, 0, 1)) }}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-black text-white text-base truncate">{{ $meetup->user->name }}</div>
+                            <div class="text-xs text-slate-400">Match Organizer • {{ $meetup->city }}</div>
+                        </div>
+                    </div>
+                @endif
 
                 <div class="space-y-2 pt-1">
                     @if($meetup->contact_whatsapp)

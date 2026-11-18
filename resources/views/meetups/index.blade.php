@@ -305,12 +305,23 @@
 
                                 <!-- Organizer Snippet -->
                                 <div class="pt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
-                                    <div class="flex items-center gap-2 min-w-0">
-                                        <div class="w-6 h-6 rounded-full bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-[10px] font-black text-indigo-300 shrink-0">
-                                            {{ strtoupper(substr($meetup->user->name ?? 'C', 0, 1)) }}
+                                    @if($meetup->user_id)
+                                        <a href="{{ route('profile.user', $meetup->user_id) }}" 
+                                           title="View {{ $meetup->user->name ?? 'Organizer' }}'s Profile"
+                                           class="flex items-center gap-2 min-w-0 hover:text-amber-400 transition group/host">
+                                            <div class="w-6 h-6 rounded-full bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-[10px] font-black text-indigo-300 shrink-0 group-hover/host:border-amber-400">
+                                                {{ strtoupper(substr($meetup->user->name ?? 'C', 0, 1)) }}
+                                            </div>
+                                            <span class="truncate text-[11px]">By <b class="text-slate-200 group-hover/host:text-amber-400 transition">{{ $meetup->user->name ?? 'Captain' }}</b></span>
+                                        </a>
+                                    @else
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <div class="w-6 h-6 rounded-full bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-[10px] font-black text-indigo-300 shrink-0">
+                                                {{ strtoupper(substr($meetup->user->name ?? 'C', 0, 1)) }}
+                                            </div>
+                                            <span class="truncate text-[11px]">By <b class="text-slate-200">{{ $meetup->user->name ?? 'Captain' }}</b></span>
                                         </div>
-                                        <span class="truncate text-[11px]">By <b class="text-slate-200">{{ $meetup->user->name ?? 'Captain' }}</b></span>
-                                    </div>
+                                    @endif
                                     <span class="text-[10px] text-slate-500 font-mono">{{ $meetup->created_at->diffForHumans() }}</span>
                                 </div>
 
