@@ -1,12 +1,36 @@
 /**
- * LiveCricket MediaMTX Stream Engine
- * High-performance, self-hosted WebRTC WHIP/WHEP & HLS Live Streaming.
- * Zero Agora SDK dependencies, zero monthly per-minute billing, ultra-low latency (< 500ms).
+ * LiveCricket MediaMTX & Direct WebRTC P2P Stream Engine
+ * High-performance, self-hosted WebRTC Live Streaming with STUN/TURN traversal.
+ * Zero Agora SDK dependencies, zero monthly per-minute billing, ultra-low latency (< 200ms).
  */
+
+const CRICKET_ICE_SERVERS = [
+    {
+        urls: [
+            'stun:stun.l.google.com:19302',
+            'stun:stun1.l.google.com:19302',
+            'stun:stun2.l.google.com:19302',
+            'stun:stun3.l.google.com:19302',
+            'stun:stun4.l.google.com:19302'
+        ]
+    },
+    {
+        urls: [
+            'turn:openrelay.metered.ca:80',
+            'turn:openrelay.metered.ca:443',
+            'turn:openrelay.metered.ca:443?transport=tcp',
+            'turns:openrelay.metered.ca:443?transport=tcp'
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+    }
+];
 
 class CricketStreamBroadcaster {
     constructor(options = {}) {
         this.whipUrl = options.whipUrl || '';
+        this.signalUrl = options.signalUrl || '';
+        this.csrfToken = options.csrfToken || '';
         this.pc = null;
         this.localStream = null;
         this.whipSessionUrl = null;
@@ -15,13 +39,14 @@ class CricketStreamBroadcaster {
         this.micMuted = false;
         this.isVirtualCamera = false;
         this.virtualAnimationId = null;
+        this.peerConnections = new Map(); // viewerId => RTCPeerConnection
+        this.isAnswering = false;
         this.onStateChange = options.onStateChange || (() => {});
         this.onError = options.onError || (() => {});
     }
 
     async start(whipUrl, videoPreviewElement) {
         if (whipUrl) this.whipUrl = whipUrl;
-        if (!this.whipUrl) throw new Error('WHIP endpoint URL is required');
 
         try {
             // 1. Acquire Camera & Microphone (or Virtual Cricket Ground Simulator if no hardware found)
@@ -33,38 +58,43 @@ class CricketStreamBroadcaster {
                 await videoPreviewElement.play().catch(() => {});
             }
 
-            // 2. Setup RTCPeerConnection with Google STUN servers
+            this.isBroadcasting = true;
+            this.onStateChange('connected');
+
+            // 2. Background attempt to publish to MediaMTX WHIP (if available and open)
+            if (this.whipUrl) {
+                this._attemptWhipPublish(this.whipUrl).catch((err) => {
+                    console.info('[Broadcaster Engine] MediaMTX WHIP notice (P2P mode active):', err.message);
+                });
+            }
+
+            return this.localStream;
+        } catch (err) {
+            this.stop();
+            this.onError(err);
+            throw err;
+        }
+    }
+
+    async _attemptWhipPublish(whipUrl) {
+        try {
             this.pc = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ],
+                iceServers: CRICKET_ICE_SERVERS,
                 bundlePolicy: 'max-bundle'
             });
 
-            this.pc.onconnectionstatechange = () => {
-                const state = this.pc ? this.pc.connectionState : 'closed';
-                this.onStateChange(state);
-            };
-
-            // 3. Add audio and video tracks to WebRTC peer connection
             this.localStream.getTracks().forEach(track => {
                 this.pc.addTrack(track, this.localStream);
             });
 
-            // 4. Create SDP offer and set local description
             const offer = await this.pc.createOffer();
             await this.pc.setLocalDescription(offer);
 
-            // 5. Wait for ICE gathering to complete so SDP has all candidates
             await this._waitForIceGathering(this.pc);
 
-            // 6. POST SDP offer to MediaMTX WHIP endpoint
-            const res = await fetch(this.whipUrl, {
+            const res = await fetch(whipUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/sdp'
-                },
+                headers: { 'Content-Type': 'application/sdp' },
                 body: this.pc.localDescription.sdp
             });
 
@@ -79,21 +109,100 @@ class CricketStreamBroadcaster {
                 sdp: answerSdp
             }));
 
-            // Store session URL from Location header for clean termination
             const loc = res.headers.get('Location');
-            if (loc) {
-                this.whipSessionUrl = new URL(loc, this.whipUrl).href;
-            } else {
-                this.whipSessionUrl = this.whipUrl;
+            this.whipSessionUrl = loc ? new URL(loc, whipUrl).href : whipUrl;
+            console.log('[Broadcaster Engine] MediaMTX WHIP published successfully.');
+        } catch (e) {
+            // Ignore - Direct WebRTC P2P serves audience directly
+            console.warn('[Broadcaster Engine] MediaMTX publish skipped:', e.message);
+        }
+    }
+
+    /**
+     * Process viewer offers received via signaling (Direct WebRTC P2P)
+     */
+    async handleViewerOffers(offers, signalUrl, csrfToken) {
+        if (!this.isBroadcasting || !this.localStream || this.isAnswering) return;
+        if (!offers || typeof offers !== 'object') return;
+
+        const offerEntries = Object.entries(offers);
+        if (offerEntries.length === 0) return;
+
+        this.isAnswering = true;
+        const answersBatch = {};
+
+        try {
+            for (const [viewerId, offerData] of offerEntries) {
+                const offerSdp = (typeof offerData === 'string') ? offerData : offerData?.offer;
+                if (!offerSdp) continue;
+
+                // Check if connection already established
+                if (this.peerConnections.has(viewerId)) {
+                    const existingPc = this.peerConnections.get(viewerId);
+                    if (existingPc.connectionState === 'connected' || existingPc.connectionState === 'connecting') {
+                        continue;
+                    }
+                    try { existingPc.close(); } catch(e) {}
+                    this.peerConnections.delete(viewerId);
+                }
+
+                console.log(`[Broadcaster P2P] Answering viewer offer: ${viewerId}`);
+
+                const pc = new RTCPeerConnection({
+                    iceServers: CRICKET_ICE_SERVERS,
+                    bundlePolicy: 'max-bundle'
+                });
+
+                // Attach broadcaster audio & video tracks
+                this.localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, this.localStream);
+                });
+
+                pc.onconnectionstatechange = () => {
+                    console.log(`[Broadcaster P2P] Viewer ${viewerId} state:`, pc.connectionState);
+                    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                        try { pc.close(); } catch(e) {}
+                        this.peerConnections.delete(viewerId);
+                    }
+                };
+
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: 'offer',
+                    sdp: offerSdp
+                }));
+
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                await this._waitForIceGathering(pc);
+
+                this.peerConnections.set(viewerId, pc);
+                answersBatch[viewerId] = pc.localDescription.sdp;
             }
 
-            this.isBroadcasting = true;
-            this.onStateChange('connected');
-            return this.localStream;
+            if (Object.keys(answersBatch).length > 0) {
+                const targetSignalUrl = signalUrl || this.signalUrl;
+                const token = csrfToken || this.csrfToken;
+                if (targetSignalUrl) {
+                    await fetch(targetSignalUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': token
+                        },
+                        body: JSON.stringify({
+                            webrtc_answers: answersBatch,
+                            heartbeat: true
+                        })
+                    });
+                    console.log(`[Broadcaster P2P] Successfully sent answers for ${Object.keys(answersBatch).length} viewer(s)`);
+                }
+            }
         } catch (err) {
-            this.stop();
-            this.onError(err);
-            throw err;
+            console.warn('[Broadcaster P2P] Error handling viewer offers:', err);
+        } finally {
+            this.isAnswering = false;
         }
     }
 
@@ -121,7 +230,7 @@ class CricketStreamBroadcaster {
                 hasVideoInput = devs.some(d => d.kind === 'videoinput');
                 hasAudioInput = devs.some(d => d.kind === 'audioinput');
             } catch (e) {
-                // If permission is not yet granted, enumerateDevices might return empty labels
+                // If permission is not yet granted
             }
         }
 
@@ -292,7 +401,7 @@ class CricketStreamBroadcaster {
 
             ctx.fillStyle = '#f8fafc';
             ctx.font = 'bold 13px system-ui, sans-serif';
-            ctx.fillText('✓ PC Simulator Active: Real WebRTC WHIP Stream Transmitting', 65, 104);
+            ctx.fillText('✓ PC Simulator Active: Real WebRTC Live Stream Transmitting', 65, 104);
 
             ctx.fillStyle = '#94a3b8';
             ctx.font = '12px system-ui, sans-serif';
@@ -346,11 +455,17 @@ class CricketStreamBroadcaster {
             this.whipSessionUrl = null;
         }
 
-        // Close peer connection
+        // Close WHIP peer connection
         if (this.pc) {
             try { this.pc.close(); } catch (e) {}
             this.pc = null;
         }
+
+        // Close all viewer P2P peer connections
+        this.peerConnections.forEach((pc) => {
+            try { pc.close(); } catch (e) {}
+        });
+        this.peerConnections.clear();
 
         // Stop camera and mic tracks
         if (this.localStream) {
@@ -374,7 +489,7 @@ class CricketStreamBroadcaster {
 
     async flipCamera(videoPreviewElement) {
         this.facingMode = (this.facingMode === 'environment') ? 'user' : 'environment';
-        if (this.isBroadcasting && this.whipUrl && !this.isVirtualCamera) {
+        if (this.isBroadcasting && !this.isVirtualCamera) {
             await this.stop();
             await this.start(this.whipUrl, videoPreviewElement);
         }
@@ -405,12 +520,125 @@ class CricketStreamViewer {
         this.hlsUrl = options.hlsUrl || '';
         this.pc = null;
         this.hlsInstance = null;
-        this.mode = 'idle'; // 'webrtc', 'hls', 'idle'
+        this.mode = 'idle'; // 'p2p', 'webrtc', 'hls', 'idle'
         this.videoElement = null;
+        this.viewerId = null;
+        this.signalUrl = '';
+        this.waitingForAnswer = false;
+        this.isConnecting = false;
         this.onModeChange = options.onModeChange || (() => {});
         this.onError = options.onError || (() => {});
     }
 
+    /**
+     * Start Direct WebRTC P2P connection to Broadcaster
+     */
+    async startP2P({ signalUrl, viewerId, videoElement, csrfToken, onConnected, onError }) {
+        if (this.isConnecting) return;
+        this.isConnecting = true;
+
+        try {
+            this.stop();
+            this.signalUrl = signalUrl;
+            this.viewerId = viewerId;
+            this.videoElement = videoElement;
+
+            console.log(`[Viewer P2P] Initiating peer connection for ${viewerId}...`);
+
+            this.pc = new RTCPeerConnection({
+                iceServers: CRICKET_ICE_SERVERS,
+                bundlePolicy: 'max-bundle'
+            });
+
+            this.pc.addTransceiver('video', { direction: 'recvonly' });
+            this.pc.addTransceiver('audio', { direction: 'recvonly' });
+
+            this.pc.ontrack = (event) => {
+                console.log('[Viewer P2P] Track received:', event.track.kind);
+                if (this.videoElement && event.streams && event.streams[0]) {
+                    this.videoElement.srcObject = event.streams[0];
+                    this.videoElement.muted = true; // Auto-play safely
+                    this.videoElement.play().catch(e => console.log('Autoplay caught:', e));
+                    this.mode = 'p2p';
+                    this.onModeChange('p2p');
+                    if (onConnected) onConnected();
+                }
+            };
+
+            this.pc.onconnectionstatechange = () => {
+                const state = this.pc ? this.pc.connectionState : 'closed';
+                console.log('[Viewer P2P] Connection state:', state);
+                if (state === 'connected') {
+                    this.mode = 'p2p';
+                    this.onModeChange('p2p');
+                    if (onConnected) onConnected();
+                } else if (state === 'failed') {
+                    console.warn('[Viewer P2P] Connection failed, resetting for retry');
+                    this.waitingForAnswer = false;
+                    if (onError) onError(new Error('P2P connection failed'));
+                }
+            };
+
+            const offer = await this.pc.createOffer();
+            await this.pc.setLocalDescription(offer);
+
+            await this._waitForIceGathering(this.pc);
+
+            // Post offer to Laravel signaling endpoint
+            const res = await fetch(signalUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken || ''
+                },
+                body: JSON.stringify({
+                    viewer_id: viewerId,
+                    webrtc_offer: this.pc.localDescription.sdp
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error(`Signaling error (${res.status})`);
+            }
+
+            this.waitingForAnswer = true;
+            console.log('[Viewer P2P] Offer posted, awaiting broadcaster answer...');
+        } catch (err) {
+            console.warn('[Viewer P2P] startP2P error:', err);
+            if (onError) onError(err);
+        } finally {
+            this.isConnecting = false;
+        }
+    }
+
+    /**
+     * Handle broadcaster SDP answer received via polling
+     */
+    async handleAnswer(answerSdp) {
+        if (!this.pc || !answerSdp) return;
+        if (this.pc.signalingState !== 'have-local-offer') {
+            return; // Already processed or closed
+        }
+
+        try {
+            console.log('[Viewer P2P] Broadcaster answer received, completing handshake!');
+            const sdpString = (typeof answerSdp === 'string') ? answerSdp : (answerSdp?.sdp || answerSdp?.answer);
+            if (!sdpString) return;
+
+            await this.pc.setRemoteDescription(new RTCSessionDescription({
+                type: 'answer',
+                sdp: sdpString
+            }));
+            this.waitingForAnswer = false;
+        } catch (err) {
+            console.warn('[Viewer P2P] Error setting remote description:', err);
+        }
+    }
+
+    /**
+     * MediaMTX WHEP + HLS Fallback (Used when P2P is not applicable)
+     */
     async play(whepUrl, hlsUrl, videoElement) {
         if (whepUrl) this.whepUrl = whepUrl;
         if (hlsUrl) this.hlsUrl = hlsUrl;
@@ -445,10 +673,7 @@ class CricketStreamViewer {
 
     async _playWhep(whepUrl, videoEl) {
         this.pc = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ],
+            iceServers: CRICKET_ICE_SERVERS,
             bundlePolicy: 'max-bundle'
         });
 
@@ -533,6 +758,8 @@ class CricketStreamViewer {
             }
         }
 
+        this.waitingForAnswer = false;
+        this.isConnecting = false;
         this.mode = 'idle';
         this.onModeChange('idle');
     }
@@ -549,7 +776,7 @@ class CricketStreamViewer {
                     }
                 };
                 pc.addEventListener('icegatheringstatechange', check);
-                setTimeout(resolve, 800);
+                setTimeout(resolve, 800); // 800ms safety timeout
             }
         });
     }

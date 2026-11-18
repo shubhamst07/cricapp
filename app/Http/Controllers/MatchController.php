@@ -523,6 +523,25 @@ class MatchController extends Controller
             $agoraToken = $agoraTokenService->buildToken($agoraChannel, 0, $role);
         }
 
+        $now = now()->timestamp;
+        $webrtcOffers = [];
+        foreach (($state['webrtc_offers'] ?? []) as $vId => $offData) {
+            if (is_array($offData) && ($now - ($offData['time'] ?? 0)) < 60) {
+                $webrtcOffers[$vId] = $offData;
+            }
+        }
+
+        $webrtcAnswers = [];
+        foreach (($state['webrtc_answers'] ?? []) as $vId => $ansData) {
+            if (is_array($ansData)) {
+                if (($now - ($ansData['time'] ?? 0)) < 60) {
+                    $webrtcAnswers[$vId] = $ansData['sdp'] ?? '';
+                }
+            } else {
+                $webrtcAnswers[$vId] = $ansData;
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'match_status' => $match->status,
@@ -551,8 +570,8 @@ class MatchController extends Controller
             'whip_url' => $this->getMediaMtxUrls($match)['whip_url'],
             'whep_url' => $this->getMediaMtxUrls($match)['whep_url'],
             'hls_url' => $this->getMediaMtxUrls($match)['hls_url'],
-            'webrtc_offers' => $state['webrtc_offers'] ?? [],
-            'webrtc_answers' => $state['webrtc_answers'] ?? [],
+            'webrtc_offers' => $webrtcOffers,
+            'webrtc_answers' => $webrtcAnswers,
         ]);
     }
 
@@ -783,9 +802,19 @@ class MatchController extends Controller
             }
             if ($request->has('webrtc_answers') && is_array($request->input('webrtc_answers'))) {
                 $existingAnswers = $state['webrtc_answers'] ?? [];
+                $now = now()->timestamp;
                 foreach ($request->input('webrtc_answers') as $vId => $ans) {
-                    $existingAnswers[$vId] = $ans;
+                    $existingAnswers[$vId] = [
+                        'sdp' => is_array($ans) ? ($ans['sdp'] ?? ($ans['answer'] ?? '')) : $ans,
+                        'time' => $now,
+                    ];
+                    // Remove answered offer from webrtc_offers
+                    if (isset($state['webrtc_offers'][$vId])) {
+                        unset($state['webrtc_offers'][$vId]);
+                    }
                 }
+                // Prune answers older than 60s
+                $existingAnswers = array_filter($existingAnswers, fn($a) => is_array($a) ? (($now - ($a['time'] ?? 0)) < 60) : true);
                 $state['webrtc_answers'] = $existingAnswers;
             }
         }

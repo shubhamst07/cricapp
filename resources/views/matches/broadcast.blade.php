@@ -40,12 +40,22 @@
     editStreamModal: false,
     activeStreamTab: 'camera',
 
-    // MediaMTX Live Streaming Endpoints (Self-Hosted, Ultra-Low Latency < 500ms)
+    // Live Streaming Endpoints & WebRTC P2P Signaling
     streamChannel: '{{ $streamChannel }}',
     whipUrl: '{{ $whipUrl }}',
     whepUrl: '{{ $whepUrl }}',
     hlsUrl: '{{ $hlsUrl }}',
-    broadcastMode: 'mediamtx_webrtc',
+    signalUrl: '{{ route('matches.stream-signal', $match) }}',
+    csrfToken: '{{ csrf_token() }}',
+    viewerId: (function() {
+        let v = sessionStorage.getItem('cric_viewer_id');
+        if (!v) {
+            v = 'v_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+            sessionStorage.setItem('cric_viewer_id', v);
+        }
+        return v;
+    })(),
+    broadcastMode: 'direct_p2p',
     isCameraLive: {{ $isCameraLive ? 'true' : 'false' }},
     streamActive: {{ $isCameraLive ? 'true' : 'false' }},
     isBroadcasting: false,
@@ -54,8 +64,8 @@
     hasLiveStream: false,
     broadcasterEngine: null,
     viewerEngine: null,
-    streamEngineMode: 'idle', // 'webrtc' or 'hls'
-    audienceMuted: false,
+    streamEngineMode: 'idle', // 'p2p', 'webrtc' or 'hls'
+    audienceMuted: true,
     facingMode: 'environment',
     micMuted: false,
 
@@ -404,12 +414,14 @@
 
             this.broadcasterEngine = new CricketStreamBroadcaster({
                 whipUrl: whipEndpoint,
+                signalUrl: this.signalUrl,
+                csrfToken: this.csrfToken,
                 facingMode: this.facingMode,
                 onStateChange: (state) => {
-                    console.log('MediaMTX WHIP state:', state);
+                    console.log('Broadcaster stream state:', state);
                 },
                 onError: (err) => {
-                    console.error('MediaMTX broadcast error:', err);
+                    console.error('Broadcaster stream error:', err);
                 }
             });
 
@@ -419,18 +431,18 @@
             this.streamActive = true;
             this.isBroadcasting = true;
             this.isCameraLive = true;
-            this.broadcastMode = 'mediamtx_webrtc';
+            this.broadcastMode = 'direct_p2p';
 
             // Start automatic recording of live camera stream
             this.startRecording();
 
             // Notify backend that Broadcaster is live with camera
-            await fetch('{{ route('matches.stream-signal', $match) }}', {
+            await fetch(this.signalUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    'X-CSRF-TOKEN': this.csrfToken
                 },
                 body: JSON.stringify({ is_camera_live: true, heartbeat: true })
             });
@@ -504,7 +516,7 @@
         this.showToast(this.micMuted ? '🔇 Microphone muted' : '🎙️ Microphone on');
     },
 
-    // Audience In-App Live Stream Subscriber (MediaMTX WebRTC WHEP + HLS Fallback)
+    // Audience In-App Live Stream Subscriber (Direct WebRTC P2P + MediaMTX Fallback)
     async connectAudienceStream(data) {
         if (this.viewerConnected || this.isBroadcaster || this.isConnectingAudience) return;
         this.isConnectingAudience = true;
@@ -516,22 +528,33 @@
                 return;
             }
 
-            const whepEndpoint = data?.whep_url || this.whepUrl;
-            const hlsEndpoint = data?.hls_url || this.hlsUrl;
-
             if (!this.viewerEngine) {
                 this.viewerEngine = new CricketStreamViewer({
                     onModeChange: (mode) => {
                         this.streamEngineMode = mode;
                         console.log('Stream playback mode:', mode);
+                    },
+                    onError: (err) => {
+                        console.warn('Viewer engine notice:', err);
                     }
                 });
             }
 
-            await this.viewerEngine.play(whepEndpoint, hlsEndpoint, videoElem);
-            this.viewerConnected = true;
-            this.streamActive = true;
-            this.hasLiveStream = true;
+            // 1. Direct WebRTC P2P (Connects phone broadcaster directly to audience device)
+            await this.viewerEngine.startP2P({
+                signalUrl: this.signalUrl,
+                viewerId: this.viewerId,
+                videoElement: videoElem,
+                csrfToken: this.csrfToken,
+                onConnected: () => {
+                    this.viewerConnected = true;
+                    this.streamActive = true;
+                    this.hasLiveStream = true;
+                },
+                onError: (err) => {
+                    console.warn('P2P connection attempt notice:', err);
+                }
+            });
         } catch(e) {
             console.warn('Audience stream connection notice:', e);
             this.viewerConnected = false;
@@ -691,29 +714,42 @@
                     if (data.videos) this.matchVideos = data.videos;
 
                     // Broadcaster Heartbeat & P2P Viewer Handling
-                    if (this.isBroadcaster && this.streamActive) {
-                        // Send live heartbeat
-                        fetch('{{ route('matches.stream-signal', $match) }}', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                            body: JSON.stringify({ heartbeat: true })
-                        }).catch(() => {});
-
+                    if (this.isBroadcaster && this.streamActive && this.broadcasterEngine) {
+                        if (data.webrtc_offers && Object.keys(data.webrtc_offers).length > 0) {
+                            // Answer any new incoming viewer connection offers
+                            this.broadcasterEngine.handleViewerOffers(data.webrtc_offers, this.signalUrl, this.csrfToken);
+                        } else {
+                            // Send live heartbeat
+                            fetch(this.signalUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrfToken },
+                                body: JSON.stringify({ heartbeat: true })
+                            }).catch(() => {});
+                        }
                     }
 
-                    // Sync MediaMTX Live Stream State for Audience
-                    if (data.is_camera_live) {
-                        this.isCameraLive = true;
-                        if (!this.isBroadcaster && !this.viewerConnected && !this.isConnectingAudience) {
-                            this.connectAudienceStream(data);
-                        }
-                    } else {
-                        if (!this.isBroadcaster && this.isCameraLive) {
-                            this.isCameraLive = false;
-                            this.viewerConnected = false;
-                            this.hasLiveStream = false;
-                            if (this.viewerEngine) {
-                                this.viewerEngine.stop();
+                    // Sync Live Stream State for Audience
+                    if (!this.isBroadcaster) {
+                        if (data.is_camera_live) {
+                            this.isCameraLive = true;
+                            if (!this.viewerConnected && !this.isConnectingAudience) {
+                                if (!this.viewerEngine || (!this.viewerEngine.waitingForAnswer && !this.viewerEngine.pc)) {
+                                    this.connectAudienceStream(data);
+                                }
+                            }
+
+                            // If broadcaster answered this viewer's offer, complete P2P handshake
+                            if (this.viewerEngine && this.viewerEngine.waitingForAnswer && data.webrtc_answers && data.webrtc_answers[this.viewerId]) {
+                                this.viewerEngine.handleAnswer(data.webrtc_answers[this.viewerId]);
+                            }
+                        } else {
+                            if (this.isCameraLive) {
+                                this.isCameraLive = false;
+                                this.viewerConnected = false;
+                                this.hasLiveStream = false;
+                                if (this.viewerEngine) {
+                                    this.viewerEngine.stop();
+                                }
                             }
                         }
                     }
@@ -1094,10 +1130,10 @@
                        class="absolute inset-0 w-full h-full object-cover z-0"></video>
             @endif
 
-            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (MediaMTX WebRTC WHEP + HLS Fallback) -->
+            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (Direct WebRTC P2P + MediaMTX Fallback) -->
             @if(!$isOwner)
                 <div x-show="isCameraLive" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
-                    <video id="audienceVideoPlayer" autoplay playsinline 
+                    <video id="audienceVideoPlayer" autoplay playsinline muted 
                            class="absolute inset-0 w-full h-full object-cover"></video>
 
                     <!-- Stream Connecting / Buffering Loader -->
@@ -1107,7 +1143,7 @@
                             <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
                             <span>Connecting to Live Video Feed...</span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-1 max-w-xs">Connecting to MediaMTX ultra-low latency WebRTC stream</p>
+                        <p class="text-xs text-slate-400 mt-1 max-w-xs">Connecting to ultra-low latency direct live stream...</p>
                     </div>
 
                     <!-- Unmute Audio Floating Pill -->
@@ -1304,14 +1340,14 @@
 
                     <template x-if="isBroadcaster && streamActive">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1 bg-emerald-600 text-white border border-white/20 shadow">
-                            <span>⚡ MediaMTX WebRTC</span>
+                            <span>⚡ Live Stream</span>
                         </span>
                     </template>
 
                     <template x-if="!isBroadcaster && (viewerConnected || isCameraLive)">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1 bg-emerald-600 text-white border border-white/20 shadow">
                             <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
-                            <span x-text="streamEngineMode === 'hls' ? '⚡ HLS Live' : '⚡ Sub-Second HD (<0.5s)'"></span>
+                            <span x-text="streamEngineMode === 'p2p' ? '⚡ Direct HD Live (<0.2s)' : (streamEngineMode === 'hls' ? '⚡ HLS Live' : '⚡ WebRTC Live')"></span>
                         </span>
                     </template>
 
