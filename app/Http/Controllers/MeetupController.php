@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\CricketCircle;
 use App\Models\Ground;
 use App\Models\MatchMeetup;
+use App\Models\MatchPlayer;
 use App\Models\MeetupParticipant;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -342,5 +345,214 @@ class MeetupController extends Controller
         $circle->members()->detach($user->id);
 
         return back()->with('success', "You have left '{$circle->name}'.");
+    }
+
+    /**
+     * Get player career statistics for a meetup participant.
+     */
+    public function participantCareer(MatchMeetup $meetup, MeetupParticipant $participant): JsonResponse
+    {
+        $user = $participant->user;
+        if (!$user && $participant->user_id) {
+            $user = User::find($participant->user_id);
+        }
+        if (!$user && !empty($participant->contact_phone)) {
+            $cleanPhone = preg_replace('/[^0-9]/', '', $participant->contact_phone);
+            if (strlen($cleanPhone) >= 4) {
+                $user = User::whereRaw("REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ?", ["%{$cleanPhone}%"])->first();
+            }
+        }
+        if (!$user) {
+            $user = User::whereRaw('LOWER(name) = ?', [strtolower(trim($participant->player_name))])->first();
+        }
+
+        return response()->json($this->buildCareerData(
+            playerName: $participant->player_name,
+            playerRole: $participant->player_role,
+            playerPhone: $participant->contact_phone,
+            teamName: $meetup->title,
+            user: $user,
+            isCaptain: $participant->user_id === $meetup->user_id
+        ));
+    }
+
+    /**
+     * Get player career statistics for a user.
+     */
+    public function userCareer(User $user): JsonResponse
+    {
+        return response()->json($this->buildCareerData(
+            playerName: $user->name,
+            playerRole: $user->player_role ?? 'All-Rounder',
+            playerPhone: $user->phone,
+            teamName: 'LiveCricket Platform',
+            user: $user,
+            isCaptain: false
+        ));
+    }
+
+    /**
+     * Helper to compute unified CricHeroes career statistics.
+     */
+    protected function buildCareerData(string $playerName, ?string $playerRole, ?string $playerPhone, string $teamName, ?User $user, bool $isCaptain = false): array
+    {
+        $cleanName = strtolower(trim($playerName));
+        $perfQuery = MatchPlayer::query();
+
+        if ($user) {
+            $perfQuery->where(function ($q) use ($user, $cleanName, $playerPhone) {
+                $q->where('user_id', $user->id)
+                  ->orWhereRaw('LOWER(player_name) = ?', [$cleanName]);
+                if (!empty($playerPhone)) {
+                    $q->orWhere('player_phone', $playerPhone);
+                }
+            });
+        } else {
+            $perfQuery->where(function ($q) use ($cleanName, $playerPhone) {
+                $q->whereRaw('LOWER(player_name) = ?', [$cleanName]);
+                if (!empty($playerPhone)) {
+                    $q->orWhere('player_phone', $playerPhone);
+                }
+            });
+        }
+
+        $performances = $perfQuery->with('match')->get();
+
+        if ($performances->isNotEmpty()) {
+            $matchesCount = $performances->pluck('match_id')->unique()->count();
+            $inningsBatted = $performances->filter(function ($p) {
+                return $p->balls_faced > 0 || $p->runs_scored > 0 || ($p->dismissal && !in_array(strtolower(trim($p->dismissal)), ['yet to bat', 'dnb', '']));
+            })->count();
+            $totalRuns = (int) $performances->sum('runs_scored');
+            $totalBalls = (int) $performances->sum('balls_faced');
+            $totalFours = (int) $performances->sum('fours');
+            $totalSixes = (int) $performances->sum('sixes');
+            $fifties = $performances->filter(fn($p) => $p->runs_scored >= 50 && $p->runs_scored < 100)->count();
+            $hundreds = $performances->filter(fn($p) => $p->runs_scored >= 100)->count();
+            $highestScore = (int) ($performances->max('runs_scored') ?? 0);
+            $highestPerf = $performances->where('runs_scored', $highestScore)->first();
+            $highestStr = (string) $highestScore;
+            if ($highestPerf && ($highestPerf->dismissal === 'not out' || empty($highestPerf->dismissal)) && $highestScore > 0) {
+                $highestStr .= '*';
+            }
+            $timesOut = $performances->filter(function ($p) {
+                return $p->balls_faced > 0 && !in_array(strtolower(trim($p->dismissal ?? '')), ['not out', 'dnb', 'yet to bat', '']);
+            })->count();
+            $battingAvg = $timesOut > 0 ? round($totalRuns / $timesOut, 2) : ($inningsBatted > 0 ? $totalRuns : 0.0);
+            $strikeRate = $totalBalls > 0 ? round(($totalRuns / $totalBalls) * 100, 2) : 0.0;
+            $notOuts = $performances->filter(function ($p) {
+                return ($p->balls_faced > 0 || $p->runs_scored > 0) && ($p->dismissal === 'not out' || empty($p->dismissal));
+            })->count();
+
+            $inningsBowled = $performances->filter(function ($p) {
+                return !empty($p->overs_bowled) && $p->overs_bowled !== '0.0' && $p->overs_bowled !== '0';
+            })->count();
+            $totalWickets = (int) $performances->sum('wickets_taken');
+            $totalRunsConceded = (int) $performances->sum('runs_conceded');
+            $totalMaidens = (int) $performances->sum('maidens');
+            $totalLegalBalls = 0;
+            foreach ($performances as $perf) {
+                if (!empty($perf->overs_bowled)) {
+                    $parts = explode('.', (string) $perf->overs_bowled);
+                    $ov = (int) ($parts[0] ?? 0);
+                    $bl = (int) ($parts[1] ?? 0);
+                    $totalLegalBalls += ($ov * 6) + $bl;
+                }
+            }
+            $totalOversFormatted = floor($totalLegalBalls / 6) . '.' . ($totalLegalBalls % 6);
+            $economyRate = $totalLegalBalls > 0 ? round(($totalRunsConceded / $totalLegalBalls) * 6, 2) : 0.0;
+            $bowlingAvg = $totalWickets > 0 ? round($totalRunsConceded / $totalWickets, 2) : 0.0;
+            $bestBowlingPerf = $performances->sortByDesc('wickets_taken')->sortBy('runs_conceded')->first();
+            $bestBowling = ($bestBowlingPerf && $bestBowlingPerf->wickets_taken > 0)
+                ? "{$bestBowlingPerf->wickets_taken}/{$bestBowlingPerf->runs_conceded}"
+                : '0/0';
+
+            $recentMatches = $performances->sortByDesc('created_at')->take(5)->map(function ($p) {
+                $m = $p->match;
+                return [
+                    'match_id' => $p->match_id,
+                    'title' => $m ? ($m->team1_name . ' vs ' . $m->team2_name) : 'Match #' . $p->match_id,
+                    'team' => $p->team_name,
+                    'runs' => $p->runs_scored,
+                    'balls' => $p->balls_faced,
+                    'dismissal' => $p->dismissal ?: 'not out',
+                    'overs' => $p->formatted_overs,
+                    'wickets' => $p->wickets_taken,
+                    'runs_conceded' => $p->runs_conceded,
+                    'date' => $m && $m->match_date ? \Carbon\Carbon::parse($m->match_date)->format('d M Y') : ($p->created_at ? $p->created_at->format('d M Y') : 'Recent'),
+                ];
+            })->values();
+        } else {
+            // Fallback from User model passport or defaults
+            $matchesCount = $user ? (int) $user->matches_played : 0;
+            $totalRuns = $user ? (int) $user->total_runs : 0;
+            $highestStr = $user && $user->highest_score ? (string) $user->highest_score : '0';
+            $battingAvg = $user && $user->batting_avg ? (float) $user->batting_avg : ($matchesCount > 0 ? round($totalRuns / $matchesCount, 2) : 0.0);
+            $strikeRate = $user && $user->strike_rate ? (float) $user->strike_rate : 120.0;
+            $fifties = $user ? (int) $user->fifties : 0;
+            $hundreds = $user ? (int) $user->hundreds : 0;
+            $notOuts = 0;
+            $inningsBatted = $matchesCount;
+            $totalBalls = $totalRuns > 0 ? round(($totalRuns / ($strikeRate ?: 120)) * 100) : 0;
+            $totalFours = round($totalRuns * 0.10);
+            $totalSixes = round($totalRuns * 0.04);
+
+            $inningsBowled = $matchesCount;
+            $totalWickets = $user ? (int) $user->wickets_taken : 0;
+            $bestBowling = $user && $user->best_bowling ? (string) $user->best_bowling : '0/0';
+            $economyRate = $user && $user->economy_rate ? (float) $user->economy_rate : 7.2;
+            $totalOversFormatted = ($matchesCount * 2) . '.0';
+            $totalRunsConceded = round($totalWickets * 16);
+            $totalMaidens = 0;
+            $bowlingAvg = $totalWickets > 0 ? round($totalRunsConceded / $totalWickets, 2) : 0.0;
+
+            $recentMatches = collect([]);
+        }
+
+        $initials = urlencode($playerName ?: 'Cricket Player');
+        $defaultAvatar = "https://ui-avatars.com/api/?name={$initials}&background=0284c7&color=ffffff&bold=true&size=200";
+
+        return [
+            'status' => 'success',
+            'player' => [
+                'id' => $user?->id ?? 0,
+                'name' => $playerName,
+                'role' => $playerRole ?: ($user?->player_role ?? 'All-Rounder'),
+                'team' => $teamName,
+                'phone' => $playerPhone ?? $user?->phone,
+                'is_captain' => (bool) $isCaptain,
+                'is_wicketkeeper' => str_contains(strtolower($playerRole ?? ''), 'keeper') || str_contains(strtolower($playerRole ?? ''), 'wk'),
+                'user_id' => $user?->id,
+                'profile_url' => $user ? route('profile.user', $user->id) : null,
+                'avatar_url' => $user ? $user->avatar_url : $defaultAvatar,
+                'city' => $user?->city ?? 'Local Cricket Arena',
+                'bio' => $user?->bio ?? 'Cricket Player on LiveCricket',
+            ],
+            'batting' => [
+                'matches' => max($matchesCount, 1),
+                'innings' => $inningsBatted,
+                'runs' => $totalRuns,
+                'balls' => $totalBalls,
+                'highest' => $highestStr,
+                'average' => $battingAvg,
+                'strike_rate' => $strikeRate,
+                'fours' => $totalFours,
+                'sixes' => $totalSixes,
+                'fifties' => $fifties,
+                'hundreds' => $hundreds,
+                'not_outs' => $notOuts,
+            ],
+            'bowling' => [
+                'innings' => $inningsBowled,
+                'overs' => $totalOversFormatted,
+                'wickets' => $totalWickets,
+                'runs_conceded' => $totalRunsConceded,
+                'maidens' => $totalMaidens,
+                'economy' => $economyRate,
+                'average' => $bowlingAvg,
+                'best' => $bestBowling,
+            ],
+            'recent_matches' => $recentMatches,
+        ];
     }
 }

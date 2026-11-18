@@ -132,6 +132,8 @@ Route::middleware('auth')->group(function () {
 // Cricket Meetups Index & Show (Publicly browseable)
 Route::get('/meetups', [MeetupController::class, 'index'])->name('meetups.index');
 Route::get('/meetups/{meetup}', [MeetupController::class, 'show'])->name('meetups.show');
+Route::get('/meetups/{meetup}/participants/{participant}/career', [MeetupController::class, 'participantCareer'])->name('meetups.participants.career');
+Route::get('/users/{user}/career', [MeetupController::class, 'userCareer'])->name('users.career');
 
 // Show individual ground & umpire (Must be after create/register)
 Route::get('/grounds/{ground}', [GroundController::class, 'show'])->name('grounds.show');
