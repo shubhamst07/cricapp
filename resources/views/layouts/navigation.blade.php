@@ -63,6 +63,12 @@
                         </span>
                     </x-nav-link>
 
+                    <x-nav-link :href="route('meetups.index')" :active="request()->routeIs('meetups.*')">
+                        <span class="inline-flex items-center gap-1.5 font-semibold">
+                            <span>🤝 {{ __('Find Players') }}</span>
+                        </span>
+                    </x-nav-link>
+
                     <x-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
                         <span class="inline-flex items-center gap-1.5 font-semibold">
                             <span>⚖️ {{ __('Umpires') }}</span>
@@ -218,6 +224,10 @@
 
             <x-responsive-nav-link :href="route('grounds.index')" :active="request()->routeIs('grounds.*')">
                 <span>🏟️ {{ __('Grounds & Venues') }}</span>
+            </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('meetups.index')" :active="request()->routeIs('meetups.*')">
+                <span>🤝 {{ __('Find Players & Meetups') }}</span>
             </x-responsive-nav-link>
 
             <x-responsive-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">

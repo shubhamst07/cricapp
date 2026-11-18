@@ -6,6 +6,7 @@ use App\Http\Controllers\LiveScoreController;
 use App\Http\Controllers\GroundController;
 use App\Http\Controllers\UmpireController;
 use App\Http\Controllers\PageController;
+use App\Http\Controllers\MeetupController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', fn () => response('pong', 200)->header('Content-Type', 'text/plain'));
@@ -111,7 +112,26 @@ Route::middleware('auth')->group(function () {
     Route::post('/umpires/profile', [UmpireController::class, 'storeProfile'])->name('umpires.profile.store');
     Route::post('/umpires/{umpire}/book', [UmpireController::class, 'book'])->name('umpires.book');
     Route::patch('/umpire-bookings/{booking}/status', [UmpireController::class, 'updateBookingStatus'])->name('umpires.bookings.status');
+
+    // Cricket Match Meetups & Player Requests ("खिलाड़ी चाहिए")
+    Route::get('/meetups/create', [MeetupController::class, 'create'])->name('meetups.create');
+    Route::post('/meetups', [MeetupController::class, 'store'])->name('meetups.store');
+    Route::get('/meetups/{meetup}/edit', [MeetupController::class, 'edit'])->name('meetups.edit');
+    Route::put('/meetups/{meetup}', [MeetupController::class, 'update'])->name('meetups.update');
+    Route::delete('/meetups/{meetup}', [MeetupController::class, 'destroy'])->name('meetups.destroy');
+    Route::post('/meetups/{meetup}/join', [MeetupController::class, 'join'])->name('meetups.join');
+    Route::post('/meetups/{meetup}/leave', [MeetupController::class, 'leave'])->name('meetups.leave');
+    Route::delete('/meetups/{meetup}/participants/{participant}', [MeetupController::class, 'removeParticipant'])->name('meetups.participants.remove');
+
+    // City Cricket Circles
+    Route::post('/circles', [MeetupController::class, 'storeCircle'])->name('circles.store');
+    Route::post('/circles/{circle}/join', [MeetupController::class, 'joinCircle'])->name('circles.join');
+    Route::post('/circles/{circle}/leave', [MeetupController::class, 'leaveCircle'])->name('circles.leave');
 });
+
+// Cricket Meetups Index & Show (Publicly browseable)
+Route::get('/meetups', [MeetupController::class, 'index'])->name('meetups.index');
+Route::get('/meetups/{meetup}', [MeetupController::class, 'show'])->name('meetups.show');
 
 // Show individual ground & umpire (Must be after create/register)
 Route::get('/grounds/{ground}', [GroundController::class, 'show'])->name('grounds.show');
