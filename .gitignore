@@ -35,3 +35,7 @@ __pycache__/
 venv/
 score-engine/venv/
 score-engine/__pycache__/
+
+# MediaMTX Binary & Bin Directory
+bin/
+

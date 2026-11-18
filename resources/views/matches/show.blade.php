@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+@endpush
+
 @section('title', ($match->team1_name ?? 'Team 1') . ' vs ' . ($match->team2_name ?? 'Team 2') . ' - Live Score | ' . config('app.name', 'LiveCricket'))
 
 @section('header')
@@ -163,8 +167,30 @@
         this.$nextTick(() => {
             const videoEl = document.getElementById('scorecardMatchVideoPlayer');
             if (videoEl) {
-                videoEl.src = url;
-                videoEl.play().catch(() => {});
+                if (url.includes('.m3u8')) {
+                    if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                        videoEl.src = url;
+                        videoEl.play().catch(() => {});
+                    } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                        if (window._scorecardHls) {
+                            try { window._scorecardHls.destroy(); } catch(e) {}
+                        }
+                        const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+                        window._scorecardHls = hls;
+                        hls.loadSource(url);
+                        hls.attachMedia(videoEl);
+                        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                            videoEl.play().catch(() => {});
+                        });
+                    }
+                } else {
+                    if (window._scorecardHls) {
+                        try { window._scorecardHls.destroy(); } catch(e) {}
+                        window._scorecardHls = null;
+                    }
+                    videoEl.src = url;
+                    videoEl.play().catch(() => {});
+                }
             }
         });
     },
@@ -530,7 +556,7 @@
             this.isSavingPlayer = false;
         }
     }
-}">
+}" x-init="if (activeVideoUrl && activeVideoUrl.includes('.m3u8')) { $nextTick(() => { selectAndPlayVideo({ url: activeVideoUrl, title: activeVideoTitle }); }); }">
     <!-- Floating Toast -->
     <div x-cloak x-show="toastMsg" x-transition 
          class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-2 border border-white/20">

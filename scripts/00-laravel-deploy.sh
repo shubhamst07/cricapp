@@ -21,3 +21,12 @@ php artisan migrate --force
 
 echo "Starting Cricbuzz Live Score Engine on port 6020..."
 cd /var/www/html/score-engine && python3 -m uvicorn app:app --host 127.0.0.1 --port 6020 --workers 1 > /var/www/html/storage/logs/score-engine.log 2>&1 &
+
+echo "Starting MediaMTX WebRTC & HLS Live Streaming Server on port 8889/8888..."
+if [ ! -f /var/www/html/bin/mediamtx ]; then
+    php artisan mediamtx:run --install || true
+fi
+if [ -f /var/www/html/bin/mediamtx ]; then
+    /var/www/html/bin/mediamtx /var/www/html/mediamtx.yml > /var/www/html/storage/logs/mediamtx.log 2>&1 &
+fi
+

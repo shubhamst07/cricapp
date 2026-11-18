@@ -1,0 +1,40 @@
+# MediaMTX Configuration for LiveCricket
+
+logLevel: info
+logDestinations: [stdout]
+
+# WebRTC Server (WHIP publisher & WHEP viewer)
+webrtc: true
+webrtcAddress: :8889
+webrtcEncryption: false
+webrtcAllowOrigins: ["*"]
+webrtcLocalUDPAddress: :8189
+webrtcIPsFromInterfaces: true
+webrtcAdditionalHosts: []
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+  - url: stun:stun1.l.google.com:19302
+
+# HLS Server (Universal fallback & DVR replay)
+hls: true
+hlsAddress: :8888
+hlsEncryption: false
+hlsAllowOrigins: ["*"]
+hlsAlwaysRemux: false
+hlsVariant: fmp4
+hlsSegmentDuration: 2s
+hlsPartDuration: 500ms
+
+# RTMP Server (Optional ingestion via OBS Studio or hardware encoders)
+rtmp: true
+rtmpAddress: :1935
+
+# Disable unused protocols to keep system light and avoid port conflicts
+rtsp: false
+srt: false
+moq: false
+
+# Path Configuration for Match Streams
+paths:
+  all_others:
+    source: publisher

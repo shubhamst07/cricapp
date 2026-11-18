@@ -463,12 +463,19 @@ class MatchController extends Controller
             $agoraToken = $agoraTokenService->buildToken($agoraChannel, 0, $role) ?: '';
         }
 
+        $mediaMtx = $this->getMediaMtxUrls($match);
+        $whipUrl = $mediaMtx['whip_url'];
+        $whepUrl = $mediaMtx['whep_url'];
+        $hlsUrl = $mediaMtx['hls_url'];
+        $streamChannel = $mediaMtx['stream_channel'];
+
         $videos = $match->videos;
         return view('matches.broadcast', compact(
             'match', 'state', 'striker', 'nonStriker', 'bowler', 
             'score1', 'score2', 'currentScoreObj', 'activeInningNum', 
             'isOwner', 'agoraAppId', 'agoraChannel', 'agoraToken', 'isCameraLive', 'videos',
-            'battingSquad', 'bowlingSquad', 'activeBattingTeam', 'activeBowlingTeam', 'availableNextBatsmen'
+            'battingSquad', 'bowlingSquad', 'activeBattingTeam', 'activeBowlingTeam', 'availableNextBatsmen',
+            'whipUrl', 'whepUrl', 'hlsUrl', 'streamChannel'
         ));
     }
 
@@ -539,9 +546,45 @@ class MatchController extends Controller
             'agora_app_id' => $agoraAppId,
             'agora_channel' => $agoraChannel,
             'agora_token' => $agoraToken,
+            'stream_channel' => $this->getMediaMtxUrls($match)['stream_channel'],
+            'whip_url' => $this->getMediaMtxUrls($match)['whip_url'],
+            'whep_url' => $this->getMediaMtxUrls($match)['whep_url'],
+            'hls_url' => $this->getMediaMtxUrls($match)['hls_url'],
             'webrtc_offers' => $state['webrtc_offers'] ?? [],
             'webrtc_answers' => $state['webrtc_answers'] ?? [],
         ]);
+    }
+
+    /**
+     * Build MediaMTX WHIP, WHEP, and HLS streaming endpoints for a match.
+     */
+    protected function getMediaMtxUrls(CricketMatch $match): array
+    {
+        $channel = 'live_match_' . $match->id;
+        $hostConfig = config('services.mediamtx.host');
+        $webrtcPort = config('services.mediamtx.webrtc_port', 8889);
+        $hlsPort = config('services.mediamtx.hls_port', 8888);
+
+        if (empty($hostConfig)) {
+            $host = request()->getHost();
+            $scheme = request()->getScheme();
+            $whipUrl = "{$scheme}://{$host}:{$webrtcPort}/{$channel}/whip";
+            $whepUrl = "{$scheme}://{$host}:{$webrtcPort}/{$channel}/whep";
+            $hlsUrl = "{$scheme}://{$host}:{$hlsPort}/{$channel}/index.m3u8";
+        } else {
+            $scheme = parse_url($hostConfig, PHP_URL_SCHEME) ?: request()->getScheme();
+            $hostOnly = parse_url($hostConfig, PHP_URL_HOST) ?: $hostConfig;
+            $whipUrl = "{$scheme}://{$hostOnly}:{$webrtcPort}/{$channel}/whip";
+            $whepUrl = "{$scheme}://{$hostOnly}:{$webrtcPort}/{$channel}/whep";
+            $hlsUrl = "{$scheme}://{$hostOnly}:{$hlsPort}/{$channel}/index.m3u8";
+        }
+
+        return [
+            'stream_channel' => $channel,
+            'whip_url' => $whipUrl,
+            'whep_url' => $whepUrl,
+            'hls_url' => $hlsUrl,
+        ];
     }
 
     /**

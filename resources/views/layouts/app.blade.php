@@ -238,5 +238,6 @@
                 console.log('LiveCricket PWA installed successfully!');
             });
         </script>
+        @stack('scripts')
     </body>
 </html>

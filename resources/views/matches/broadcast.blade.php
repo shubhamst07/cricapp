@@ -28,8 +28,9 @@
 @endsection
 
 @section('content')
-<!-- Agora WebRTC Live Streaming SDK for Real-time In-App Phone Camera Broadcast -->
-<script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
+<!-- MediaMTX WebRTC (WHIP / WHEP) Engine & HLS Fallback -->
+<script src="{{ asset('js/cricket-stream-engine.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <div class="py-4 sm:py-6 bg-slate-950 min-h-screen text-slate-100 font-sans select-none" x-data="{
     // Broadcast Source ('camera' or 'youtube')
@@ -39,27 +40,24 @@
     editStreamModal: false,
     activeStreamTab: 'camera',
 
-    // In-App WebRTC Camera Broadcast States
-    agoraAppId: '{{ $agoraAppId }}',
-    agoraChannel: '{{ $agoraChannel }}',
-    agoraToken: '{{ $agoraToken ?? '' }}',
-    broadcastMode: 'agora', // 'agora' or 'webrtc_p2p'
+    // MediaMTX Live Streaming Endpoints (Self-Hosted, Ultra-Low Latency < 500ms)
+    streamChannel: '{{ $streamChannel }}',
+    whipUrl: '{{ $whipUrl }}',
+    whepUrl: '{{ $whepUrl }}',
+    hlsUrl: '{{ $hlsUrl }}',
+    broadcastMode: 'mediamtx_webrtc',
     isCameraLive: {{ $isCameraLive ? 'true' : 'false' }},
-    agoraClient: null,
-    localAudioTrack: null,
-    localVideoTrack: null,
-    hasAgoraStream: false,
-    viewerConnected: false,
-    isConnectingAudience: false,
     streamActive: {{ $isCameraLive ? 'true' : 'false' }},
     isBroadcasting: false,
-
-    // WebRTC Direct P2P States (Zero-Token Fallback for Phone Camera Broadcast)
-    viewerId: 'v_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36),
-    p2pClient: null,
-    hasP2pStream: false,
-    audienceMuted: true,
-    webrtcPeerConnections: {},
+    viewerConnected: false,
+    isConnectingAudience: false,
+    hasLiveStream: false,
+    broadcasterEngine: null,
+    viewerEngine: null,
+    streamEngineMode: 'idle', // 'webrtc' or 'hls'
+    audienceMuted: false,
+    facingMode: 'environment',
+    micMuted: false,
 
     // Live Match Recording & Storage States
     isRecordingStream: false,
@@ -267,18 +265,11 @@
             return;
         }
 
-        let streamToRecord = null;
-        if (window.localMediaStream) {
-            streamToRecord = window.localMediaStream;
-        } else if (this.localVideoTrack) {
-            try {
-                const tracks = [this.localVideoTrack.getMediaStreamTrack()];
-                if (this.localAudioTrack) {
-                    tracks.push(this.localAudioTrack.getMediaStreamTrack());
-                }
-                streamToRecord = new MediaStream(tracks);
-            } catch(e) {
-                console.warn('Could not extract Agora tracks for recording:', e);
+        let streamToRecord = window.localMediaStream;
+        if (!streamToRecord) {
+            const videoElem = document.getElementById('broadcastVideo');
+            if (videoElem && videoElem.srcObject) {
+                streamToRecord = videoElem.srcObject;
             }
         }
 
@@ -407,76 +398,34 @@
         try {
             if (this.isBroadcasting) return;
 
-            // 1. Try Agora WebRTC Live Broadcast (ONLY if BOTH App ID and Token are configured)
-            if (typeof AgoraRTC !== 'undefined' && this.agoraAppId && this.agoraToken) {
-                try {
-                    if (window._agoraClient) {
-                        try { await window._agoraClient.leave(); } catch(e) {}
-                        window._agoraClient = null;
-                    }
-                    const hostClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-                    window._agoraClient = hostClient;
-                    await hostClient.setClientRole('host');
-                    await hostClient.join(this.agoraAppId, this.agoraChannel, this.agoraToken || null, 0);
-
-                    const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
-                        { AEC: true, ANS: true },
-                        { facingMode: this.facingMode, encoderConfig: '720p_1' }
-                    );
-                    this.localAudioTrack = audioTrack;
-                    this.localVideoTrack = videoTrack;
-
-                    await hostClient.publish([audioTrack, videoTrack]);
-
-                    const previewDiv = document.getElementById('broadcasterAgoraPreview');
-                    if (previewDiv) {
-                        videoTrack.play(previewDiv);
-                    }
-                    this.hasAgoraStream = true;
-                    this.broadcastMode = 'agora';
-
-                    // Re-use Agora's tracks for recording & P2P fallback without secondary getUserMedia lock
-                    try {
-                        window.localMediaStream = new MediaStream([videoTrack.getMediaStreamTrack(), audioTrack.getMediaStreamTrack()]);
-                    } catch(streamWrapErr) {
-                        console.warn('MediaStream wrap notice:', streamWrapErr);
-                    }
-                } catch(agoraErr) {
-                    console.warn('Agora WebRTC connect notice (will use Direct WebRTC P2P stream):', agoraErr);
-                    this.hasAgoraStream = false;
-                    if (window._agoraClient) {
-                        try { await window._agoraClient.leave(); } catch(e) {}
-                        window._agoraClient = null;
-                    }
-                }
+            const videoElem = document.getElementById('broadcastVideo');
+            
+            // Build dynamic WHIP URL
+            let whipEndpoint = this.whipUrl;
+            if (!whipEndpoint || whipEndpoint.includes('localhost') || whipEndpoint.includes('127.0.0.1')) {
+                const currentHost = window.location.hostname;
+                const port = '{{ config('services.mediamtx.webrtc_port', 8889) }}';
+                whipEndpoint = `${window.location.protocol}//${currentHost}:${port}/${this.streamChannel}/whip`;
             }
 
-            // Fallback: only acquire local camera media stream via getUserMedia if Agora was NOT used
-            if (!this.hasAgoraStream && !window.localMediaStream) {
-                const constraints = {
-                    video: {
-                        facingMode: { ideal: this.facingMode },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
-                    audio: !this.micMuted
-                };
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                window.localMediaStream = stream;
-                const videoElem = document.getElementById('broadcastVideo');
-                if (videoElem) {
-                    videoElem.srcObject = stream;
-                    videoElem.play();
+            this.broadcasterEngine = new CricketStreamBroadcaster({
+                whipUrl: whipEndpoint,
+                facingMode: this.facingMode,
+                onStateChange: (state) => {
+                    console.log('MediaMTX WHIP state:', state);
+                },
+                onError: (err) => {
+                    console.error('MediaMTX broadcast error:', err);
                 }
-            }
+            });
+
+            const stream = await this.broadcasterEngine.start(whipEndpoint, videoElem);
+            window.localMediaStream = stream;
 
             this.streamActive = true;
             this.isBroadcasting = true;
             this.isCameraLive = true;
-
-            if (!this.hasAgoraStream) {
-                this.broadcastMode = 'webrtc_p2p';
-            }
+            this.broadcastMode = 'mediamtx_webrtc';
 
             // Start automatic recording of live camera stream
             this.startRecording();
@@ -492,71 +441,10 @@
                 body: JSON.stringify({ is_camera_live: true, heartbeat: true })
             });
 
-            this.showToast(this.broadcastMode === 'agora' ? '🔴 YOU ARE LIVE! (Agora Cloud Stream)' : '🔴 YOU ARE LIVE! (Direct WebRTC Low Latency Stream)');
+            this.showToast('🔴 YOU ARE LIVE! (Self-Hosted MediaMTX Ultra-Low Latency)');
         } catch(err) {
-            console.error('Camera access error:', err);
-            this.showToast('⚠️ Camera permission denied or device not found.');
-        }
-    },
-
-    async handlePendingViewerOffers(offers) {
-        if (!this.streamActive || !window.localMediaStream || this.broadcastMode !== 'webrtc_p2p') return;
-
-        const answersToSend = {};
-        for (const [vId, offerData] of Object.entries(offers || {})) {
-            if (this.webrtcPeerConnections[vId] && this.webrtcPeerConnections[vId].connectionState === 'connected') {
-                continue;
-            }
-
-            try {
-                const pc = new RTCPeerConnection({
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                });
-
-                window.localMediaStream.getTracks().forEach(track => {
-                    pc.addTrack(track, window.localMediaStream);
-                });
-
-                await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offerData.offer }));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-
-                // Wait for ICE gathering to complete so SDP has all candidates
-                await new Promise(resolve => {
-                    if (pc.iceGatheringState === 'complete') {
-                        resolve();
-                    } else {
-                        const checkState = () => {
-                            if (pc.iceGatheringState === 'complete') {
-                                pc.removeEventListener('icegatheringstatechange', checkState);
-                                resolve();
-                            }
-                        };
-                        pc.addEventListener('icegatheringstatechange', checkState);
-                        setTimeout(resolve, 800);
-                    }
-                });
-
-                answersToSend[vId] = pc.localDescription.sdp;
-                this.webrtcPeerConnections[vId] = pc;
-            } catch(e) {
-                console.warn('P2P answer error for viewer ' + vId, e);
-            }
-        }
-
-        if (Object.keys(answersToSend).length > 0) {
-            await fetch('{{ route('matches.stream-signal', $match) }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({ webrtc_answers: answersToSend })
-            });
+            console.error('Camera access / WHIP broadcast error:', err);
+            this.showToast('⚠️ Could not start broadcast: ' + (err.message || 'Camera permission denied'));
         }
     },
 
@@ -565,37 +453,22 @@
             // Stop recording & finalize video
             this.stopRecording();
 
-            // Stop all P2P peer connections
-            for (const vId in this.webrtcPeerConnections) {
-                try { this.webrtcPeerConnections[vId].close(); } catch(e) {}
+            if (this.broadcasterEngine) {
+                await this.broadcasterEngine.stop();
+                this.broadcasterEngine = null;
             }
-            this.webrtcPeerConnections = {};
 
-            if (this.localAudioTrack) {
-                this.localAudioTrack.stop();
-                this.localAudioTrack.close();
-                this.localAudioTrack = null;
-            }
-            if (this.localVideoTrack) {
-                this.localVideoTrack.stop();
-                this.localVideoTrack.close();
-                this.localVideoTrack = null;
-            }
-            if (window._agoraClient) {
-                try { await window._agoraClient.leave(); } catch(e) {}
-                window._agoraClient = null;
-            }
             if (window.localMediaStream) {
                 window.localMediaStream.getTracks().forEach(track => track.stop());
                 window.localMediaStream = null;
             }
+
             const videoElem = document.getElementById('broadcastVideo');
             if (videoElem) videoElem.srcObject = null;
 
             this.streamActive = false;
             this.isBroadcasting = false;
             this.isCameraLive = false;
-            this.hasAgoraStream = false;
 
             // Notify backend that stream ended
             await fetch('{{ route('matches.stream-signal', $match) }}', {
@@ -615,166 +488,77 @@
     },
 
     async toggleCameraFlip() {
-        this.facingMode = (this.facingMode === 'environment') ? 'user' : 'environment';
-        if (this.streamActive) {
-            await this.stopCamera();
-            await this.startCamera();
+        const videoElem = document.getElementById('broadcastVideo');
+        if (this.broadcasterEngine) {
+            this.facingMode = await this.broadcasterEngine.flipCamera(videoElem);
+            this.showToast(this.facingMode === 'user' ? '🤳 Front Camera' : '🏟️ Ground Camera');
+        } else {
+            this.facingMode = (this.facingMode === 'environment') ? 'user' : 'environment';
         }
     },
 
     toggleMic() {
-        this.micMuted = !this.micMuted;
-        if (this.localAudioTrack) {
-            this.localAudioTrack.setEnabled(!this.micMuted);
-        }
-        if (window.localMediaStream) {
-            const audioTracks = window.localMediaStream.getAudioTracks();
-            audioTracks.forEach(t => t.enabled = !this.micMuted);
+        if (this.broadcasterEngine) {
+            this.micMuted = this.broadcasterEngine.toggleMute();
+        } else {
+            this.micMuted = !this.micMuted;
         }
         this.showToast(this.micMuted ? '🔇 Microphone muted' : '🎙️ Microphone on');
     },
 
-    // Audience In-App Live Stream Subscriber (Agora Cloud + Direct WebRTC P2P Fallback)
+    // Audience In-App Live Stream Subscriber (MediaMTX WebRTC WHEP + HLS Fallback)
     async connectAudienceStream(data) {
         if (this.viewerConnected || this.isBroadcaster || this.isConnectingAudience) return;
         this.isConnectingAudience = true;
 
-        const appId = data.agora_app_id || this.agoraAppId;
-        const channel = data.agora_channel || this.agoraChannel;
-        const token = data.agora_token || this.agoraToken;
-
-        let agoraAttempted = false;
-        if (typeof AgoraRTC !== 'undefined' && appId && channel && token) {
-            try {
-                if (window._agoraClient) {
-                    try { await window._agoraClient.leave(); } catch(e) {}
-                    window._agoraClient = null;
-                }
-
-                const audClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-                window._agoraClient = audClient;
-                await audClient.setClientRole('audience');
-
-                audClient.on('user-published', async (user, mediaType) => {
-                    try {
-                        await audClient.subscribe(user, mediaType);
-                        if (mediaType === 'video') {
-                            this.hasAgoraStream = true;
-                            const container = document.getElementById('audienceAgoraVideo');
-                            if (container && user.videoTrack) {
-                                user.videoTrack.play(container);
-                            }
-                        }
-                        if (mediaType === 'audio') {
-                            try {
-                                await user.audioTrack.play();
-                                this.audienceMuted = false;
-                            } catch(e) {
-                                this.audienceMuted = true;
-                            }
-                        }
-                    } catch(subErr) {
-                        console.warn('Agora subscribe notice for ' + (user?.uid || 'unknown') + ':', subErr);
-                    }
-                });
-
-                audClient.on('user-unpublished', (user, mediaType) => {
-                    if (mediaType === 'video') {
-                        this.hasAgoraStream = false;
-                    }
-                });
-
-                await audClient.join(appId, channel, token || null, 0);
-                this.viewerConnected = true;
-                agoraAttempted = true;
-            } catch(e) {
-                console.warn('Audience Agora stream connect notice (initiating Direct WebRTC P2P fallback):', e);
-                if (window._agoraClient) {
-                    try { await window._agoraClient.leave(); } catch(err) {}
-                    window._agoraClient = null;
-                }
-                agoraAttempted = false;
-            } finally {
-                this.isConnectingAudience = false;
-            }
-        } else {
-            this.isConnectingAudience = false;
-        }
-
-        // If Agora is not connected or failed, initiate Direct WebRTC P2P immediately
-        if (!agoraAttempted) {
-            await this.initP2pAudience();
-        }
-    },
-
-    async initP2pAudience() {
-        if (this.p2pClient) return;
-
         try {
-            const pc = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            });
-            this.p2pClient = pc;
+            const videoElem = document.getElementById('audienceVideoPlayer');
+            if (!videoElem) {
+                this.isConnectingAudience = false;
+                return;
+            }
 
-            pc.addTransceiver('video', { direction: 'recvonly' });
-            pc.addTransceiver('audio', { direction: 'recvonly' });
+            const currentHost = window.location.hostname;
+            const webrtcPort = '{{ config('services.mediamtx.webrtc_port', 8889) }}';
+            const hlsPort = '{{ config('services.mediamtx.hls_port', 8888) }}';
+            const channel = data?.stream_channel || this.streamChannel;
 
-            pc.ontrack = (event) => {
-                const videoElem = document.getElementById('audienceP2pVideo');
-                if (videoElem && event.streams && event.streams[0]) {
-                    videoElem.srcObject = event.streams[0];
-                    videoElem.play().catch(e => {
-                        console.warn('Autoplay prevented unmuted play, muting video:', e);
-                        videoElem.muted = true;
-                        videoElem.play();
-                        this.audienceMuted = true;
-                    });
-                    this.hasP2pStream = true;
-                }
-            };
+            let whepEndpoint = data?.whep_url || this.whepUrl;
+            if (!whepEndpoint || whepEndpoint.includes('localhost') || whepEndpoint.includes('127.0.0.1')) {
+                whepEndpoint = `${window.location.protocol}//${currentHost}:${webrtcPort}/${channel}/whep`;
+            }
 
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
+            let hlsEndpoint = data?.hls_url || this.hlsUrl;
+            if (!hlsEndpoint || hlsEndpoint.includes('localhost') || hlsEndpoint.includes('127.0.0.1')) {
+                hlsEndpoint = `${window.location.protocol}//${currentHost}:${hlsPort}/${channel}/index.m3u8`;
+            }
 
-            // Wait for ICE gathering
-            await new Promise(resolve => {
-                if (pc.iceGatheringState === 'complete') {
-                    resolve();
-                } else {
-                    const checkState = () => {
-                        if (pc.iceGatheringState === 'complete') {
-                            pc.removeEventListener('icegatheringstatechange', checkState);
-                            resolve();
-                        }
-                    };
-                    pc.addEventListener('icegatheringstatechange', checkState);
-                    setTimeout(resolve, 800);
-                }
-            });
+            if (!this.viewerEngine) {
+                this.viewerEngine = new CricketStreamViewer({
+                    onModeChange: (mode) => {
+                        this.streamEngineMode = mode;
+                        console.log('Stream playback mode:', mode);
+                    }
+                });
+            }
 
-            await fetch('{{ route('matches.stream-signal', $match) }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({ viewer_id: this.viewerId, webrtc_offer: pc.localDescription.sdp })
-            });
-
+            await this.viewerEngine.play(whepEndpoint, hlsEndpoint, videoElem);
             this.viewerConnected = true;
+            this.streamActive = true;
+            this.hasLiveStream = true;
         } catch(e) {
-            console.error('Failed to init P2P audience stream:', e);
+            console.warn('Audience stream connection notice:', e);
+            this.viewerConnected = false;
+        } finally {
+            this.isConnectingAudience = false;
         }
     },
 
     unmuteAudienceAudio() {
-        const videoElem = document.getElementById('audienceP2pVideo');
+        const videoElem = document.getElementById('audienceVideoPlayer');
         if (videoElem) {
             videoElem.muted = false;
+            videoElem.play().catch(() => {});
             this.audienceMuted = false;
             this.showToast('🔊 Commentary Audio Unmuted');
         }
@@ -929,43 +713,21 @@
                             body: JSON.stringify({ heartbeat: true })
                         }).catch(() => {});
 
-                        // Answer incoming viewer P2P offers
-                        if (data.webrtc_offers) {
-                            this.handlePendingViewerOffers(data.webrtc_offers);
-                        }
                     }
 
-                    // Sync In-App Phone Camera Live Stream State
+                    // Sync MediaMTX Live Stream State for Audience
                     if (data.is_camera_live) {
                         this.isCameraLive = true;
-                        if (!this.isBroadcaster && !this.viewerConnected) {
+                        if (!this.isBroadcaster && !this.viewerConnected && !this.isConnectingAudience) {
                             this.connectAudienceStream(data);
-                        }
-
-                        // Audience: check for broadcaster's P2P answer
-                        if (this.p2pClient && this.p2pClient.signalingState === 'have-local-offer' && data.webrtc_answers && data.webrtc_answers[this.viewerId]) {
-                            try {
-                                await this.p2pClient.setRemoteDescription(new RTCSessionDescription({
-                                    type: 'answer',
-                                    sdp: data.webrtc_answers[this.viewerId]
-                                }));
-                            } catch(ansErr) {
-                                console.warn('P2P answer setting error:', ansErr);
-                            }
                         }
                     } else {
                         if (!this.isBroadcaster && this.isCameraLive) {
                             this.isCameraLive = false;
                             this.viewerConnected = false;
-                            this.hasAgoraStream = false;
-                            this.hasP2pStream = false;
-                            if (this.agoraClient) {
-                                try { await this.agoraClient.leave(); } catch(e) {}
-                                this.agoraClient = null;
-                            }
-                            if (this.p2pClient) {
-                                try { this.p2pClient.close(); } catch(e) {}
-                                this.p2pClient = null;
+                            this.hasLiveStream = false;
+                            if (this.viewerEngine) {
+                                this.viewerEngine.stop();
                             }
                         }
                     }
@@ -995,7 +757,7 @@
             }
         }, 1800);
     }
-}" x-init="startPolling(); if (!isBroadcaster && isCameraLive) { connectAudienceStream({ agora_app_id: agoraAppId, agora_channel: agoraChannel, agora_token: agoraToken }); } window.addEventListener('beforeunload', () => { if (isBroadcaster && streamActive) { navigator.sendBeacon('{{ route('matches.stream-signal', $match) }}', new Blob([JSON.stringify({ is_camera_live: false, _token: '{{ csrf_token() }}' })], { type: 'application/json' })); } });">
+}" x-init="startPolling(); if (!isBroadcaster && isCameraLive) { connectAudienceStream({ stream_channel: streamChannel, whip_url: whipUrl, whep_url: whepUrl, hls_url: hlsUrl }); } window.addEventListener('beforeunload', () => { if (isBroadcaster && streamActive) { navigator.sendBeacon('{{ route('matches.stream-signal', $match) }}', new Blob([JSON.stringify({ is_camera_live: false, _token: '{{ csrf_token() }}' })], { type: 'application/json' })); } });">
 
     <!-- Floating Notification -->
     <div x-cloak x-show="toastMsg" x-transition 
@@ -1046,16 +808,20 @@
                 </div>
 
                 <div class="p-3 rounded-xl bg-white/5 border border-white/5 text-[11px] space-y-1">
-                    <span class="text-slate-400 font-bold uppercase block">Agora WebRTC Cloud Relay:</span>
+                    <span class="text-slate-400 font-bold uppercase block">MediaMTX Live Streaming Server:</span>
                     <div class="flex items-center justify-between text-slate-300">
-                        <span>Channel Name:</span>
-                        <code class="font-mono text-amber-300 font-bold" x-text="agoraChannel"></code>
+                        <span>Stream Path:</span>
+                        <code class="font-mono text-emerald-300 font-bold" x-text="streamChannel"></code>
                     </div>
                     <div class="flex items-center justify-between text-slate-300">
-                        <span>Status:</span>
+                        <span>Protocols:</span>
+                        <span class="text-indigo-300 font-bold">WHIP (WebRTC) + WHEP + HLS</span>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-300">
+                        <span>Latency:</span>
                         <span class="text-emerald-400 font-bold flex items-center gap-1">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            <span>Ultra-Low Latency Ready (0.3s)</span>
+                            <span>Ultra-Low Sub-Second (< 500ms)</span>
                         </span>
                     </div>
                 </div>
@@ -1338,33 +1104,28 @@
 
             <!-- 1. BROADCASTER DEVICE LIVE CAMERA PREVIEW -->
             @if($isOwner)
-                <div id="broadcasterAgoraPreview" x-show="streamSource === 'camera' && hasAgoraStream" class="absolute inset-0 w-full h-full object-cover z-0"></div>
-                <video x-show="streamSource === 'camera' && !hasAgoraStream && streamActive" id="broadcastVideo" autoplay playsinline muted 
+                <video x-show="streamSource === 'camera' && streamActive" id="broadcastVideo" autoplay playsinline muted 
                        class="absolute inset-0 w-full h-full object-cover z-0"></video>
             @endif
 
-            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (Real-time Video from Organizer's Phone Camera: Agora + Direct WebRTC P2P) -->
+            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (MediaMTX WebRTC WHEP + HLS Fallback) -->
             @if(!$isOwner)
-                <div x-show="isCameraLive || hasAgoraStream || hasP2pStream" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
-                    <!-- Agora Cloud Stream Container -->
-                    <div id="audienceAgoraVideo" class="absolute inset-0 w-full h-full object-cover"></div>
-
-                    <!-- Direct WebRTC P2P Stream Video -->
-                    <video id="audienceP2pVideo" x-show="!hasAgoraStream && hasP2pStream" autoplay playsinline muted 
+                <div x-show="isCameraLive" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
+                    <video id="audienceVideoPlayer" autoplay playsinline 
                            class="absolute inset-0 w-full h-full object-cover"></video>
 
                     <!-- Stream Connecting / Buffering Loader -->
-                    <div x-show="!hasAgoraStream && !hasP2pStream" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-black">
+                    <div x-show="!viewerConnected" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-black">
                         <div class="w-12 h-12 rounded-full border-4 border-red-500 border-t-transparent animate-spin mb-3"></div>
                         <div class="text-sm font-black text-white flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
                             <span>Connecting to Live Video Feed...</span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-1 max-w-xs">Receiving broadcaster's live phone camera stream with low latency</p>
+                        <p class="text-xs text-slate-400 mt-1 max-w-xs">Connecting to MediaMTX ultra-low latency WebRTC stream</p>
                     </div>
 
                     <!-- Unmute Audio Floating Pill -->
-                    <div x-cloak x-show="(hasAgoraStream || hasP2pStream) && audienceMuted" 
+                    <div x-cloak x-show="viewerConnected && audienceMuted" 
                          class="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
                         <button type="button" @click="unmuteAudienceAudio()"
                                 class="px-4 py-2 rounded-full bg-red-600/95 hover:bg-red-500 text-white font-extrabold text-xs shadow-2xl flex items-center gap-2 border border-white/30 backdrop-blur-md transition transform active:scale-95 animate-bounce">
@@ -1556,15 +1317,15 @@
                     </span>
 
                     <template x-if="isBroadcaster && streamActive">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1 border border-white/20 shadow"
-                              :class="broadcastMode === 'agora' ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'"
-                              x-text="broadcastMode === 'agora' ? '☁️ Agora Cloud' : '📡 Direct WebRTC'"></span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1 bg-emerald-600 text-white border border-white/20 shadow">
+                            <span>⚡ MediaMTX WebRTC</span>
+                        </span>
                     </template>
 
-                    <template x-if="!isBroadcaster && (hasAgoraStream || hasP2pStream)">
+                    <template x-if="!isBroadcaster && (viewerConnected || isCameraLive)">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1 bg-emerald-600 text-white border border-white/20 shadow">
                             <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
-                            <span x-text="hasAgoraStream ? '☁️ Cloud Relay' : '⚡ Real-time HD'"></span>
+                            <span x-text="streamEngineMode === 'hls' ? '⚡ HLS Live' : '⚡ Sub-Second HD (<0.5s)'"></span>
                         </span>
                     </template>
 

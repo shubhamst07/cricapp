@@ -50,6 +50,14 @@ return [
         ],
     ],
 
+    'mediamtx' => [
+        'enabled' => env('MEDIAMTX_ENABLED', true),
+        'host' => env('MEDIAMTX_HOST', null),
+        'webrtc_port' => (int) env('MEDIAMTX_WEBRTC_PORT', 8889),
+        'hls_port' => (int) env('MEDIAMTX_HLS_PORT', 8888),
+        'rtmp_port' => (int) env('MEDIAMTX_RTMP_PORT', 1935),
+    ],
+
     'agora' => [
         'app_id' => env('AGORA_APP_ID', 'f4929bb36b5a4d3a972226ad8b6ce599'),
         'app_certificate' => env('AGORA_APP_CERTIFICATE', '19b692f8de2a41598b57b55e1755997e'),
