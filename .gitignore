@@ -35,3 +35,6 @@ __pycache__/
 venv/
 score-engine/venv/
 score-engine/__pycache__/
+
+# Binaries
+bin/

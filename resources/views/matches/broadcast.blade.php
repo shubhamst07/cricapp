@@ -1,27 +1,28 @@
 @extends('layouts.app')
 
 @section('header')
-    <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <a href="{{ route('matches.show', $match) }}" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition" title="Back to Scorecard">
+    <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <a href="{{ route('matches.show', $match) }}" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition shrink-0" title="Back to Scorecard">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
             </a>
-            <div>
-                <span class="text-[11px] font-black uppercase text-red-600 dark:text-rose-400 tracking-wider flex items-center gap-1.5">
+            <div class="min-w-0">
+                <div class="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black uppercase text-red-600 dark:text-rose-400 tracking-wider">
                     <span class="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
-                    {{ $isOwner ? 'CRICHEROES LIVE BROADCAST STUDIO' : 'CRICKET LIVE STREAM • AUDIENCE WATCH' }}
-                </span>
-                <h2 class="font-black text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight">
+                    <span>{{ $isOwner ? 'Live Broadcast Studio' : 'Live Match Stream' }}</span>
+                </div>
+                <h2 class="font-black text-base sm:text-xl text-slate-900 dark:text-white leading-tight truncate">
                     {{ $match->team1_name }} vs {{ $match->team2_name }}
                 </h2>
             </div>
         </div>
 
-        <div class="flex items-center gap-2">
-            <a href="{{ route('matches.show', $match) }}" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-white/10 transition flex items-center gap-1.5">
-                <span>📋 Full Scorecard</span>
+        <div class="flex items-center gap-2 shrink-0">
+            <a href="{{ route('matches.show', $match) }}" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-white/10 transition flex items-center gap-1.5">
+                <span>📋</span>
+                <span class="hidden sm:inline">Full</span><span>Scorecard</span>
             </a>
         </div>
     </div>
@@ -32,8 +33,8 @@
 <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
 
 <div class="py-4 sm:py-6 bg-slate-950 min-h-screen text-slate-100 font-sans select-none" x-data="{
-    // Broadcast Source ('camera' or 'youtube')
-    streamSource: '{{ !empty($match->embed_stream_url) ? 'youtube' : 'camera' }}',
+    // Broadcast Source ('camera', 'youtube', or 'replay')
+    streamSource: '{{ !empty($match->embed_stream_url) ? 'youtube' : ($match->is_direct_video && !empty($match->stream_url) && !$isOwner ? 'replay' : 'camera') }}',
     streamUrlInput: '{{ addslashes($match->stream_url ?? '') }}',
     embedStreamUrl: '{{ addslashes($match->embed_stream_url ?? '') }}',
     editStreamModal: false,
@@ -100,7 +101,7 @@
         this.savedVideoServerUrl = url;
         this.isDirectVideo = true;
         this.videoLoadFailed = false;
-        this.streamSource = 'camera';
+        this.streamSource = 'replay';
         const arena = document.getElementById('broadcastArenaContainer');
         if (arena) arena.scrollIntoView({ behavior: 'smooth', block: 'center' });
         this.showToast('▶ Playing: ' + (video.title || 'Match Video'));
@@ -1334,7 +1335,7 @@
         <!-- MAIN BROADCAST ARENA CONTAINER (FULLSCREEN READY) -->
         <!-- ============================================================== -->
         <div id="broadcastArenaContainer" 
-             class="relative w-full aspect-video sm:rounded-3xl overflow-hidden bg-black shadow-2xl border border-white/10 flex flex-col justify-between">
+             class="relative w-full aspect-video min-h-[240px] sm:min-h-[380px] sm:rounded-3xl overflow-hidden bg-black shadow-2xl border border-white/10 flex flex-col justify-between">
 
             <!-- 1. BROADCASTER DEVICE LIVE CAMERA PREVIEW -->
             @if($isOwner)
@@ -1343,9 +1344,9 @@
                        class="absolute inset-0 w-full h-full object-cover z-0"></video>
             @endif
 
-            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (Real-time Video from Organizer's Phone Camera: Agora + Direct WebRTC P2P) -->
+            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (Real-time Video from Organizer's Phone Camera) -->
             @if(!$isOwner)
-                <div x-show="isCameraLive || hasAgoraStream || hasP2pStream" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
+                <div x-show="(isCameraLive || hasAgoraStream || hasP2pStream) && streamSource === 'camera'" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
                     <!-- Agora Cloud Stream Container -->
                     <div id="audienceAgoraVideo" class="absolute inset-0 w-full h-full object-cover"></div>
 
@@ -1355,36 +1356,35 @@
 
                     <!-- Stream Connecting / Buffering Loader -->
                     <div x-show="!hasAgoraStream && !hasP2pStream" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-black">
-                        <div class="w-12 h-12 rounded-full border-4 border-red-500 border-t-transparent animate-spin mb-3"></div>
-                        <div class="text-sm font-black text-white flex items-center gap-2">
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-4 border-red-500 border-t-transparent animate-spin mb-3"></div>
+                        <div class="text-xs sm:text-sm font-black text-white flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
                             <span>Connecting to Live Video Feed...</span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-1 max-w-xs">Receiving broadcaster's live phone camera stream with low latency</p>
+                        <p class="text-[11px] text-slate-400 mt-1 max-w-xs">Receiving live stream from organizer's phone camera</p>
                     </div>
 
                     <!-- Unmute Audio Floating Pill -->
                     <div x-cloak x-show="(hasAgoraStream || hasP2pStream) && audienceMuted" 
-                         class="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+                         class="absolute bottom-14 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
                         <button type="button" @click="unmuteAudienceAudio()"
                                 class="px-4 py-2 rounded-full bg-red-600/95 hover:bg-red-500 text-white font-extrabold text-xs shadow-2xl flex items-center gap-2 border border-white/30 backdrop-blur-md transition transform active:scale-95 animate-bounce">
-                            <span>🔊</span>
-                            <span>Tap to Unmute Audio</span>
+                            <span>🔊 Tap to Unmute Audio</span>
                         </button>
                     </div>
                 </div>
             @endif
 
-            <!-- 3. EMBEDDED YOUTUBE / FACEBOOK LIVE STREAM (Shown when YouTube/FB link is set) -->
-            <template x-if="embedStreamUrl && (streamSource === 'youtube' || (!isCameraLive && !{{ $isOwner ? 'true' : 'false' }}))">
+            <!-- 3. EMBEDDED YOUTUBE / FACEBOOK LIVE STREAM -->
+            <template x-if="embedStreamUrl && streamSource === 'youtube'">
                 <iframe :src="embedStreamUrl" 
                         class="absolute inset-0 w-full h-full z-0 border-0 pointer-events-auto" 
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                         allowfullscreen></iframe>
             </template>
 
-            <!-- 4. RECORDED MATCH VIDEO REPLAY (Full match video saved permanently) -->
-            <template x-if="isDirectVideo && savedVideoServerUrl && !streamActive && !isCameraLive">
+            <!-- 4. RECORDED MATCH VIDEO REPLAY (When watching replay) -->
+            <template x-if="streamSource === 'replay'">
                 <div class="absolute inset-0 w-full h-full z-0 flex items-center justify-center bg-black">
                     <video x-show="!videoLoadFailed" :src="fixVideoUrl(savedVideoServerUrl)" x-on:error="videoLoadFailed = true" controls playsinline class="w-full h-full object-contain pointer-events-auto"></video>
                     
@@ -1407,22 +1407,6 @@
                             <span class="text-slate-300 truncate max-w-[80px] sm:max-w-[110px]" x-text="team2Name"></span>
                         </div>
 
-                        <!-- Scoreboard Right: Batsmen / Bowler -->
-                        <div class="hidden md:flex items-center gap-3 text-xs text-slate-300">
-                            <template x-if="striker">
-                                <div class="flex items-center gap-1">
-                                    <span class="text-amber-400 font-bold">🏏 *<span x-text="striker.player_name"></span></span>
-                                    <span class="font-mono text-white" x-text="striker.runs_scored + '(' + striker.balls_faced + ')'"></span>
-                                </div>
-                            </template>
-                            <template x-if="bowler">
-                                <div class="flex items-center gap-1 border-l border-white/20 pl-3">
-                                    <span class="text-rose-400 font-bold">🎯 <span x-text="bowler.player_name"></span></span>
-                                    <span class="font-mono text-white" x-text="bowler.wickets_taken + '/' + bowler.runs_conceded"></span>
-                                </div>
-                            </template>
-                        </div>
-
                         <!-- Toggle Overlay Button -->
                         <button type="button" @click="showScoreboardOverlayOnVideo = false" 
                                 class="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 font-bold shrink-0">
@@ -1439,105 +1423,123 @@
                         </button>
                     </div>
 
-                    <!-- Offline / Fallback screen when video fails or not playable -->
+                    <!-- Replay fallback if failed -->
                     <div x-show="videoLoadFailed" class="flex flex-col items-center justify-center p-6 text-center z-10 text-slate-400">
-                        <div class="w-14 h-14 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-2 text-red-500">
-                            📹
+                        <div class="w-12 h-12 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-2xl mb-2 text-slate-300">
+                            📼
                         </div>
-                        <div class="text-sm font-bold text-white mb-1">Live Camera Stream is Currently Offline</div>
-                        <p class="text-xs max-w-sm text-slate-400 mb-4 leading-relaxed">The match organizer has not started live camera broadcasting yet. As soon as they go live, the video feed will appear here automatically in real time!</p>
-                        <div class="flex items-center gap-3">
-                            @if($isOwner)
-                                <button type="button" @click="startCamera()" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-xl shadow-red-600/30">
-                                    <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                                    <span>🔴 Start Live Camera Broadcast</span>
-                                </button>
-                            @else
-                                @guest
-                                    <a href="{{ route('login') }}" class="px-4 py-2.5 rounded-2xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-red-300 font-bold text-xs transition flex items-center gap-1.5">
-                                        <span>🔐</span>
-                                        <span>Match Organizer? Log In to Go Live</span>
-                                    </a>
-                                @endguest
-                            @endif
-                        </div>
-                    </div>
-                    <div x-show="!videoLoadFailed" class="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center gap-2 pointer-events-none shadow-xl">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                        <span x-text="activeVideoTitle || '📼 MATCH VIDEO REPLAY'"></span>
+                        <div class="text-xs font-bold text-white mb-1">Replay Video Currently Unavailable</div>
+                        <p class="text-[11px] max-w-xs text-slate-400 mb-3">This match video recording cannot be played right now.</p>
+                        @if($isOwner)
+                            <button type="button" @click="streamSource = 'camera'" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs">
+                                📱 Switch to Live Camera Studio
+                            </button>
+                        @endif
                     </div>
                 </div>
             </template>
 
             @if($isOwner)
-                <!-- Button to Go Live when a Replay is currently loaded -->
-                <div x-cloak x-show="isDirectVideo && savedVideoServerUrl && !streamActive && streamSource === 'camera'" 
-                     class="absolute top-14 left-4 z-20 pointer-events-auto">
-                    <button type="button" @click="startCamera()" 
-                            class="px-4 py-2 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-2xl flex items-center gap-2 border border-white/20">
-                        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                        <span>Go Live (Camera) 🔴</span>
-                    </button>
-                </div>
+                <!-- Broadcaster Camera Idle / Setup View (Clean, Single Clear Action) -->
+                <div x-show="streamSource === 'camera' && !streamActive" 
+                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-4 sm:p-6 text-center">
+                    
+                    <!-- Clean Source Switcher Tabs -->
+                    <div class="flex items-center gap-1 p-1 bg-black/60 backdrop-blur-md rounded-2xl border border-white/15 text-xs font-bold mb-3 sm:mb-4">
+                        <button type="button" @click="streamSource = 'camera'" 
+                                class="px-3 py-1.5 rounded-xl bg-red-600 text-white shadow-lg flex items-center gap-1.5 transition">
+                            <span>📱 Phone Camera</span>
+                        </button>
+                        <button type="button" @click="streamSource = 'youtube'; if (!embedStreamUrl) editStreamModal = true;" 
+                                class="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white flex items-center gap-1.5 transition">
+                            <span>🔴 YouTube / FB</span>
+                        </button>
+                        <template x-if="matchVideos && matchVideos.length > 0">
+                            <button type="button" @click="streamSource = 'replay'; selectAndPlayVideo(matchVideos[0]);" 
+                                    class="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white flex items-center gap-1.5 transition">
+                                <span>📼 Replays (<span x-text="matchVideos.length"></span>)</span>
+                            </button>
+                        </template>
+                    </div>
 
-                <!-- Broadcaster Camera Idle / Not Started Placeholder -->
-                <div x-show="streamSource === 'camera' && !streamActive && !(isDirectVideo && savedVideoServerUrl)" 
-                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
-                    <div class="w-16 h-16 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-3 shadow-inner">
+                    <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-red-600/15 border-2 border-red-500/30 flex items-center justify-center text-2xl sm:text-3xl mb-2 sm:mb-3 shadow-inner text-red-400 animate-pulse">
                         📹
                     </div>
-                    <h3 class="text-xl sm:text-2xl font-black text-white">Live Camera Broadcast Studio</h3>
-                    <p class="text-slate-400 text-xs sm:text-sm max-w-md mt-1">
-                        Go live directly using your <b class="text-white">Phone Camera</b> so all audience members can watch this match in real-time, or connect a YouTube / Facebook stream.
+                    <h3 class="text-base sm:text-xl font-black text-white">Live Phone Camera Studio</h3>
+                    <p class="text-slate-400 text-xs max-w-sm mt-0.5 sm:mt-1 leading-relaxed">
+                        Broadcast this match directly from your phone camera with live TV scoreboard overlay.
                     </p>
-                    <div class="flex flex-wrap items-center justify-center gap-3 mt-4">
+
+                    <!-- ONE PROMINENT, UNMISSABLE ACTION BUTTON -->
+                    <div class="mt-3 sm:mt-4 flex flex-col items-center gap-2.5 w-full max-w-xs">
                         <button type="button" @click="startCamera()" 
-                                class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-red-600/30 transition flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                            <span>🔴 Go Live (Phone Camera)</span>
+                                class="w-full py-3 sm:py-3.5 px-6 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-2xl shadow-red-600/50 transition transform active:scale-95 flex items-center justify-center gap-2 border border-white/20">
+                            <span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
+                            <span>Start Live Broadcast 🔴</span>
                         </button>
-                        <button type="button" @click="editStreamModal = true" 
-                                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black text-xs uppercase tracking-wider transition flex items-center gap-2">
-                            <span>⚙️ Stream Settings / YouTube</span>
-                        </button>
+
+                        <!-- Quick Pre-Stream Camera Settings -->
+                        <div class="flex items-center justify-center gap-2 pt-0.5 text-[11px] text-slate-300 font-bold">
+                            <button type="button" @click="facingMode = (facingMode === 'environment' ? 'user' : 'environment')" 
+                                    class="px-3 py-1 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 flex items-center gap-1.5 transition">
+                                <span>🔄</span>
+                                <span x-text="facingMode === 'environment' ? 'Rear Camera (Ground)' : 'Front Camera (Selfie)'"></span>
+                            </button>
+                            <button type="button" @click="micMuted = !micMuted" 
+                                    :class="micMuted ? 'text-rose-400 bg-rose-950/40 border-rose-500/40' : 'text-emerald-400 bg-emerald-950/40 border-emerald-500/40'"
+                                    class="px-3 py-1 rounded-xl border flex items-center gap-1.5 transition">
+                                <span x-text="micMuted ? '🔇 Muted' : '🎙️ Mic Active'"></span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Broadcaster YouTube URL Missing Placeholder -->
+                <!-- Broadcaster YouTube Setup View -->
                 <div x-show="streamSource === 'youtube' && !embedStreamUrl" 
-                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
-                    <div class="w-16 h-16 rounded-full bg-red-600/10 border-2 border-red-500/30 flex items-center justify-center text-3xl mb-2 text-red-500 shadow-inner">
+                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-4 sm:p-6 text-center">
+                    <div class="flex items-center gap-1 p-1 bg-black/60 backdrop-blur-md rounded-2xl border border-white/15 text-xs font-bold mb-3 sm:mb-4">
+                        <button type="button" @click="streamSource = 'camera'" 
+                                class="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white flex items-center gap-1.5 transition">
+                            <span>📱 Phone Camera</span>
+                        </button>
+                        <button type="button" @click="streamSource = 'youtube'" 
+                                class="px-3 py-1.5 rounded-xl bg-red-600 text-white shadow-lg flex items-center gap-1.5 transition">
+                            <span>🔴 YouTube / FB</span>
+                        </button>
+                    </div>
+
+                    <div class="w-12 h-12 rounded-2xl bg-red-600/15 border-2 border-red-500/30 flex items-center justify-center text-2xl mb-2 text-red-400">
                         📺
                     </div>
-                    <h3 class="text-xl font-black text-white">No Live Stream Link Connected</h3>
-                    <p class="text-slate-400 text-xs max-w-sm mt-1">Enter a YouTube Live or Facebook Live stream link to broadcast to all audience with TV graphics overlay.</p>
+                    <h3 class="text-base sm:text-lg font-black text-white">Connect YouTube or Facebook Live</h3>
+                    <p class="text-slate-400 text-xs max-w-sm mt-1">Paste a live stream URL to stream to all audience with TV graphics overlay.</p>
                     <button type="button" @click="editStreamModal = true" 
-                            class="mt-4 px-5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-red-600/30 transition">
+                            class="mt-3 px-5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-red-600/30 transition">
                         + Add Live Stream Link 🔗
                     </button>
                 </div>
             @else
-                <!-- AUDIENCE / VIEWER WAITING SCREEN (When neither in-app camera nor YouTube is active) -->
-                <div x-show="!isCameraLive && !embedStreamUrl && !(isDirectVideo && savedVideoServerUrl)" 
-                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-6 text-center">
-                    <div class="w-16 h-16 rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-3xl mb-3 shadow-inner">
+                <!-- AUDIENCE / VIEWER WAITING SCREEN (When stream is not active) -->
+                <div x-show="!isCameraLive && !embedStreamUrl && streamSource !== 'replay'" 
+                     class="absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-4 sm:p-6 text-center">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-2xl mb-2 text-amber-400">
                         📺
                     </div>
-                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold mb-2">
+                    <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold mb-2">
                         <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                        <span>Broadcast Waiting</span>
+                        <span>Broadcast Offline</span>
                     </div>
-                    <h3 class="text-xl sm:text-2xl font-black text-white">Live Video Stream Has Not Started Yet</h3>
-                    <p class="text-slate-400 text-xs sm:text-sm max-w-md mt-1 leading-relaxed">
-                        The match organizer has not started the live video broadcast yet. As soon as they go live with their phone camera or stream link, the live video will appear here automatically with real-time TV scoreboard!
+                    <h3 class="text-base sm:text-xl font-black text-white">Live Broadcast Has Not Started Yet</h3>
+                    <p class="text-slate-400 text-xs max-w-sm mt-1 leading-relaxed">
+                        The match organizer has not started broadcasting yet. As soon as they go live, the stream will appear here automatically!
                     </p>
-                    <div class="flex items-center gap-3 mt-4">
-                        <a href="{{ route('matches.show', $match) }}" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs transition">
+                    <div class="flex items-center gap-2.5 mt-4">
+                        <a href="{{ route('matches.show', $match) }}" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold text-xs transition">
                             📋 View Full Scorecard
                         </a>
                         @guest
-                            <a href="{{ route('login') }}" class="px-4 py-2.5 rounded-2xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-red-300 font-bold text-xs transition">
-                                🔐 Match Organizer? Log In
+                            <a href="{{ route('login') }}" class="px-4 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 text-red-300 font-bold text-xs transition">
+                                🔐 Organizer Login
                             </a>
                         @endguest
                     </div>
@@ -1545,105 +1547,38 @@
             @endif
 
             <!-- ============================================================== -->
-            <!-- TV GRAPHICS OVERLAY: TOP BAR (HEADER & LIVE BADGES) -->
+            <!-- TV GRAPHICS OVERLAY: TOP BAR (CLEAN, MINIMAL, NEVER OVERLAPS) -->
             <!-- ============================================================== -->
-            <div class="relative z-10 p-2.5 sm:p-4 flex items-start justify-between bg-gradient-to-b from-black/85 via-black/50 to-transparent pointer-events-none">
-                <!-- Match Title & Live Badge -->
-                <div class="flex flex-wrap items-center gap-2 pointer-events-auto">
-                    <span class="px-2.5 py-1 rounded-full bg-red-600 text-white font-black text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-red-600/50 animate-pulse">
-                        <span class="w-2 h-2 rounded-full bg-white"></span>
-                        LIVE
-                    </span>
-
-                    <template x-if="isBroadcaster && streamActive">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1 border border-white/20 shadow"
-                              :class="broadcastMode === 'agora' ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'"
-                              x-text="broadcastMode === 'agora' ? '☁️ Agora Cloud' : '📡 Direct WebRTC'"></span>
-                    </template>
-
-                    <template x-if="!isBroadcaster && (hasAgoraStream || hasP2pStream)">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1 bg-emerald-600 text-white border border-white/20 shadow">
-                            <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
-                            <span x-text="hasAgoraStream ? '☁️ Cloud Relay' : '⚡ Real-time HD'"></span>
+            <div class="relative z-10 p-2 sm:p-3 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/40 to-transparent pointer-events-none">
+                <!-- Left: Status Badges -->
+                <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+                    <template x-if="streamActive || isCameraLive">
+                        <span class="px-2.5 py-1 rounded-full bg-red-600 text-white font-black text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-red-600/50 animate-pulse">
+                            <span class="w-2 h-2 rounded-full bg-white"></span>
+                            LIVE
                         </span>
                     </template>
 
-                    <!-- Live In-App Recording Pulse Indicator -->
                     <template x-if="isRecordingStream">
-                        <span class="px-2.5 py-1 rounded-full bg-rose-700/95 text-white font-black font-mono text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-rose-700/50 animate-pulse">
-                            <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                            <span>REC <span x-text="formatRecordingTime(recordingSeconds)"></span> (<span x-text="formatRecordedSize(recordedBytes)"></span>)</span>
+                        <span class="px-2 py-0.5 rounded-full bg-rose-700/90 text-white font-black font-mono text-[10px] tracking-wider uppercase flex items-center gap-1 shadow animate-pulse">
+                            <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+                            <span>REC <span x-text="formatRecordingTime(recordingSeconds)"></span></span>
                         </span>
                     </template>
 
-                    @if($isOwner)
-                        <!-- Source Switcher (Camera vs YouTube/Facebook) - ONLY FOR BROADCASTER -->
-                        <div class="flex items-center gap-1 p-0.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-[10px] font-bold">
-                            <button type="button" 
-                                    @click="streamSource = 'camera'"
-                                    :class="streamSource === 'camera' ? 'bg-red-600 text-white shadow' : 'text-slate-400 hover:text-white'"
-                                    class="px-2.5 py-1 rounded-lg transition flex items-center gap-1">
-                                <span>📷 Camera</span>
-                            </button>
-                            <button type="button" 
-                                    @click="streamSource = 'youtube'; if (!embedStreamUrl) editStreamModal = true;"
-                                    :class="streamSource === 'youtube' ? 'bg-red-600 text-white shadow' : 'text-slate-400 hover:text-white'"
-                                    class="px-2.5 py-1 rounded-lg transition flex items-center gap-1">
-                                <span>🔴 YouTube / FB</span>
-                            </button>
-                            <button type="button" @click="editStreamModal = true" class="p-1 px-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition" title="Change Stream Link">
-                                ⚙️
-                            </button>
-                        </div>
-                    @endif
-
-                    <div class="hidden sm:flex bg-black/60 backdrop-blur-md px-3 py-1 rounded-xl border border-white/10 text-[11px] sm:text-xs items-center">
-                        <span class="text-amber-400 font-extrabold uppercase">{{ $match->tournament_name ?? 'Tournament Match' }}</span>
-                        <span class="text-slate-400 mx-1.5">•</span>
-                        <span class="text-slate-300 font-mono">{{ $match->total_overs }} Overs</span>
+                    <div class="hidden sm:flex bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/10 text-[11px] items-center">
+                        <span class="text-amber-400 font-extrabold uppercase">{{ $match->tournament_name ?? 'Match' }}</span>
+                        <span class="text-slate-400 mx-1">•</span>
+                        <span class="text-slate-300 font-mono">{{ $match->total_overs }} Ov</span>
                     </div>
                 </div>
 
-                <!-- Floating Broadcaster Control Bar -->
-                <div class="flex items-center gap-1 sm:gap-1.5 bg-black/70 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-xl pointer-events-auto">
-                    @if($isOwner)
-                        <template x-if="streamSource === 'camera'">
-                            <div class="flex items-center gap-1">
-                                <button type="button" @click="streamActive ? stopCamera() : startCamera()" 
-                                        :class="streamActive ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'"
-                                        class="px-2.5 py-1 rounded-xl font-black text-[10px] sm:text-xs uppercase transition flex items-center gap-1">
-                                    <span x-text="streamActive ? '⏹️ Stop' : '🔴 Go Live'"></span>
-                                </button>
-
-                                <button type="button" @click="toggleCameraFlip()" 
-                                        class="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition"
-                                        title="Flip Camera (Rear/Front)">
-                                    <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                </button>
-
-                                <button type="button" @click="toggleMic()" 
-                                        :class="micMuted ? 'text-rose-400' : 'text-emerald-400'"
-                                        class="p-1.5 rounded-xl hover:bg-white/10 transition"
-                                        :title="micMuted ? 'Unmute Mic' : 'Mute Mic'">
-                                    <span x-text="micMuted ? '🔇' : '🎙️'"></span>
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Quick Keypad Drawer Toggle -->
-                        <button type="button" @click="showKeypadDrawer = !showKeypadDrawer" 
-                                :class="showKeypadDrawer ? 'bg-amber-500 text-slate-950 font-black' : 'bg-white/10 text-white'"
-                                class="px-2 py-1 rounded-xl text-[10px] sm:text-xs font-bold transition flex items-center gap-1 shadow-sm">
-                            <span>⚡ Scorer</span>
-                        </button>
-                    @endif
-
+                <!-- Right: Fullscreen Toggle -->
+                <div class="flex items-center gap-1 pointer-events-auto">
                     <button type="button" @click="toggleFullscreen()" 
-                            class="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition"
+                            class="p-2 rounded-xl bg-black/60 hover:bg-black/80 text-slate-300 hover:text-white border border-white/10 transition shadow-lg"
                             title="Toggle Fullscreen">
-                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                         </svg>
                     </button>
@@ -1671,6 +1606,50 @@
                     <span x-text="eventBannerText"></span>
                 </div>
             </div>
+
+            @if($isOwner)
+                <!-- ============================================================== -->
+                <!-- FLOATING BROADCASTER IN-STREAM CONTROLS (ONLY WHEN LIVE) -->
+                <!-- ============================================================== -->
+                <div x-cloak x-show="streamActive && streamSource === 'camera'" 
+                     class="relative z-10 px-2 sm:px-3 pb-1 flex items-center justify-center pointer-events-none">
+                    <div class="flex items-center gap-1.5 bg-black/85 backdrop-blur-xl p-1.5 rounded-2xl border border-white/20 shadow-2xl pointer-events-auto">
+                        <!-- 1. Flip Camera -->
+                        <button type="button" @click="toggleCameraFlip()" 
+                                class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white transition flex items-center gap-1 text-xs font-bold"
+                                title="Flip Camera (Rear/Front)">
+                            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span class="hidden xs:inline text-[11px]">Flip</span>
+                        </button>
+
+                        <!-- 2. Mic Mute / Unmute -->
+                        <button type="button" @click="toggleMic()" 
+                                :class="micMuted ? 'bg-rose-950/60 text-rose-300 border border-rose-500/40' : 'bg-white/10 text-emerald-400'"
+                                class="p-2 rounded-xl hover:bg-white/20 transition flex items-center gap-1 text-xs font-bold"
+                                :title="micMuted ? 'Unmute Mic' : 'Mute Mic'">
+                            <span x-text="micMuted ? '🔇' : '🎙️'"></span>
+                            <span class="hidden xs:inline text-[11px]" x-text="micMuted ? 'Muted' : 'Mic'"></span>
+                        </button>
+
+                        <!-- 3. Scorer Drawer Toggle -->
+                        <button type="button" @click="showKeypadDrawer = !showKeypadDrawer" 
+                                :class="showKeypadDrawer ? 'bg-amber-500 text-slate-950 font-black shadow-amber-500/50' : 'bg-white/10 text-white'"
+                                class="px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-md">
+                            <span>⚡</span>
+                            <span class="text-[11px]">Scorer</span>
+                        </button>
+
+                        <!-- 4. Stop Broadcast (Red Button) -->
+                        <button type="button" @click="stopCamera()" 
+                                class="px-2.5 sm:px-3 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider transition flex items-center gap-1 shadow-lg shadow-red-600/40">
+                            <span>⏹️</span>
+                            <span class="text-[11px]">Stop</span>
+                        </button>
+                    </div>
+                </div>
+            @endif
 
             <!-- ============================================================== -->
             <!-- TV GRAPHICS OVERLAY: SIGNATURE LOWER THIRD (BOTTOM SCOREBOARD) -->
@@ -1823,60 +1802,63 @@
                 </div>
             </div>
 
-            <!-- ============================================================== -->
-            <!-- FLOATING MINI SCORER DRAWER (FOR SINGLE OPERATOR STREAMING) -->
-            <!-- ============================================================== -->
-            @if($isOwner)
-                <div x-cloak x-show="showKeypadDrawer" 
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 translate-y-4"
-                     x-transition:enter-end="opacity-100 translate-y-0"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 translate-y-0"
-                     x-transition:leave-end="opacity-0 translate-y-4"
-                     class="absolute bottom-28 left-4 right-4 z-30 p-3 rounded-2xl bg-slate-950/95 border-2 border-amber-500/50 backdrop-blur-xl shadow-2xl max-w-lg mx-auto space-y-2 pointer-events-auto">
-                    <div class="flex items-center justify-between text-xs pb-1 border-b border-white/10">
-                        <span class="font-black text-amber-400 flex items-center gap-1.5">
-                            <span>⚡ Quick Live Scorer (Tap to update live broadcast)</span>
-                        </span>
-                        <button type="button" @click="showKeypadDrawer = false" class="text-slate-400 hover:text-white font-bold">✕ Close</button>
-                    </div>
-
-                    <!-- Row 1: Runs -->
-                    <div class="grid grid-cols-6 gap-1.5 text-xs font-black font-mono">
-                        <button type="button" @click="recordBall('run', { runs: 0 })" class="py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white">0</button>
-                        <button type="button" @click="recordBall('run', { runs: 1 })" class="py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white">1</button>
-                        <button type="button" @click="recordBall('run', { runs: 2 })" class="py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white">2</button>
-                        <button type="button" @click="recordBall('run', { runs: 3 })" class="py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white">3</button>
-                        <button type="button" @click="recordBall('run', { runs: 4 })" class="py-2.5 rounded-xl bg-blue-600 text-white">4 🏏</button>
-                        <button type="button" @click="recordBall('run', { runs: 6 })" class="py-2.5 rounded-xl bg-purple-600 text-white">6 💥</button>
-                    </div>
-
-                    <!-- Row 2: Extras, Wicket & Undo -->
-                    <div class="grid grid-cols-5 gap-1.5 text-[10px] font-bold">
-                        <button type="button" @click="recordBall('wide', { runs: 1 })" class="py-2 rounded-xl bg-amber-600/30 text-amber-300 border border-amber-500/40 hover:bg-amber-600/40 transition">Wide (WD)</button>
-                        <button type="button" @click="recordBall('no_ball', { runs: 1 })" class="py-2 rounded-xl bg-orange-600/30 text-orange-300 border border-orange-500/40 hover:bg-orange-600/40 transition">No Ball (NB)</button>
-                        <button type="button" @click="recordBall('swap_strike')" class="py-2 rounded-xl bg-white/10 text-slate-300 hover:bg-white/20 transition">Rotate ⇄</button>
-                        <button type="button" @click="wicketModalOpen = true" class="py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black shadow-lg shadow-red-600/40 transition">☝️ Out</button>
-                        <button type="button" @click="recordBall('undo')" class="py-2 rounded-xl bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 border border-rose-500/50 font-black transition flex items-center justify-center gap-1 shadow-sm" title="Undo last delivery">
-                            <span>↩️ Undo</span>
-                        </button>
-                    </div>
-
-                    <!-- Row 3: Player Management -->
-                    <div class="grid grid-cols-2 gap-1.5 text-[11px] font-extrabold pt-1.5 border-t border-white/10">
-                        <button type="button" @click="openPlayerModal('all')" class="py-2 px-3 rounded-xl bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 flex items-center justify-center gap-1.5 transition shadow-sm">
-                            <span>🏏 Change Batsmen</span>
-                        </button>
-                        <button type="button" @click="openPlayerModal('bowler')" class="py-2 px-3 rounded-xl bg-rose-600/25 hover:bg-rose-600/40 text-rose-300 border border-rose-500/40 flex items-center justify-center gap-1.5 transition shadow-sm">
-                            <span>🎯 Change Bowler</span>
-                        </button>
-                    </div>
-                </div>
-            @endif
-
         </div>
 
+        @if($isOwner)
+            <!-- ============================================================== -->
+            <!-- QUICK LIVE SCORER: DEDICATED MOBILE BOTTOM SHEET / MODAL -->
+            <!-- ============================================================== -->
+            <div x-cloak x-show="showKeypadDrawer" 
+                 class="fixed inset-x-0 bottom-0 z-50 p-4 pb-6 bg-slate-950/95 border-t-2 border-amber-500/50 backdrop-blur-2xl shadow-2xl rounded-t-3xl max-w-lg mx-auto space-y-3 pointer-events-auto"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 translate-y-full"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 translate-y-full">
+                
+                <!-- Drawer Header -->
+                <div class="flex items-center justify-between pb-2 border-b border-white/10">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">⚡</span>
+                        <span class="font-black text-xs sm:text-sm text-white">Live Quick Scorer</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono font-bold" x-text="scoreRuns + '/' + scoreWickets + ' (' + scoreOvers + ' ov)'"></span>
+                    </div>
+                    <button type="button" @click="showKeypadDrawer = false" class="p-1 text-slate-400 hover:text-white font-bold text-xs">✕ Close</button>
+                </div>
+
+                <!-- Runs Row -->
+                <div class="grid grid-cols-6 gap-2 text-sm font-black font-mono">
+                    <button type="button" @click="recordBall('run', { runs: 0 })" class="py-3 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition shadow">0</button>
+                    <button type="button" @click="recordBall('run', { runs: 1 })" class="py-3 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition shadow">1</button>
+                    <button type="button" @click="recordBall('run', { runs: 2 })" class="py-3 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition shadow">2</button>
+                    <button type="button" @click="recordBall('run', { runs: 3 })" class="py-3 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition shadow">3</button>
+                    <button type="button" @click="recordBall('run', { runs: 4 })" class="py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white transition shadow-lg shadow-blue-600/30">4 🏏</button>
+                    <button type="button" @click="recordBall('run', { runs: 6 })" class="py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white transition shadow-lg shadow-purple-600/30">6 💥</button>
+                </div>
+
+                <!-- Extras, Out & Undo Row -->
+                <div class="grid grid-cols-5 gap-1.5 text-[11px] font-bold">
+                    <button type="button" @click="recordBall('wide', { runs: 1 })" class="py-2.5 rounded-xl bg-amber-600/25 text-amber-300 border border-amber-500/40 hover:bg-amber-600/40 active:scale-95 transition">Wide</button>
+                    <button type="button" @click="recordBall('no_ball', { runs: 1 })" class="py-2.5 rounded-xl bg-orange-600/25 text-orange-300 border border-orange-500/40 hover:bg-orange-600/40 active:scale-95 transition">No Ball</button>
+                    <button type="button" @click="recordBall('swap_strike')" class="py-2.5 rounded-xl bg-white/10 text-slate-200 hover:bg-white/20 active:scale-95 transition">Rotate ⇄</button>
+                    <button type="button" @click="wicketModalOpen = true" class="py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black active:scale-95 shadow-lg shadow-red-600/40 transition">☝️ Out</button>
+                    <button type="button" @click="recordBall('undo')" class="py-2.5 rounded-xl bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 border border-rose-500/50 font-black active:scale-95 transition flex items-center justify-center gap-1 shadow-sm">
+                        <span>↩️</span><span>Undo</span>
+                    </button>
+                </div>
+
+                <!-- Change Batsmen / Bowler -->
+                <div class="grid grid-cols-2 gap-2 text-xs font-bold pt-1 border-t border-white/10">
+                    <button type="button" @click="openPlayerModal('all')" class="py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center justify-center gap-1.5 transition">
+                        <span>🏏 Change Batsmen</span>
+                    </button>
+                    <button type="button" @click="openPlayerModal('bowler')" class="py-2 px-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 flex items-center justify-center gap-1.5 transition">
+                        <span>🎯 Change Bowler</span>
+                    </button>
+                </div>
+            </div>
+        @endif
         <!-- Mobile Live Match Details Card (Below Video on Phones: Never Blocks the Pitch!) -->
         <div class="block md:hidden p-3.5 rounded-2xl bg-[#131b2e] border border-white/10 shadow-xl space-y-2.5">
             <!-- Row 1: Striker & Non-Striker -->
@@ -1961,19 +1943,19 @@
                     </div>
                 </div>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0">
                 <button type="button" @click="showCommentaryDrawer = !showCommentaryDrawer" 
-                        class="px-3.5 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 hover:text-white font-bold transition flex items-center gap-1.5">
+                        class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 hover:text-white font-bold transition flex items-center justify-center gap-1.5 text-xs">
                     <span>🎙️ Commentary</span>
                     <span class="px-1.5 py-0.2 rounded-full bg-black/40 text-[10px] font-mono" x-text="commentaryList.length"></span>
                 </button>
                 @if($isOwner)
-                    <button type="button" @click="editStreamModal = true" class="px-3.5 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 hover:text-white font-bold transition flex items-center gap-1.5">
+                    <button type="button" @click="editStreamModal = true" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 hover:text-white font-bold transition flex items-center justify-center gap-1.5 text-xs">
                         <span>🔗 Stream Link</span>
                     </button>
                 @endif
-                <a href="{{ route('matches.show', $match) }}" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition">
-                    Full Scorecard ➔
+                <a href="{{ route('matches.show', $match) }}" class="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition text-xs text-center">
+                    Scorecard ➔
                 </a>
             </div>
         </div>
