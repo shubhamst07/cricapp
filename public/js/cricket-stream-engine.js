@@ -186,6 +186,7 @@ class CricketStreamBroadcaster {
                 if (targetSignalUrl) {
                     await fetch(targetSignalUrl, {
                         method: 'POST',
+                        credentials: 'include',
                         headers: {
                             'Content-Type': 'application/json',
                             'Accept': 'application/json',
@@ -587,6 +588,7 @@ class CricketStreamViewer {
             // Post offer to Laravel signaling endpoint
             const res = await fetch(signalUrl, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',

@@ -1,5 +1,5 @@
 // LiveCricket Progressive Web App Service Worker
-const CACHE_NAME = 'livecricket-cache-v3';
+const CACHE_NAME = 'livecricket-cache-v4';
 const OFFLINE_URL = '/offline';
 
 const PRECACHE_ASSETS = [
@@ -49,6 +49,15 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET requests and external third-party origins (YouTube, FB, cricbuzz)
   if (request.method !== 'GET' || url.origin !== self.location.origin) {
+    return;
+  }
+
+  // Bypass ServiceWorker completely for live streaming scripts, state and signals
+  if (
+    url.pathname.includes('cricket-stream-engine.js') ||
+    url.pathname.includes('/broadcast') ||
+    url.pathname.includes('/stream')
+  ) {
     return;
   }
 

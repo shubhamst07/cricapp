@@ -29,7 +29,7 @@
 
 @section('content')
 <!-- MediaMTX WebRTC (WHIP / WHEP) Engine & HLS Fallback -->
-<script src="{{ asset('js/cricket-stream-engine.js') }}"></script>
+<script src="{{ asset('js/cricket-stream-engine.js') }}?v={{ time() }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <div class="py-4 sm:py-6 bg-slate-950 min-h-screen text-slate-100 font-sans select-none" x-data="{
@@ -429,6 +429,7 @@
             window.localMediaStream = stream;
 
             this.streamActive = true;
+            this.isBroadcaster = true;
             this.isBroadcasting = true;
             this.isCameraLive = true;
             this.broadcastMode = 'direct_p2p';
@@ -439,6 +440,7 @@
             // Notify backend that Broadcaster is live with camera
             await fetch(this.signalUrl, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
@@ -722,6 +724,7 @@
                             // Send live heartbeat
                             fetch(this.signalUrl, {
                                 method: 'POST',
+                                credentials: 'include',
                                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrfToken },
                                 body: JSON.stringify({ heartbeat: true })
                             }).catch(() => {});
@@ -1333,10 +1336,25 @@
             <div class="relative z-10 p-2.5 sm:p-4 flex items-start justify-between bg-gradient-to-b from-black/85 via-black/50 to-transparent pointer-events-none">
                 <!-- Match Title & Live Badge -->
                 <div class="flex flex-wrap items-center gap-2 pointer-events-auto">
-                    <span class="px-2.5 py-1 rounded-full bg-red-600 text-white font-black text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-red-600/50 animate-pulse">
-                        <span class="w-2 h-2 rounded-full bg-white"></span>
-                        LIVE
-                    </span>
+                    <!-- Live / Replay / Offline Status Indicator -->
+                    <template x-if="isCameraLive || (isBroadcaster && streamActive)">
+                        <span class="px-2.5 py-1 rounded-full bg-red-600 text-white font-black text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-red-600/50 animate-pulse">
+                            <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                            LIVE
+                        </span>
+                    </template>
+                    <template x-if="!isCameraLive && !(isBroadcaster && streamActive) && isDirectVideo && savedVideoServerUrl">
+                        <span class="px-2.5 py-1 rounded-full bg-indigo-600 text-white font-black text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-indigo-600/50">
+                            <span>📼</span>
+                            MATCH REPLAY
+                        </span>
+                    </template>
+                    <template x-if="!isCameraLive && !(isBroadcaster && streamActive) && !(isDirectVideo && savedVideoServerUrl)">
+                        <span class="px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 font-bold text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1.5 border border-white/10">
+                            <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                            OFFLINE
+                        </span>
+                    </template>
 
                     <template x-if="isBroadcaster && streamActive">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1 bg-emerald-600 text-white border border-white/20 shadow">

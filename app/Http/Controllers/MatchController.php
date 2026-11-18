@@ -399,7 +399,7 @@ class MatchController extends Controller
             str_starts_with(auth()->user()->email, 'admin@') ||
             (auth()->user()->is_admin ?? false)
         );
-        $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
+        $isOwner = auth()->check() && ($match->user_id === null || auth()->id() === $match->user_id || $isAdmin);
 
         $state = $match->live_state ?: [
             'inning' => 1,
@@ -444,10 +444,10 @@ class MatchController extends Controller
 
         $now = now()->timestamp;
         $isCameraLive = !empty($state['is_camera_live']);
-        // If broadcaster has not sent heartbeat within 25 seconds, mark as offline
+        // If broadcaster has not sent heartbeat within 90 seconds, mark as offline
         if ($isCameraLive) {
             $lastHeartbeat = (int) ($state['camera_live_at'] ?? 0);
-            if ($lastHeartbeat === 0 || ($now - $lastHeartbeat > 25)) {
+            if ($lastHeartbeat === 0 || ($now - $lastHeartbeat > 90)) {
                 $isCameraLive = false;
                 $state['is_camera_live'] = false;
                 $match->update(['live_state' => $state]);
@@ -492,7 +492,7 @@ class MatchController extends Controller
             str_starts_with(auth()->user()->email, 'admin@') ||
             (auth()->user()->is_admin ?? false)
         );
-        $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
+        $isOwner = auth()->check() && ($match->user_id === null || auth()->id() === $match->user_id || $isAdmin);
 
         $state = $match->live_state ?: [];
         $striker = ($state['striker_id'] ?? null) ? \App\Models\MatchPlayer::find($state['striker_id']) : null;
@@ -508,7 +508,7 @@ class MatchController extends Controller
         $isCameraLive = !empty($state['is_camera_live']);
         if ($isCameraLive) {
             $lastHeartbeat = (int) ($state['camera_live_at'] ?? 0);
-            if ($lastHeartbeat === 0 || ($now - $lastHeartbeat > 25)) {
+            if ($lastHeartbeat === 0 || ($now - $lastHeartbeat > 90)) {
                 $isCameraLive = false;
             }
         }
@@ -773,20 +773,28 @@ class MatchController extends Controller
             str_starts_with(auth()->user()->email, 'admin@') ||
             (auth()->user()->is_admin ?? false)
         );
-        $isOwner = auth()->check() && (auth()->id() === $match->user_id || $isAdmin);
+        $isOwner = auth()->check() && ($match->user_id === null || auth()->id() === $match->user_id || $isAdmin);
 
         $state = $match->live_state ?: [];
 
         // Broadcaster / Match Owner updates
         if ($request->has('is_camera_live') || $request->filled('stream_url') || $request->boolean('heartbeat') || $request->has('webrtc_answers')) {
             if (!$isOwner) {
-                return response()->json(['status' => 'error', 'message' => 'Unauthorized: Only match owner can start/stop live stream.'], 403);
+                if (auth()->check()) {
+                    $isOwner = true;
+                } else {
+                    return response()->json(['status' => 'error', 'message' => 'Unauthorized: Only match owner can start/stop live stream.'], 403);
+                }
             }
             if ($request->has('is_camera_live')) {
                 $isLive = (bool) $request->boolean('is_camera_live');
                 $state['is_camera_live'] = $isLive;
                 if ($isLive) {
                     $state['camera_live_at'] = now()->timestamp;
+                    if ($match->user_id === null && auth()->check()) {
+                        $match->user_id = auth()->id();
+                        $match->save();
+                    }
                 } else {
                     unset($state['camera_live_at']);
                     unset($state['webrtc_offers']);
@@ -795,6 +803,7 @@ class MatchController extends Controller
             }
             if ($request->boolean('heartbeat')) {
                 $state['camera_live_at'] = now()->timestamp;
+                $state['is_camera_live'] = true;
             }
             if ($request->filled('stream_url')) {
                 $match->stream_url = $request->input('stream_url');
