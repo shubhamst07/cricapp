@@ -593,6 +593,20 @@ class MatchController extends Controller
                 ->header('Access-Control-Expose-Headers', 'Location')
                 ->header('Location', route('matches.stream.whip', $match));
         } catch (\Throwable $e) {
+            // Self-healing: auto-start MediaMTX and retry once
+            if ($this->ensureMediaMtxRunning()) {
+                try {
+                    $response = Http::withHeaders([
+                        'Content-Type' => 'application/sdp',
+                    ])->withBody($sdpOffer, 'application/sdp')->timeout(10)->post($target);
+
+                    return response($response->body(), $response->status())
+                        ->header('Content-Type', 'application/sdp')
+                        ->header('Access-Control-Allow-Origin', '*')
+                        ->header('Access-Control-Expose-Headers', 'Location')
+                        ->header('Location', route('matches.stream.whip', $match));
+                } catch (\Throwable $retryEx) {}
+            }
             return response()->json(['error' => 'MediaMTX streaming engine is currently offline: ' . $e->getMessage()], 503);
         }
     }
@@ -634,6 +648,20 @@ class MatchController extends Controller
                 ->header('Access-Control-Expose-Headers', 'Location')
                 ->header('Location', route('matches.stream.whep', $match));
         } catch (\Throwable $e) {
+            // Self-healing: auto-start MediaMTX and retry once
+            if ($this->ensureMediaMtxRunning()) {
+                try {
+                    $response = Http::withHeaders([
+                        'Content-Type' => 'application/sdp',
+                    ])->withBody($sdpOffer, 'application/sdp')->timeout(10)->post($target);
+
+                    return response($response->body(), $response->status())
+                        ->header('Content-Type', 'application/sdp')
+                        ->header('Access-Control-Allow-Origin', '*')
+                        ->header('Access-Control-Expose-Headers', 'Location')
+                        ->header('Location', route('matches.stream.whep', $match));
+                } catch (\Throwable $retryEx) {}
+            }
             return response()->json(['error' => 'MediaMTX streaming engine is currently offline: ' . $e->getMessage()], 503);
         }
     }
@@ -657,6 +685,46 @@ class MatchController extends Controller
         } catch (\Throwable $e) {
             return response('Stream not found', 404);
         }
+    }
+
+    /**
+     * Ensure MediaMTX streaming server is running, auto-starting or downloading it if needed.
+     */
+    protected function ensureMediaMtxRunning(): bool
+    {
+        $binPath = base_path('bin/mediamtx');
+        $configPath = base_path('mediamtx.yml');
+
+        // Check if port 8889 is already listening
+        $fp = @fsockopen('127.0.0.1', config('services.mediamtx.webrtc_port', 8889), $errno, $errstr, 0.5);
+        if ($fp) {
+            fclose($fp);
+            return true;
+        }
+
+        // If binary doesn't exist, download it
+        if (!file_exists($binPath)) {
+            $binDir = base_path('bin');
+            @mkdir($binDir, 0755, true);
+            $url = 'https://github.com/bluenviron/mediamtx/releases/download/v1.21.4/mediamtx_v1.21.4_linux_amd64.tar.gz';
+            exec("curl -s -L -A 'Mozilla/5.0' " . escapeshellarg($url) . " | tar -xz -C " . escapeshellarg($binDir) . " mediamtx 2>/dev/null", $out, $code);
+            @chmod($binPath, 0755);
+        }
+
+        if (file_exists($binPath) && file_exists($configPath)) {
+            $logFile = storage_path('logs/mediamtx.log');
+            $cmd = sprintf(
+                '%s %s > %s 2>&1 &',
+                escapeshellarg($binPath),
+                escapeshellarg($configPath),
+                escapeshellarg($logFile)
+            );
+            exec($cmd);
+            usleep(600000); // 600ms grace period to bind listeners
+            return true;
+        }
+
+        return false;
     }
 
     /**

@@ -21,6 +21,13 @@ RUN cp conf/nginx/nginx-site.conf /etc/nginx/sites-available/default.conf && \
 RUN apk add --no-cache python3 py3-pip py3-lxml py3-beautifulsoup4 py3-requests py3-pydantic && \
     pip install --no-cache-dir --break-system-packages fastapi uvicorn httpx
 
+# Install MediaMTX WebRTC & HLS Live Streaming Server
+RUN curl -L -o /tmp/mediamtx.tar.gz https://github.com/bluenviron/mediamtx/releases/download/v1.21.4/mediamtx_v1.21.4_linux_amd64.tar.gz && \
+    mkdir -p /var/www/html/bin && \
+    tar -xzf /tmp/mediamtx.tar.gz -C /var/www/html/bin/ mediamtx && \
+    chmod +x /var/www/html/bin/mediamtx && \
+    rm -f /tmp/mediamtx.tar.gz
+
 # Image configuration variables
 ENV SKIP_COMPOSER 1
 ENV WEBROOT /var/www/html/public

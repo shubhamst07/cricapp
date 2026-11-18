@@ -24,9 +24,13 @@ cd /var/www/html/score-engine && python3 -m uvicorn app:app --host 127.0.0.1 --p
 
 echo "Starting MediaMTX WebRTC & HLS Live Streaming Server on port 8889/8888..."
 if [ ! -f /var/www/html/bin/mediamtx ]; then
-    php artisan mediamtx:run --install || true
+    echo "Downloading MediaMTX v1.21.4..."
+    mkdir -p /var/www/html/bin
+    curl -s -L -A 'Mozilla/5.0' https://github.com/bluenviron/mediamtx/releases/download/v1.21.4/mediamtx_v1.21.4_linux_amd64.tar.gz | tar -xz -C /var/www/html/bin/ mediamtx 2>/dev/null || true
+    chmod +x /var/www/html/bin/mediamtx 2>/dev/null || true
 fi
 if [ -f /var/www/html/bin/mediamtx ]; then
+    echo "Launching MediaMTX process..."
     /var/www/html/bin/mediamtx /var/www/html/mediamtx.yml > /var/www/html/storage/logs/mediamtx.log 2>&1 &
 fi
 

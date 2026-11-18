@@ -161,28 +161,38 @@ class MediaMtxCommand extends Command
         $version = 'v1.21.4';
         $url = "https://github.com/bluenviron/mediamtx/releases/download/{$version}/mediamtx_{$version}_{$target}.tar.gz";
 
-        $tempFile = tempnam(sys_get_temp_dir(), 'mediamtx');
+        $tempTar = sys_get_temp_dir() . '/mediamtx_' . time() . '.tar.gz';
         
-        $opts = [
-            'http' => [
-                'method' => 'GET',
-                'header' => "User-Agent: Mozilla/5.0 (LiveCricket MediaMTX Installer)\r\n"
-            ]
-        ];
-        $context = stream_context_create($opts);
-        $content = @file_get_contents($url, false, $context);
-        if (!$content) {
+        // Try curl first
+        exec("curl -s -L -A 'Mozilla/5.0' " . escapeshellarg($url) . " -o " . escapeshellarg($tempTar), $out, $code);
+        if ($code !== 0 || !file_exists($tempTar) || filesize($tempTar) < 10000) {
+            $opts = [
+                'http' => [
+                    'method' => 'GET',
+                    'header' => "User-Agent: Mozilla/5.0 (LiveCricket MediaMTX Installer)\r\n"
+                ]
+            ];
+            $context = stream_context_create($opts);
+            $content = @file_get_contents($url, false, $context);
+            if ($content) {
+                file_put_contents($tempTar, $content);
+            }
+        }
+
+        if (!file_exists($tempTar) || filesize($tempTar) < 10000) {
             return false;
         }
 
-        file_put_contents($tempFile, $content);
+        // Extract using tar
+        exec("tar -xzf " . escapeshellarg($tempTar) . " -C " . escapeshellarg($binDir) . " mediamtx", $out, $code);
+        @unlink($tempTar);
 
-        $phar = new \PharData($tempFile);
-        $phar->extractTo($binDir, ['mediamtx', 'LICENSE'], true);
-        @unlink($tempFile);
+        if (file_exists($binPath)) {
+            chmod($binPath, 0755);
+            $this->info("MediaMTX {$version} installed successfully at {$binPath}");
+            return true;
+        }
 
-        chmod($binPath, 0755);
-        $this->info("MediaMTX {$version} installed successfully at {$binPath}");
-        return true;
+        return false;
     }
 }
