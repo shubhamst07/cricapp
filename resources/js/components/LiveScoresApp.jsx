@@ -1422,13 +1422,13 @@ export default function LiveScoresApp({
                                                         <tr key={pIdx}>
                                                             <td className="px-4 py-2 font-bold text-white">
                                                                 {player.name}
-                                                                <span className="block text-[10px] text-slate-400 font-normal">{player.out}</span>
+                                                                <span className="block text-[10px] text-slate-400 font-normal">{player.out || player.dismissal || 'not out'}</span>
                                                             </td>
                                                             <td className="px-3 py-2 text-right font-black text-white font-mono">{player.runs ?? 0}</td>
                                                             <td className="px-3 py-2 text-right text-slate-400 font-mono">{player.balls ?? 0}</td>
                                                             <td className="px-3 py-2 text-right text-slate-400 font-mono">{player.fours ?? 0}</td>
                                                             <td className="px-3 py-2 text-right text-slate-400 font-mono">{player.sixes ?? 0}</td>
-                                                            <td className="px-3 py-2 text-right text-sky-400 font-semibold font-mono">{player.strikeRate ?? 0}</td>
+                                                            <td className="px-3 py-2 text-right text-sky-400 font-semibold font-mono">{player.strikeRate ?? player.sr ?? 0}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -1444,7 +1444,7 @@ export default function LiveScoresApp({
                         {/* Modal Footer */}
                         <div className="p-4 bg-slate-950/80 border-t border-white/10 flex justify-end">
                             <a
-                                href={`/live-scores/${modalMatch.id}?tab=${activeTab || 'live'}`}
+                                href={modalMatch.is_local ? (modalMatch.match_url || `/matches/${modalMatch.local_id || String(modalMatch.id).replace('local_', '')}`) : `/live-scores/${modalMatch.id}?tab=${activeTab || 'live'}`}
                                 className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-600/30 transition"
                             >
                                 Open Full Match Center & Scorecard →
@@ -2395,11 +2395,16 @@ function getScoresForTeams(match, team1, team2, isFinished) {
 
     const formatInnings = (inns) => {
         if (!inns || inns.length === 0) return null;
-        return inns.map((inn, idx) => {
+        const formatted = inns.map((inn, idx) => {
             const runs = inn.runs ?? inn.r ?? 0;
             let wickets = inn.wickets ?? inn.w ?? 0;
             const rawOvers = inn.overs ?? inn.o;
             let overs = formatCricketOvers(rawOvers);
+
+            // If team has not started batting yet in a live/unfinished match, don't show "0-0"
+            if (!isFinished && runs === 0 && wickets === 0 && (!overs || overs === '0.0' || overs === '0')) {
+                return null;
+            }
 
             if (isFinished && wickets === 0 && (inn.display_score || '').includes('/10')) {
                 wickets = 10;
@@ -2425,7 +2430,9 @@ function getScoresForTeams(match, team1, team2, isFinished) {
                 return `${scStr} (${overs})`;
             }
             return scStr;
-        }).join(' & ');
+        }).filter(Boolean);
+
+        return formatted.length > 0 ? formatted.join(' & ') : null;
     };
 
     return {
@@ -2923,7 +2930,7 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
                                 )}
                             </div>
                             <span className="font-extrabold text-slate-100 text-sm sm:text-base tracking-tight truncate max-w-[130px] sm:max-w-[170px]" title={team1Name}>
-                                {team1Code}
+                                {team1Name || team1Code}
                             </span>
                         </div>
                         <div className="text-right shrink-0">
@@ -2951,7 +2958,7 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
                                 )}
                             </div>
                             <span className="font-extrabold text-slate-100 text-sm sm:text-base tracking-tight truncate max-w-[130px] sm:max-w-[170px]" title={team2Name}>
-                                {team2Code}
+                                {team2Name || team2Code}
                             </span>
                         </div>
                         <div className="text-right shrink-0">
@@ -2966,7 +2973,7 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
 
                 {/* Match Status Text (Cricbuzz Style highlight below teams) */}
                 {match.status_text ? (
-                    <div className="pt-0.5">
+                    <div className="pt-0.5 space-y-1">
                         <p className={`text-xs sm:text-sm font-semibold truncate ${
                             isLive || ['opt to', 'elected to', 'chose to', 'target', 'need', 'require', 'trail', 'lead'].some(w => stLower.includes(w))
                                 ? 'text-rose-400'
@@ -2976,6 +2983,20 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
                         }`}>
                             {match.status_text}
                         </p>
+                        {isLive && Array.isArray(match.current_batsmen) && match.current_batsmen.length > 0 && (
+                            <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono truncate">
+                                {match.current_batsmen.map((b, idx) => (
+                                    <span key={idx} className={b.is_striker ? 'text-emerald-300 font-bold' : ''}>
+                                        {b.is_striker ? '*' : ''}{b.name} {b.runs ?? 0}{b.balls !== undefined ? `(${b.balls})` : ''}
+                                    </span>
+                                ))}
+                                {match.current_bowler && (
+                                    <span className="text-slate-500 truncate">
+                                        • {match.current_bowler.name} {match.current_bowler.wickets ?? 0}/{match.current_bowler.runs ?? 0}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
                 ) : isUpcoming && match.dateTimeGMT ? (
                     <div className="pt-0.5">
@@ -3000,21 +3021,35 @@ function MatchCard({ match, type, onSelectSeries, onQuickScorecard, onOpenPoints
                 </a>
 
                 <div className="flex items-center gap-3">
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (onOpenPointsTable) {
-                                onOpenPointsTable(seriesTitle, match);
-                            } else if (onSelectSeries) {
-                                onSelectSeries(seriesTitle);
-                            }
-                        }}
-                        className="text-slate-400 hover:text-white transition-colors"
-                        title={`View Points Table for ${seriesTitle}`}
-                    >
-                        POINTS TABLE
-                    </button>
+                    {match.is_local && match.stream_url ? (
+                        <a
+                            href={`/matches/${match.local_id || (match.id ? String(match.id).replace('local_', '') : '')}/broadcast`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
+                            title="Watch Live Video Stream"
+                        >
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                            <span>WATCH 📺</span>
+                        </a>
+                    ) : null}
+
+                    {isTournamentWithPointsTable(seriesTitle) && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onOpenPointsTable) {
+                                    onOpenPointsTable(seriesTitle, match);
+                                } else if (onSelectSeries) {
+                                    onSelectSeries(seriesTitle);
+                                }
+                            }}
+                            className="text-slate-400 hover:text-white transition-colors"
+                            title={`View Points Table for ${seriesTitle}`}
+                        >
+                            POINTS TABLE
+                        </button>
+                    )}
 
                     <button
                         type="button"

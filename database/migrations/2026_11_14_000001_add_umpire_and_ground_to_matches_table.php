@@ -11,16 +11,35 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('matches', function (Blueprint $table) {
-            $table->foreignId('ground_id')->nullable()->after('venue')->constrained('grounds')->nullOnDelete();
-            $table->foreignId('umpire_id')->nullable()->after('ground_id')->constrained('umpire_profiles')->nullOnDelete();
-            $table->string('umpire_name')->nullable()->after('umpire_id');
-            $table->decimal('umpire_rating', 3, 1)->nullable()->after('umpire_name');
-        });
+        if (!Schema::hasColumn('matches', 'ground_id')) {
+            Schema::table('matches', function (Blueprint $table) {
+                $table->foreignId('ground_id')->nullable()->after('venue')->constrained('grounds')->nullOnDelete();
+            });
+        }
 
-        Schema::table('grounds', function (Blueprint $table) {
-            $table->unsignedInteger('matches_hosted')->default(0)->after('status');
-        });
+        if (!Schema::hasColumn('matches', 'umpire_id')) {
+            Schema::table('matches', function (Blueprint $table) {
+                $table->foreignId('umpire_id')->nullable()->constrained('umpire_profiles')->nullOnDelete();
+            });
+        }
+
+        if (!Schema::hasColumn('matches', 'umpire_name')) {
+            Schema::table('matches', function (Blueprint $table) {
+                $table->string('umpire_name')->nullable();
+            });
+        }
+
+        if (!Schema::hasColumn('matches', 'umpire_rating')) {
+            Schema::table('matches', function (Blueprint $table) {
+                $table->decimal('umpire_rating', 3, 1)->nullable();
+            });
+        }
+
+        if (Schema::hasTable('grounds') && !Schema::hasColumn('grounds', 'matches_hosted')) {
+            Schema::table('grounds', function (Blueprint $table) {
+                $table->unsignedInteger('matches_hosted')->default(0);
+            });
+        }
     }
 
     /**

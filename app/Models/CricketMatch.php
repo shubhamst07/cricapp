@@ -217,9 +217,41 @@ class CricketMatch extends Model
      */
     public function getScoreForTeam(string $teamName): ?Score
     {
-        return $this->scores->first(function ($score) use ($teamName) {
-            return strtolower(trim($score->batting_team)) === strtolower(trim($teamName));
+        $cleanSearch = strtolower(trim($teamName));
+        if (empty($cleanSearch)) {
+            return null;
+        }
+
+        // 1. Direct exact match on batting_team
+        $score = $this->scores->first(function ($s) use ($cleanSearch) {
+            return strtolower(trim((string)$s->batting_team)) === $cleanSearch;
         });
+        if ($score) {
+            return $score;
+        }
+
+        // 2. Contains match or initials/code match (e.g. "Shimla Strikers" vs "SS" or "Shimla")
+        $score = $this->scores->first(function ($s) use ($cleanSearch) {
+            $bat = strtolower(trim((string)$s->batting_team));
+            if (empty($bat)) return false;
+            return str_contains($bat, $cleanSearch) || str_contains($cleanSearch, $bat);
+        });
+        if ($score) {
+            return $score;
+        }
+
+        // 3. Fallback by inning_number:
+        // Inning 1 corresponds to Team 1 (unless toss elected to bowl), Inning 2 to Team 2
+        $isTeam1 = ($cleanSearch === strtolower(trim((string)$this->team1_name)));
+        $isTeam2 = ($cleanSearch === strtolower(trim((string)$this->team2_name)));
+        if ($isTeam1) {
+            return $this->scores->firstWhere('inning_number', 1) ?? $this->scores->first();
+        }
+        if ($isTeam2) {
+            return $this->scores->firstWhere('inning_number', 2);
+        }
+
+        return null;
     }
 
     /**
@@ -228,7 +260,7 @@ class CricketMatch extends Model
     public function formatTeamScore(string $teamName): string
     {
         $score = $this->getScoreForTeam($teamName);
-        if (!$score) {
+        if (!$score || ($score->status === 'scheduled' && $score->runs == 0 && $score->wickets == 0)) {
             return 'Yet to bat';
         }
 
@@ -277,8 +309,16 @@ class CricketMatch extends Model
      */
     public function formatForLiveCenter(?int $currentUserId = null, ?string $currentUserPhone = null): array
     {
+        $activeInning = $this->live_state['inning'] ?? 1;
         $scores = [];
+
         foreach ($this->scores as $sc) {
+            // If Inning 2 is scheduled or has 0 runs, 0 wkts, 0 overs while match is still in Inning 1,
+            // don't export it as a started score so frontend does not show a premature 0-0!
+            if ($sc->inning_number == 2 && ($sc->status === 'scheduled' || ($activeInning == 1 && $sc->runs == 0 && $sc->wickets == 0 && (empty($sc->overs) || $sc->overs === '0.0' || $sc->overs === '0')))) {
+                continue;
+            }
+
             $normOvers = \App\Services\CricketDataService::normalizeCricketOvers($sc->overs);
             $scores[] = [
                 'r' => (int) $sc->runs,
@@ -308,12 +348,80 @@ class CricketMatch extends Model
         $rawResult = strtolower(trim((string)$this->match_result));
         $isDismissed = $rawStatus === 'abandoned' || str_contains($rawResult, 'dismiss') || str_contains($rawStatus, 'dismiss');
 
+        // Extract live current batsmen and bowler if match has live state
+        $currentBatsmen = [];
+        $currentBowler = null;
+        if ($this->live_state) {
+            $strikerId = $this->live_state['striker_id'] ?? null;
+            $nonStrikerId = $this->live_state['non_striker_id'] ?? null;
+            $bowlerId = $this->live_state['bowler_id'] ?? null;
+            if ($strikerId) {
+                $st = $this->players->firstWhere('id', $strikerId);
+                if ($st) {
+                    $currentBatsmen[] = [
+                        'name' => $st->player_name,
+                        'runs' => (int) $st->runs_scored,
+                        'balls' => (int) $st->balls_faced,
+                        'fours' => (int) $st->fours,
+                        'sixes' => (int) $st->sixes,
+                        'is_striker' => true,
+                    ];
+                }
+            }
+            if ($nonStrikerId) {
+                $nst = $this->players->firstWhere('id', $nonStrikerId);
+                if ($nst) {
+                    $currentBatsmen[] = [
+                        'name' => $nst->player_name,
+                        'runs' => (int) $nst->runs_scored,
+                        'balls' => (int) $nst->balls_faced,
+                        'fours' => (int) $nst->fours,
+                        'sixes' => (int) $nst->sixes,
+                        'is_striker' => false,
+                    ];
+                }
+            }
+            if ($bowlerId) {
+                $bw = $this->players->firstWhere('id', $bowlerId);
+                if ($bw) {
+                    $currentBowler = [
+                        'name' => $bw->player_name,
+                        'overs' => (string) $bw->overs_bowled,
+                        'maidens' => (int) $bw->maidens,
+                        'runs' => (int) $bw->runs_conceded,
+                        'wickets' => (int) $bw->wickets_taken,
+                    ];
+                }
+            }
+        }
+
         if ($rawStatus === 'completed' || $rawStatus === 'abandoned' || $isDismissed) {
             $status = 'completed';
             $statusText = $this->match_result ?: ($isDismissed ? 'Match Dismissed' : 'Match Finished');
         } elseif ($rawStatus === 'live') {
             $status = 'live';
-            $statusText = $this->match_result ?: 'Live in progress';
+            if (!empty($this->match_result)) {
+                $statusText = $this->match_result;
+            } elseif ($activeInning == 2) {
+                $inn1Score = $this->scores->firstWhere('inning_number', 1);
+                $inn2Score = $this->scores->firstWhere('inning_number', 2);
+                if ($inn1Score) {
+                    $target = (int)$inn1Score->runs + 1;
+                    $currentRuns = (int)($inn2Score ? $inn2Score->runs : 0);
+                    $runsNeeded = max(0, $target - $currentRuns);
+                    $totalBalls = (int)($this->total_overs ?: 20) * 6;
+                    $ovParts = explode('.', (string)($inn2Score ? $inn2Score->overs : '0.0'));
+                    $ballsBowled = ((int)($ovParts[0] ?? 0) * 6) + ((int)($ovParts[1] ?? 0));
+                    $ballsLeft = max(0, $totalBalls - $ballsBowled);
+                    $statusText = "{$this->team2_name} need {$runsNeeded} runs in {$ballsLeft} balls";
+                } else {
+                    $statusText = "2nd Innings in progress";
+                }
+            } elseif (!empty($this->toss_decision)) {
+                $statusText = $this->toss_decision;
+            } else {
+                $statusText = '1st Innings in progress';
+            }
         } else {
             $status = 'scheduled';
             $statusText = $this->match_result ?: 'Match Scheduled';
@@ -344,6 +452,18 @@ class CricketMatch extends Model
             }
         }
 
+        $calcCode = function($name) {
+            if (!$name) return 'TBA';
+            $words = preg_split('/[\s-]+/', trim($name));
+            if (count($words) >= 2) {
+                return strtoupper(substr($words[0], 0, 1) . substr($words[1], 0, 1));
+            }
+            return strtoupper(substr($name, 0, 3));
+        };
+
+        $t1Code = $calcCode($this->team1_name);
+        $t2Code = $calcCode($this->team2_name);
+
         return [
             'id' => 'local_' . $this->id,
             'local_id' => $this->id,
@@ -360,13 +480,15 @@ class CricketMatch extends Model
             'venue' => $this->venue ?: 'Ground Venue',
             'matchType' => $this->match_type ?: ($this->total_overs ? "{$this->total_overs} Overs" : 'Match'),
             'teams' => [$this->team1_name, $this->team2_name],
+            'team1' => ['name' => $this->team1_name, 'short_name' => $t1Code, 'code' => $t1Code],
+            'team2' => ['name' => $this->team2_name, 'short_name' => $t2Code, 'code' => $t2Code],
             'score' => $scores,
             'dateTimeGMT' => $this->match_date ? $this->match_date->format('Y-m-d') : '',
-            'matchStarted' => in_array($status, ['live', 'completed']),
-            'matchEnded' => $status === 'completed',
-            'match_url' => route('matches.show', $this->id),
+            'match_url' => '/matches/' . $this->id,
             'stream_url' => $this->stream_url,
             'players' => $allPlayerNames,
+            'current_batsmen' => $currentBatsmen,
+            'current_bowler' => $currentBowler,
         ];
     }
 

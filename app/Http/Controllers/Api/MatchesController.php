@@ -255,36 +255,76 @@ class MatchesController extends Controller
                 $localId = (int) str_replace('local_', '', $matchId);
                 $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players'])->find($localId);
                 if ($localMatch) {
+                    $liveState = $localMatch->live_state ?: [];
+                    $activeStrikerId = $liveState['striker_id'] ?? null;
+                    $activeNonStrikerId = $liveState['non_striker_id'] ?? null;
+                    $activeBowlerId = $liveState['bowler_id'] ?? null;
+
                     $batting = [];
                     $bowling = [];
                     foreach ($localMatch->players as $p) {
-                        if ($p->runs_scored > 0 || $p->balls_faced > 0 || in_array($p->dismissal, ['bowled', 'caught', 'lbw', 'run out', 'stumped', 'not out'])) {
+                        $isCurrentActiveBatter = ($activeStrikerId && $p->id == $activeStrikerId) || ($activeNonStrikerId && $p->id == $activeNonStrikerId);
+                        if ($p->runs_scored > 0 || $p->balls_faced > 0 || $isCurrentActiveBatter || in_array($p->dismissal, ['bowled', 'caught', 'lbw', 'run out', 'stumped', 'not out'])) {
+                            $sr = $p->balls_faced > 0 ? round(($p->runs_scored / $p->balls_faced) * 100, 1) : 0;
+                            $dismissalText = $p->dismissal ?: ($isCurrentActiveBatter ? 'not out*' : 'not out');
                             $batting[] = [
-                                'name' => $p->player_name,
+                                'name' => $p->player_name . ($p->id == $activeStrikerId ? ' *' : ''),
+                                'player_name' => $p->player_name,
                                 'runs' => (int) $p->runs_scored,
                                 'balls' => (int) $p->balls_faced,
                                 'fours' => (int) $p->fours,
                                 'sixes' => (int) $p->sixes,
-                                'dismissal' => $p->dismissal ?: 'not out',
+                                'strikeRate' => $sr,
+                                'sr' => $sr,
+                                'dismissal' => $dismissalText,
+                                'out' => $dismissalText,
+                                'is_striker' => ($p->id == $activeStrikerId),
                                 'team' => $p->team_number == 1 ? $localMatch->team1_name : $localMatch->team2_name,
                             ];
                         }
-                        if ($p->overs_bowled && $p->overs_bowled !== '0.0' && $p->overs_bowled !== '0') {
+                        $isCurrentBowler = ($activeBowlerId && $p->id == $activeBowlerId);
+                        if (($p->overs_bowled && $p->overs_bowled !== '0.0' && $p->overs_bowled !== '0') || $isCurrentBowler) {
+                            $ovParts = explode('.', (string)($p->overs_bowled ?: '0.0'));
+                            $balls = ((int)($ovParts[0] ?? 0) * 6) + ((int)($ovParts[1] ?? 0));
+                            $econ = $balls > 0 ? round(($p->runs_conceded / ($balls / 6)), 2) : 0;
                             $bowling[] = [
-                                'name' => $p->player_name,
-                                'overs' => (string) $p->overs_bowled,
+                                'name' => $p->player_name . ($isCurrentBowler ? ' *' : ''),
+                                'player_name' => $p->player_name,
+                                'overs' => (string) ($p->overs_bowled ?: '0.0'),
                                 'maidens' => (int) $p->maidens,
                                 'runs' => (int) $p->runs_conceded,
                                 'wickets' => (int) $p->wickets_taken,
+                                'economy' => $econ,
+                                'econ' => $econ,
                                 'team' => $p->team_number == 1 ? $localMatch->team1_name : $localMatch->team2_name,
                             ];
                         }
                     }
+
+                    // Format innings objects matching Cricbuzz format
+                    $inningsList = [];
+                    foreach ($localMatch->scores as $sc) {
+                        $teamName = $sc->batting_team;
+                        $teamBatters = array_values(array_filter($batting, fn($b) => $b['team'] === $teamName));
+                        $teamBowlers = array_values(array_filter($bowling, fn($bw) => $bw['team'] !== $teamName));
+                        $inningsList[] = [
+                            'team' => $teamName,
+                            'short_name' => $teamName,
+                            'score' => "{$sc->runs}/{$sc->wickets}",
+                            'overs' => (string)$sc->overs,
+                            'runs' => (int)$sc->runs,
+                            'wickets' => (int)$sc->wickets,
+                            'batsmen' => $teamBatters,
+                            'bowlers' => $teamBowlers,
+                        ];
+                    }
+
                     return response()->json([
                         'status' => 'success',
                         'data' => [
                             'batting' => $batting,
                             'bowling' => $bowling,
+                            'innings' => $inningsList,
                         ]
                     ]);
                 }

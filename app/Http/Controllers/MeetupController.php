@@ -63,15 +63,23 @@ class MeetupController extends Controller
             });
         }
 
-        $meetups = $query->paginate(12)->withQueryString();
+        try {
+            $meetups = $query->paginate(12)->withQueryString();
+        } catch (\Throwable $e) {
+            $meetups = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 12);
+        }
 
         // Popular / Active Cities for Quick Filter Pills
-        $popularCities = MatchMeetup::where('match_date', '>=', Carbon::today())
-            ->select('city')
-            ->distinct()
-            ->pluck('city')
-            ->filter()
-            ->values();
+        try {
+            $popularCities = MatchMeetup::where('match_date', '>=', Carbon::today())
+                ->select('city')
+                ->distinct()
+                ->pluck('city')
+                ->filter()
+                ->values();
+        } catch (\Throwable $e) {
+            $popularCities = collect([]);
+        }
 
         // Default cities if empty
         if ($popularCities->isEmpty()) {
@@ -79,12 +87,16 @@ class MeetupController extends Controller
         }
 
         // City Circles for local community
-        $circlesQuery = CricketCircle::withCount('members')
-            ->where('is_active', true);
-        if (!empty($city) && strtolower($city) !== 'all') {
-            $circlesQuery->where('city', 'LIKE', '%' . trim($city) . '%');
+        try {
+            $circlesQuery = CricketCircle::withCount('members')
+                ->where('is_active', true);
+            if (!empty($city) && strtolower($city) !== 'all') {
+                $circlesQuery->where('city', 'LIKE', '%' . trim($city) . '%');
+            }
+            $circles = $circlesQuery->take(6)->get();
+        } catch (\Throwable $e) {
+            $circles = collect([]);
         }
-        $circles = $circlesQuery->take(6)->get();
 
         return view('meetups.index', compact('meetups', 'popularCities', 'circles', 'city', 'when', 'ballType', 'search'));
     }
@@ -94,8 +106,17 @@ class MeetupController extends Controller
      */
     public function create(): View
     {
-        $grounds = Ground::where('is_active', true)->get();
-        $circles = CricketCircle::where('is_active', true)->get();
+        try {
+            $grounds = Ground::where('is_active', true)->get();
+        } catch (\Throwable $e) {
+            $grounds = collect([]);
+        }
+
+        try {
+            $circles = CricketCircle::where('is_active', true)->get();
+        } catch (\Throwable $e) {
+            $circles = collect([]);
+        }
 
         // Pre-fill upcoming Sunday date as convenient default
         $defaultDate = Carbon::now()->isSunday() ? Carbon::today() : Carbon::now()->next(Carbon::SUNDAY);
