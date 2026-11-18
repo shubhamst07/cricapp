@@ -171,13 +171,24 @@ class CricketStreamBroadcaster {
                     sdp: offerSdp
                 }));
 
+                // Add any offer ICE candidates provided by the viewer
+                const offerCandidates = Array.isArray(offerData?.candidates) ? offerData.candidates : [];
+                for (const c of offerCandidates) {
+                    try {
+                        await pc.addIceCandidate(new RTCIceCandidate(c));
+                    } catch (candErr) {}
+                }
+
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
 
-                await this._waitForIceGathering(pc);
+                const answerCandidates = await this._gatherIceCandidates(pc, 2500);
 
                 this.peerConnections.set(viewerId, pc);
-                answersBatch[viewerId] = pc.localDescription.sdp;
+                answersBatch[viewerId] = {
+                    sdp: pc.localDescription.sdp,
+                    candidates: answerCandidates
+                };
             }
 
             if (Object.keys(answersBatch).length > 0) {
@@ -497,6 +508,48 @@ class CricketStreamBroadcaster {
         return this.facingMode;
     }
 
+    _gatherIceCandidates(pc, maxWaitMs = 2500) {
+        return new Promise((resolve) => {
+            const candidates = [];
+            let resolved = false;
+
+            const done = () => {
+                if (resolved) return;
+                resolved = true;
+                resolve(candidates);
+            };
+
+            if (pc.iceGatheringState === 'complete') {
+                return done();
+            }
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    const cJson = event.candidate.toJSON ? event.candidate.toJSON() : {
+                        candidate: event.candidate.candidate,
+                        sdpMid: event.candidate.sdpMid,
+                        sdpMLineIndex: event.candidate.sdpMLineIndex
+                    };
+                    candidates.push(cJson);
+
+                    if (event.candidate.candidate && (event.candidate.candidate.includes('typ srflx') || event.candidate.candidate.includes('typ relay'))) {
+                        setTimeout(done, 500);
+                    }
+                } else {
+                    done();
+                }
+            };
+
+            pc.addEventListener('icegatheringstatechange', () => {
+                if (pc.iceGatheringState === 'complete') {
+                    done();
+                }
+            });
+
+            setTimeout(done, maxWaitMs);
+        });
+    }
+
     _waitForIceGathering(pc) {
         return new Promise((resolve) => {
             if (pc.iceGatheringState === 'complete') {
@@ -509,7 +562,7 @@ class CricketStreamBroadcaster {
                     }
                 };
                 pc.addEventListener('icegatheringstatechange', check);
-                setTimeout(resolve, 800); // 800ms safety timeout
+                setTimeout(resolve, 1500);
             }
         });
     }
@@ -583,7 +636,7 @@ class CricketStreamViewer {
             const offer = await this.pc.createOffer();
             await this.pc.setLocalDescription(offer);
 
-            await this._waitForIceGathering(this.pc);
+            const offerCandidates = await this._gatherIceCandidates(this.pc, 2500);
 
             // Post offer to Laravel signaling endpoint
             const res = await fetch(signalUrl, {
@@ -596,7 +649,8 @@ class CricketStreamViewer {
                 },
                 body: JSON.stringify({
                     viewer_id: viewerId,
-                    webrtc_offer: this.pc.localDescription.sdp
+                    webrtc_offer: this.pc.localDescription.sdp,
+                    candidates: offerCandidates
                 })
             });
 
@@ -605,6 +659,13 @@ class CricketStreamViewer {
             }
 
             this.waitingForAnswer = true;
+            if (this.answerTimeoutTimer) clearTimeout(this.answerTimeoutTimer);
+            this.answerTimeoutTimer = setTimeout(() => {
+                if (this.waitingForAnswer && !this.connected) {
+                    console.log('[Viewer P2P] Answer timeout reached, resetting to allow retry...');
+                    this.waitingForAnswer = false;
+                }
+            }, 10000);
             console.log('[Viewer P2P] Offer posted, awaiting broadcaster answer...');
         } catch (err) {
             console.warn('[Viewer P2P] startP2P error:', err);
@@ -617,21 +678,30 @@ class CricketStreamViewer {
     /**
      * Handle broadcaster SDP answer received via polling
      */
-    async handleAnswer(answerSdp) {
-        if (!this.pc || !answerSdp) return;
+    async handleAnswer(answerData) {
+        if (!this.pc || !answerData) return;
         if (this.pc.signalingState !== 'have-local-offer') {
             return; // Already processed or closed
         }
 
         try {
             console.log('[Viewer P2P] Broadcaster answer received, completing handshake!');
-            const sdpString = (typeof answerSdp === 'string') ? answerSdp : (answerSdp?.sdp || answerSdp?.answer);
+            const sdpString = (typeof answerData === 'string') ? answerData : (answerData?.sdp || answerData?.answer);
             if (!sdpString) return;
 
             await this.pc.setRemoteDescription(new RTCSessionDescription({
                 type: 'answer',
                 sdp: sdpString
             }));
+
+            // Add answer ICE candidates
+            const candidates = Array.isArray(answerData?.candidates) ? answerData.candidates : [];
+            for (const cand of candidates) {
+                try {
+                    await this.pc.addIceCandidate(new RTCIceCandidate(cand));
+                } catch (candErr) {}
+            }
+
             this.waitingForAnswer = false;
         } catch (err) {
             console.warn('[Viewer P2P] Error setting remote description:', err);
@@ -766,6 +836,48 @@ class CricketStreamViewer {
         this.onModeChange('idle');
     }
 
+    _gatherIceCandidates(pc, maxWaitMs = 2500) {
+        return new Promise((resolve) => {
+            const candidates = [];
+            let resolved = false;
+
+            const done = () => {
+                if (resolved) return;
+                resolved = true;
+                resolve(candidates);
+            };
+
+            if (pc.iceGatheringState === 'complete') {
+                return done();
+            }
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    const cJson = event.candidate.toJSON ? event.candidate.toJSON() : {
+                        candidate: event.candidate.candidate,
+                        sdpMid: event.candidate.sdpMid,
+                        sdpMLineIndex: event.candidate.sdpMLineIndex
+                    };
+                    candidates.push(cJson);
+
+                    if (event.candidate.candidate && (event.candidate.candidate.includes('typ srflx') || event.candidate.candidate.includes('typ relay'))) {
+                        setTimeout(done, 500);
+                    }
+                } else {
+                    done();
+                }
+            };
+
+            pc.addEventListener('icegatheringstatechange', () => {
+                if (pc.iceGatheringState === 'complete') {
+                    done();
+                }
+            });
+
+            setTimeout(done, maxWaitMs);
+        });
+    }
+
     _waitForIceGathering(pc) {
         return new Promise((resolve) => {
             if (pc.iceGatheringState === 'complete') {
@@ -778,7 +890,7 @@ class CricketStreamViewer {
                     }
                 };
                 pc.addEventListener('icegatheringstatechange', check);
-                setTimeout(resolve, 800); // 800ms safety timeout
+                setTimeout(resolve, 1500);
             }
         });
     }

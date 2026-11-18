@@ -523,46 +523,48 @@
         if (this.viewerConnected || this.isBroadcaster || this.isConnectingAudience) return;
         this.isConnectingAudience = true;
 
-        try {
-            const videoElem = document.getElementById('audienceVideoPlayer');
-            if (!videoElem) {
-                this.isConnectingAudience = false;
-                return;
-            }
+        this.$nextTick(async () => {
+            try {
+                const videoElem = document.getElementById('audienceVideoPlayer');
+                if (!videoElem) {
+                    this.isConnectingAudience = false;
+                    return;
+                }
 
-            if (!this.viewerEngine) {
-                this.viewerEngine = new CricketStreamViewer({
-                    onModeChange: (mode) => {
-                        this.streamEngineMode = mode;
-                        console.log('Stream playback mode:', mode);
+                if (!this.viewerEngine) {
+                    this.viewerEngine = new CricketStreamViewer({
+                        onModeChange: (mode) => {
+                            this.streamEngineMode = mode;
+                            console.log('Stream playback mode:', mode);
+                        },
+                        onError: (err) => {
+                            console.warn('Viewer engine notice:', err);
+                        }
+                    });
+                }
+
+                // 1. Direct WebRTC P2P (Connects phone broadcaster directly to audience device)
+                await this.viewerEngine.startP2P({
+                    signalUrl: this.signalUrl,
+                    viewerId: this.viewerId,
+                    videoElement: videoElem,
+                    csrfToken: this.csrfToken,
+                    onConnected: () => {
+                        this.viewerConnected = true;
+                        this.streamActive = true;
+                        this.hasLiveStream = true;
                     },
                     onError: (err) => {
-                        console.warn('Viewer engine notice:', err);
+                        console.warn('P2P connection attempt notice:', err);
                     }
                 });
+            } catch(e) {
+                console.warn('Audience stream connection notice:', e);
+                this.viewerConnected = false;
+            } finally {
+                this.isConnectingAudience = false;
             }
-
-            // 1. Direct WebRTC P2P (Connects phone broadcaster directly to audience device)
-            await this.viewerEngine.startP2P({
-                signalUrl: this.signalUrl,
-                viewerId: this.viewerId,
-                videoElement: videoElem,
-                csrfToken: this.csrfToken,
-                onConnected: () => {
-                    this.viewerConnected = true;
-                    this.streamActive = true;
-                    this.hasLiveStream = true;
-                },
-                onError: (err) => {
-                    console.warn('P2P connection attempt notice:', err);
-                }
-            });
-        } catch(e) {
-            console.warn('Audience stream connection notice:', e);
-            this.viewerConnected = false;
-        } finally {
-            this.isConnectingAudience = false;
-        }
+        });
     },
 
     unmuteAudienceAudio() {

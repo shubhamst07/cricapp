@@ -535,10 +535,16 @@ class MatchController extends Controller
         foreach (($state['webrtc_answers'] ?? []) as $vId => $ansData) {
             if (is_array($ansData)) {
                 if (($now - ($ansData['time'] ?? 0)) < 60) {
-                    $webrtcAnswers[$vId] = $ansData['sdp'] ?? '';
+                    $webrtcAnswers[$vId] = [
+                        'sdp' => $ansData['sdp'] ?? '',
+                        'candidates' => $ansData['candidates'] ?? [],
+                    ];
                 }
             } else {
-                $webrtcAnswers[$vId] = $ansData;
+                $webrtcAnswers[$vId] = [
+                    'sdp' => $ansData,
+                    'candidates' => [],
+                ];
             }
         }
 
@@ -815,6 +821,7 @@ class MatchController extends Controller
                 foreach ($request->input('webrtc_answers') as $vId => $ans) {
                     $existingAnswers[$vId] = [
                         'sdp' => is_array($ans) ? ($ans['sdp'] ?? ($ans['answer'] ?? '')) : $ans,
+                        'candidates' => is_array($ans) ? ($ans['candidates'] ?? []) : [],
                         'time' => $now,
                     ];
                     // Remove answered offer from webrtc_offers
@@ -834,6 +841,7 @@ class MatchController extends Controller
             $offers = $state['webrtc_offers'] ?? [];
             $offers[$vId] = [
                 'offer' => $request->input('webrtc_offer'),
+                'candidates' => $request->input('candidates') ?: [],
                 'time' => now()->timestamp,
             ];
             $now = now()->timestamp;
