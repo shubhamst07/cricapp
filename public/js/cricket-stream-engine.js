@@ -11,18 +11,9 @@ const CRICKET_ICE_SERVERS = [
             'stun:stun1.l.google.com:19302',
             'stun:stun2.l.google.com:19302',
             'stun:stun3.l.google.com:19302',
-            'stun:stun4.l.google.com:19302'
+            'stun:stun4.l.google.com:19302',
+            'stun:stun.cloudflare.com:3478'
         ]
-    },
-    {
-        urls: [
-            'turn:openrelay.metered.ca:80',
-            'turn:openrelay.metered.ca:443',
-            'turn:openrelay.metered.ca:443?transport=tcp',
-            'turns:openrelay.metered.ca:443?transport=tcp'
-        ],
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
     }
 ];
 
@@ -30,11 +21,15 @@ class CricketStreamBroadcaster {
     constructor(options = {}) {
         this.whipUrl = options.whipUrl || '';
         this.signalUrl = options.signalUrl || '';
+        this.chunkUrl = options.chunkUrl || '';
         this.csrfToken = options.csrfToken || '';
+        this.broadcasterToken = options.broadcasterToken || '';
         this.pc = null;
         this.localStream = null;
         this.whipSessionUrl = null;
         this.isBroadcasting = false;
+        this.chunkRecorder = null;
+        this.chunkIndex = 0;
         this.facingMode = options.facingMode || 'environment';
         this.micMuted = false;
         this.isVirtualCamera = false;
@@ -45,8 +40,10 @@ class CricketStreamBroadcaster {
         this.onError = options.onError || (() => {});
     }
 
-    async start(whipUrl, videoPreviewElement) {
+    async start(whipUrl, videoPreviewElement, options = {}) {
         if (whipUrl) this.whipUrl = whipUrl;
+        if (options.chunkUrl) this.chunkUrl = options.chunkUrl;
+        if (options.broadcasterToken) this.broadcasterToken = options.broadcasterToken;
 
         try {
             // 1. Acquire Camera & Microphone (or Virtual Cricket Ground Simulator if no hardware found)
@@ -61,7 +58,12 @@ class CricketStreamBroadcaster {
             this.isBroadcasting = true;
             this.onStateChange('connected');
 
-            // 2. Background attempt to publish to MediaMTX WHIP (if available and open)
+            // 2. Start Real-time Live Chunk Streaming to Server (Guarantees audience stream regardless of NAT)
+            if (this.chunkUrl) {
+                this.startChunkStreaming(this.chunkUrl, this.broadcasterToken);
+            }
+
+            // 3. Background attempt to publish to MediaMTX WHIP (if available and open)
             if (this.whipUrl) {
                 this._attemptWhipPublish(this.whipUrl).catch((err) => {
                     console.info('[Broadcaster Engine] MediaMTX WHIP notice (P2P mode active):', err.message);
@@ -73,6 +75,65 @@ class CricketStreamBroadcaster {
             this.stop();
             this.onError(err);
             throw err;
+        }
+    }
+
+    startChunkStreaming(chunkUrl, broadcasterToken) {
+        if (!this.localStream || !chunkUrl) return;
+        this.chunkUrl = chunkUrl;
+        this.broadcasterToken = broadcasterToken || '';
+        this.chunkIndex = 0;
+
+        let mimeType = 'video/webm;codecs=vp8,opus';
+        if (typeof MediaRecorder !== 'undefined') {
+            const types = [
+                'video/webm;codecs=vp8,opus',
+                'video/webm;codecs=vp8',
+                'video/webm',
+                'video/mp4;codecs=avc1,mp4a.40.2',
+                'video/mp4'
+            ];
+            for (const t of types) {
+                if (MediaRecorder.isTypeSupported(t)) {
+                    mimeType = t;
+                    break;
+                }
+            }
+        }
+
+        try {
+            this.chunkRecorder = new MediaRecorder(this.localStream, {
+                mimeType: mimeType,
+                videoBitsPerSecond: 800000,
+                audioBitsPerSecond: 64000
+            });
+
+            this.chunkRecorder.ondataavailable = async (e) => {
+                if (e.data && e.data.size > 0 && this.isBroadcasting) {
+                    this.chunkIndex++;
+                    const isFirst = (this.chunkIndex === 1);
+                    const postUrl = `${this.chunkUrl}?chunk_index=${this.chunkIndex}&is_first=${isFirst ? 1 : 0}&broadcaster_token=${encodeURIComponent(this.broadcasterToken)}`;
+                    try {
+                        await fetch(postUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/octet-stream',
+                                'Accept': 'application/json',
+                                'X-Broadcaster-Token': this.broadcasterToken
+                            },
+                            body: e.data
+                        });
+                        console.log(`[Broadcaster Engine] Uploaded live chunk #${this.chunkIndex} (${(e.data.size/1024).toFixed(1)} KB)`);
+                    } catch (chunkErr) {
+                        console.warn('[Broadcaster Engine] Chunk upload notice:', chunkErr.message);
+                    }
+                }
+            };
+
+            this.chunkRecorder.start(1500); // 1.5s slice interval
+            console.log('[Broadcaster Engine] Real-time Chunk Stream started with interval 1500ms.');
+        } catch (recErr) {
+            console.warn('[Broadcaster Engine] MediaRecorder chunking init notice:', recErr);
         }
     }
 
@@ -454,6 +515,11 @@ class CricketStreamBroadcaster {
     async stop() {
         this.isBroadcasting = false;
 
+        if (this.chunkRecorder && this.chunkRecorder.state !== 'inactive') {
+            try { this.chunkRecorder.stop(); } catch(e) {}
+            this.chunkRecorder = null;
+        }
+
         if (this.virtualAnimationId) {
             cancelAnimationFrame(this.virtualAnimationId);
             this.virtualAnimationId = null;
@@ -585,9 +651,9 @@ class CricketStreamViewer {
     }
 
     /**
-     * Start Direct WebRTC P2P connection to Broadcaster
+     * Start Direct WebRTC P2P connection to Broadcaster with Live Stream Relay Fallback
      */
-    async startP2P({ signalUrl, viewerId, videoElement, csrfToken, onConnected, onError }) {
+    async startP2P({ signalUrl, viewerId, videoElement, csrfToken, liveFeedUrl, onConnected, onError }) {
         if (this.isConnecting) return;
         this.isConnecting = true;
 
@@ -596,8 +662,21 @@ class CricketStreamViewer {
             this.signalUrl = signalUrl;
             this.viewerId = viewerId;
             this.videoElement = videoElement;
+            this.liveFeedUrl = liveFeedUrl || '';
 
             console.log(`[Viewer P2P] Initiating peer connection for ${viewerId}...`);
+
+            // If P2P takes longer than 3.5s (due to NAT / cellular CGNAT firewall),
+            // automatically start Live Stream Feed so the audience NEVER sees a black screen or hanging spinner!
+            if (this.liveFeedUrl) {
+                if (this.p2pFallbackTimer) clearTimeout(this.p2pFallbackTimer);
+                this.p2pFallbackTimer = setTimeout(() => {
+                    if (this.mode !== 'p2p') {
+                        console.info('[Viewer P2P] P2P handshake taking longer than 3.5s, activating Live Stream Relay fallback...');
+                        this.startLiveFeed(this.liveFeedUrl, onConnected);
+                    }
+                }, 3500);
+            }
 
             this.pc = new RTCPeerConnection({
                 iceServers: CRICKET_ICE_SERVERS,
@@ -610,6 +689,8 @@ class CricketStreamViewer {
             this.pc.ontrack = (event) => {
                 console.log('[Viewer P2P] Track received:', event.track.kind);
                 if (this.videoElement && event.streams && event.streams[0]) {
+                    if (this.p2pFallbackTimer) clearTimeout(this.p2pFallbackTimer);
+                    this.videoElement.src = '';
                     this.videoElement.srcObject = event.streams[0];
                     this.videoElement.muted = true; // Auto-play safely
                     this.videoElement.play().catch(e => console.log('Autoplay caught:', e));
@@ -623,12 +704,16 @@ class CricketStreamViewer {
                 const state = this.pc ? this.pc.connectionState : 'closed';
                 console.log('[Viewer P2P] Connection state:', state);
                 if (state === 'connected') {
+                    if (this.p2pFallbackTimer) clearTimeout(this.p2pFallbackTimer);
                     this.mode = 'p2p';
                     this.onModeChange('p2p');
                     if (onConnected) onConnected();
                 } else if (state === 'failed') {
-                    console.warn('[Viewer P2P] Connection failed, resetting for retry');
+                    console.warn('[Viewer P2P] Connection failed, activating Live Stream Feed fallback...');
                     this.waitingForAnswer = false;
+                    if (this.liveFeedUrl) {
+                        this.startLiveFeed(this.liveFeedUrl, onConnected);
+                    }
                     if (onError) onError(new Error('P2P connection failed'));
                 }
             };
@@ -661,18 +746,46 @@ class CricketStreamViewer {
             this.waitingForAnswer = true;
             if (this.answerTimeoutTimer) clearTimeout(this.answerTimeoutTimer);
             this.answerTimeoutTimer = setTimeout(() => {
-                if (this.waitingForAnswer && !this.connected) {
-                    console.log('[Viewer P2P] Answer timeout reached, resetting to allow retry...');
+                if (this.waitingForAnswer && this.mode !== 'p2p') {
+                    console.log('[Viewer P2P] Answer timeout reached, ensuring live feed is active...');
                     this.waitingForAnswer = false;
+                    if (this.liveFeedUrl) {
+                        this.startLiveFeed(this.liveFeedUrl, onConnected);
+                    }
                 }
-            }, 10000);
+            }, 8000);
             console.log('[Viewer P2P] Offer posted, awaiting broadcaster answer...');
         } catch (err) {
             console.warn('[Viewer P2P] startP2P error:', err);
+            if (this.liveFeedUrl) {
+                this.startLiveFeed(this.liveFeedUrl, onConnected);
+            }
             if (onError) onError(err);
         } finally {
             this.isConnecting = false;
         }
+    }
+
+    startLiveFeed(liveFeedUrl, onConnected) {
+        if (!this.videoElement || !liveFeedUrl) return;
+        if (this.mode === 'p2p') return; // Do not override active WebRTC P2P
+
+        console.log('[Viewer Engine] Starting Live Chunk Stream playback:', liveFeedUrl);
+        const sep = liveFeedUrl.includes('?') ? '&' : '?';
+        const feedUrl = `${liveFeedUrl}${sep}_t=${Date.now()}`;
+
+        this.videoElement.src = feedUrl;
+        this.videoElement.muted = true;
+        this.videoElement.playsInline = true;
+
+        this.videoElement.play().then(() => {
+            console.log('[Viewer Engine] Live Feed connected and playing!');
+            this.mode = 'live_feed';
+            this.onModeChange('live_feed');
+            if (onConnected) onConnected();
+        }).catch(err => {
+            console.warn('[Viewer Engine] Live feed play attempt notice:', err.message);
+        });
     }
 
     /**
@@ -828,6 +941,15 @@ class CricketStreamViewer {
                 this.videoElement.removeAttribute('src');
                 this.videoElement.load();
             }
+        }
+
+        if (this.p2pFallbackTimer) {
+            clearTimeout(this.p2pFallbackTimer);
+            this.p2pFallbackTimer = null;
+        }
+        if (this.answerTimeoutTimer) {
+            clearTimeout(this.answerTimeoutTimer);
+            this.answerTimeoutTimer = null;
         }
 
         this.waitingForAnswer = false;

@@ -123,6 +123,8 @@ Route::get('/matches/{match}/players/{player}/career', [MatchController::class, 
 Route::get('/matches/{match}/broadcast', [MatchController::class, 'broadcast'])->name('matches.broadcast');
 Route::get('/matches/{match}/broadcast/state', [MatchController::class, 'broadcastState'])->name('matches.broadcast.state');
 Route::post('/matches/{match}/stream-signal', [MatchController::class, 'updateStreamSignal'])->name('matches.stream-signal');
+Route::post('/matches/{match}/stream/chunk', [MatchController::class, 'uploadStreamChunk'])->name('matches.stream.chunk');
+Route::get('/matches/{match}/stream/live.webm', [MatchController::class, 'liveStreamFeed'])->name('matches.stream.live');
 Route::match(['get', 'post', 'options', 'delete'], '/matches/{match}/stream/whip', [MatchController::class, 'streamWhipProxy'])->name('matches.stream.whip');
 Route::match(['get', 'post', 'options', 'delete'], '/matches/{match}/stream/whep', [MatchController::class, 'streamWhepProxy'])->name('matches.stream.whep');
 Route::get('/matches/{match}/stream/hls/{file?}', [MatchController::class, 'streamHlsProxy'])->name('matches.stream.hls');

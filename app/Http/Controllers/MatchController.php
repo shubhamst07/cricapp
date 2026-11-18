@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\View\View;
 
@@ -471,12 +472,16 @@ class MatchController extends Controller
         $streamChannel = $mediaMtx['stream_channel'];
 
         $videos = $match->videos;
+        $broadcasterToken = 'bt_' . substr(md5($match->id . '_' . ($match->created_at ?? '') . '_live_secret'), 0, 16);
+        $liveStreamUrl = route('matches.stream.live', $match);
+        $chunkUrl = route('matches.stream.chunk', $match);
+
         return view('matches.broadcast', compact(
             'match', 'state', 'striker', 'nonStriker', 'bowler', 
             'score1', 'score2', 'currentScoreObj', 'activeInningNum', 
             'isOwner', 'agoraAppId', 'agoraChannel', 'agoraToken', 'isCameraLive', 'videos',
             'battingSquad', 'bowlingSquad', 'activeBattingTeam', 'activeBowlingTeam', 'availableNextBatsmen',
-            'whipUrl', 'whepUrl', 'hlsUrl', 'streamChannel'
+            'whipUrl', 'whepUrl', 'hlsUrl', 'streamChannel', 'broadcasterToken', 'liveStreamUrl', 'chunkUrl'
         ));
     }
 
@@ -505,11 +510,25 @@ class MatchController extends Controller
         $currentScore = $activeInningNum == 1 ? $score1 : $score2;
 
         $now = now()->timestamp;
-        $isCameraLive = !empty($state['is_camera_live']);
+        $cacheKey = "match_stream_signal_{$match->id}";
+        $signal = Cache::get($cacheKey);
+        if (!$signal) {
+            $signal = [
+                'is_camera_live' => !empty($state['is_camera_live']),
+                'camera_live_at' => (int) ($state['camera_live_at'] ?? 0),
+                'webrtc_offers' => $state['webrtc_offers'] ?? [],
+                'webrtc_answers' => $state['webrtc_answers'] ?? [],
+            ];
+            Cache::put($cacheKey, $signal, 300);
+        }
+
+        $lastHeartbeat = (int) ($signal['camera_live_at'] ?? 0);
+        $isCameraLive = !empty($signal['is_camera_live']);
         if ($isCameraLive) {
-            $lastHeartbeat = (int) ($state['camera_live_at'] ?? 0);
             if ($lastHeartbeat === 0 || ($now - $lastHeartbeat > 90)) {
                 $isCameraLive = false;
+                $signal['is_camera_live'] = false;
+                Cache::put($cacheKey, $signal, 300);
             }
         }
 
@@ -523,16 +542,15 @@ class MatchController extends Controller
             $agoraToken = $agoraTokenService->buildToken($agoraChannel, 0, $role);
         }
 
-        $now = now()->timestamp;
         $webrtcOffers = [];
-        foreach (($state['webrtc_offers'] ?? []) as $vId => $offData) {
+        foreach (($signal['webrtc_offers'] ?? []) as $vId => $offData) {
             if (is_array($offData) && ($now - ($offData['time'] ?? 0)) < 60) {
                 $webrtcOffers[$vId] = $offData;
             }
         }
 
         $webrtcAnswers = [];
-        foreach (($state['webrtc_answers'] ?? []) as $vId => $ansData) {
+        foreach (($signal['webrtc_answers'] ?? []) as $vId => $ansData) {
             if (is_array($ansData)) {
                 if (($now - ($ansData['time'] ?? 0)) < 60) {
                     $webrtcAnswers[$vId] = [
@@ -569,6 +587,8 @@ class MatchController extends Controller
             'is_direct_video' => (bool) $match->is_direct_video,
             'videos' => $match->videos,
             'is_camera_live' => $isCameraLive,
+            'live_stream_url' => route('matches.stream.live', $match),
+            'chunk_url' => route('matches.stream.chunk', $match),
             'agora_app_id' => $agoraAppId,
             'agora_channel' => $agoraChannel,
             'agora_token' => $agoraToken,
@@ -768,7 +788,7 @@ class MatchController extends Controller
     }
 
     /**
-     * Update Live Stream Signal (In-App Camera WebRTC / Agora sync).
+     * Update Live Stream Signal (In-App Camera WebRTC / Signaling sync).
      */
     public function updateStreamSignal(Request $request, CricketMatch $match): JsonResponse
     {
@@ -779,9 +799,28 @@ class MatchController extends Controller
             str_starts_with(auth()->user()->email, 'admin@') ||
             (auth()->user()->is_admin ?? false)
         );
-        $isOwner = auth()->check() && ($match->user_id === null || auth()->id() === $match->user_id || $isAdmin);
 
+        $expectedToken = 'bt_' . substr(md5($match->id . '_' . ($match->created_at ?? '') . '_live_secret'), 0, 16);
+        $providedToken = $request->header('X-Broadcaster-Token') ?: ($request->input('broadcaster_token') ?: $request->input('token'));
+        $hasValidToken = (!empty($providedToken) && $providedToken === $expectedToken);
+
+        $isOwner = ($match->user_id === null) ||
+                   ($hasValidToken) ||
+                   (auth()->check() && ($match->user_id === null || auth()->id() === $match->user_id || $isAdmin));
+
+        $cacheKey = "match_stream_signal_{$match->id}";
+        $signal = Cache::get($cacheKey, []);
         $state = $match->live_state ?: [];
+        $now = now()->timestamp;
+
+        if (empty($signal)) {
+            $signal = [
+                'is_camera_live' => !empty($state['is_camera_live']),
+                'camera_live_at' => (int) ($state['camera_live_at'] ?? 0),
+                'webrtc_offers' => $state['webrtc_offers'] ?? [],
+                'webrtc_answers' => $state['webrtc_answers'] ?? [],
+            ];
+        }
 
         // Broadcaster / Match Owner updates
         if ($request->has('is_camera_live') || $request->filled('stream_url') || $request->boolean('heartbeat') || $request->has('webrtc_answers')) {
@@ -789,73 +828,173 @@ class MatchController extends Controller
                 if (auth()->check()) {
                     $isOwner = true;
                 } else {
-                    return response()->json(['status' => 'error', 'message' => 'Unauthorized: Only match owner can start/stop live stream.'], 403);
+                    return response()->json(['status' => 'error', 'message' => 'Unauthorized: Invalid broadcaster session.'], 403);
                 }
             }
+
             if ($request->has('is_camera_live')) {
                 $isLive = (bool) $request->boolean('is_camera_live');
+                $signal['is_camera_live'] = $isLive;
                 $state['is_camera_live'] = $isLive;
                 if ($isLive) {
-                    $state['camera_live_at'] = now()->timestamp;
+                    $signal['camera_live_at'] = $now;
+                    $state['camera_live_at'] = $now;
                     if ($match->user_id === null && auth()->check()) {
                         $match->user_id = auth()->id();
-                        $match->save();
                     }
                 } else {
+                    $signal['webrtc_offers'] = [];
+                    $signal['webrtc_answers'] = [];
                     unset($state['camera_live_at']);
                     unset($state['webrtc_offers']);
                     unset($state['webrtc_answers']);
                 }
             }
+
             if ($request->boolean('heartbeat')) {
-                $state['camera_live_at'] = now()->timestamp;
+                $signal['camera_live_at'] = $now;
+                $signal['is_camera_live'] = true;
+                $state['camera_live_at'] = $now;
                 $state['is_camera_live'] = true;
             }
+
             if ($request->filled('stream_url')) {
                 $match->stream_url = $request->input('stream_url');
-                $match->save();
             }
+
             if ($request->has('webrtc_answers') && is_array($request->input('webrtc_answers'))) {
-                $existingAnswers = $state['webrtc_answers'] ?? [];
-                $now = now()->timestamp;
+                $existingAnswers = $signal['webrtc_answers'] ?? [];
                 foreach ($request->input('webrtc_answers') as $vId => $ans) {
                     $existingAnswers[$vId] = [
                         'sdp' => is_array($ans) ? ($ans['sdp'] ?? ($ans['answer'] ?? '')) : $ans,
                         'candidates' => is_array($ans) ? ($ans['candidates'] ?? []) : [],
                         'time' => $now,
                     ];
-                    // Remove answered offer from webrtc_offers
-                    if (isset($state['webrtc_offers'][$vId])) {
-                        unset($state['webrtc_offers'][$vId]);
-                    }
+                    unset($signal['webrtc_offers'][$vId]);
                 }
-                // Prune answers older than 60s
-                $existingAnswers = array_filter($existingAnswers, fn($a) => is_array($a) ? (($now - ($a['time'] ?? 0)) < 60) : true);
-                $state['webrtc_answers'] = $existingAnswers;
+                $existingAnswers = array_filter($existingAnswers, fn($a) => is_array($a) && (($now - ($a['time'] ?? 0)) < 60));
+                $signal['webrtc_answers'] = $existingAnswers;
             }
+
+            $match->live_state = $state;
+            $match->saveQuietly();
         }
 
         // Viewer offer for P2P connection
         if ($request->filled('viewer_id') && $request->filled('webrtc_offer')) {
             $vId = $request->input('viewer_id');
-            $offers = $state['webrtc_offers'] ?? [];
+            $offers = $signal['webrtc_offers'] ?? [];
             $offers[$vId] = [
                 'offer' => $request->input('webrtc_offer'),
                 'candidates' => $request->input('candidates') ?: [],
-                'time' => now()->timestamp,
+                'time' => $now,
             ];
-            $now = now()->timestamp;
-            $offers = array_filter($offers, fn($o) => ($now - ($o['time'] ?? 0)) < 60);
-            $state['webrtc_offers'] = $offers;
+            $offers = array_filter($offers, fn($o) => is_array($o) && ($now - ($o['time'] ?? 0)) < 60);
+            $signal['webrtc_offers'] = $offers;
         }
 
-        $match->update(['live_state' => $state]);
+        Cache::put($cacheKey, $signal, 300);
 
         return response()->json([
             'status' => 'success',
-            'is_camera_live' => (bool) ($state['is_camera_live'] ?? false),
+            'is_camera_live' => (bool) ($signal['is_camera_live'] ?? false),
             'stream_url' => $match->stream_url,
             'embed_stream_url' => $match->embed_stream_url,
+            'live_stream_url' => route('matches.stream.live', $match),
+            'chunk_url' => route('matches.stream.chunk', $match),
+        ]);
+    }
+
+    /**
+     * Ingest Real-Time Live Camera Stream Chunk from Broadcaster Phone.
+     */
+    public function uploadStreamChunk(Request $request, CricketMatch $match): JsonResponse
+    {
+        $rawChunk = $request->getContent();
+        if (empty($rawChunk) && $request->hasFile('chunk')) {
+            $rawChunk = file_get_contents($request->file('chunk')->getRealPath());
+        }
+
+        if (empty($rawChunk)) {
+            return response()->json(['status' => 'error', 'message' => 'Empty chunk payload.'], 400);
+        }
+
+        $dir = storage_path("app/public/live_streams/{$match->id}");
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+
+        $chunkIndex = (int) $request->input('chunk_index', 0);
+        $isFirst = $request->boolean('is_first') || $chunkIndex <= 1;
+        $liveFile = "{$dir}/live.webm";
+
+        if ($isFirst || !file_exists($liveFile)) {
+            file_put_contents($liveFile, $rawChunk);
+        } else {
+            file_put_contents($liveFile, $rawChunk, FILE_APPEND | LOCK_EX);
+        }
+
+        $now = now()->timestamp;
+        $cacheKey = "match_stream_signal_{$match->id}";
+        $signal = Cache::get($cacheKey, []);
+        $signal['is_camera_live'] = true;
+        $signal['camera_live_at'] = $now;
+        $signal['last_chunk_at'] = $now;
+        Cache::put($cacheKey, $signal, 300);
+
+        return response()->json([
+            'status' => 'success',
+            'chunk_index' => $chunkIndex,
+            'size' => filesize($liveFile),
+            'live_url' => route('matches.stream.live', $match),
+        ]);
+    }
+
+    /**
+     * Universal Audience Live Stream Feed (Direct HTTP Stream with Range Support).
+     */
+    public function liveStreamFeed(Request $request, CricketMatch $match)
+    {
+        $dir = storage_path("app/public/live_streams/{$match->id}");
+        $liveFile = "{$dir}/live.webm";
+
+        if (!file_exists($liveFile) || (time() - filemtime($liveFile) > 120)) {
+            return response('Live stream not currently broadcasting', 404)
+                ->header('Content-Type', 'text/plain')
+                ->header('Access-Control-Allow-Origin', '*');
+        }
+
+        $size = filesize($liveFile);
+        $mime = 'video/webm';
+
+        $range = $request->header('Range');
+        if ($range && preg_match('/bytes=(\d+)-(\d+)?/', $range, $matches)) {
+            $start = (int) $matches[1];
+            $end = isset($matches[2]) && $matches[2] !== '' ? (int) $matches[2] : ($size - 1);
+            if ($start > $size - 1) $start = 0;
+            if ($end >= $size) $end = $size - 1;
+            $length = $end - $start + 1;
+
+            $fp = fopen($liveFile, 'rb');
+            fseek($fp, $start);
+            $content = fread($fp, $length);
+            fclose($fp);
+
+            return response($content, 206, [
+                'Content-Type' => $mime,
+                'Content-Length' => $length,
+                'Content-Range' => "bytes {$start}-{$end}/{$size}",
+                'Accept-Ranges' => 'bytes',
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                'Access-Control-Allow-Origin' => '*',
+            ]);
+        }
+
+        return response()->file($liveFile, [
+            'Content-Type' => $mime,
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Access-Control-Allow-Origin' => '*',
         ]);
     }
 

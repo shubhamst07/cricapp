@@ -46,6 +46,9 @@
     whepUrl: '{{ $whepUrl }}',
     hlsUrl: '{{ $hlsUrl }}',
     signalUrl: '{{ route('matches.stream-signal', $match) }}',
+    liveStreamUrl: '{{ $liveStreamUrl ?? route('matches.stream.live', $match) }}',
+    chunkUrl: '{{ $chunkUrl ?? route('matches.stream.chunk', $match) }}',
+    broadcasterToken: '{{ $broadcasterToken ?? '' }}',
     csrfToken: '{{ csrf_token() }}',
     viewerId: (function() {
         let v = sessionStorage.getItem('cric_viewer_id');
@@ -415,6 +418,8 @@
             this.broadcasterEngine = new CricketStreamBroadcaster({
                 whipUrl: whipEndpoint,
                 signalUrl: this.signalUrl,
+                chunkUrl: this.chunkUrl,
+                broadcasterToken: this.broadcasterToken,
                 csrfToken: this.csrfToken,
                 facingMode: this.facingMode,
                 onStateChange: (state) => {
@@ -425,7 +430,10 @@
                 }
             });
 
-            const stream = await this.broadcasterEngine.start(whipEndpoint, videoElem);
+            const stream = await this.broadcasterEngine.start(whipEndpoint, videoElem, {
+                chunkUrl: this.chunkUrl,
+                broadcasterToken: this.broadcasterToken
+            });
             window.localMediaStream = stream;
 
             this.streamActive = true;
@@ -444,9 +452,10 @@
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken
+                    'X-CSRF-TOKEN': this.csrfToken,
+                    'X-Broadcaster-Token': this.broadcasterToken
                 },
-                body: JSON.stringify({ is_camera_live: true, heartbeat: true })
+                body: JSON.stringify({ is_camera_live: true, heartbeat: true, broadcaster_token: this.broadcasterToken })
             });
 
             if (this.broadcasterEngine && this.broadcasterEngine.isVirtualCamera) {
@@ -543,19 +552,27 @@
                     });
                 }
 
-                // 1. Direct WebRTC P2P (Connects phone broadcaster directly to audience device)
+                // 1. Direct WebRTC P2P (Connects phone broadcaster directly to audience device with automatic Live Stream Relay fallback)
                 await this.viewerEngine.startP2P({
                     signalUrl: this.signalUrl,
                     viewerId: this.viewerId,
                     videoElement: videoElem,
                     csrfToken: this.csrfToken,
+                    liveFeedUrl: this.liveStreamUrl,
                     onConnected: () => {
                         this.viewerConnected = true;
                         this.streamActive = true;
                         this.hasLiveStream = true;
                     },
                     onError: (err) => {
-                        console.warn('P2P connection attempt notice:', err);
+                        console.warn('P2P connection attempt notice, activating Live Stream Relay fallback:', err);
+                        if (this.liveStreamUrl) {
+                            this.viewerEngine.startLiveFeed(this.liveStreamUrl, () => {
+                                this.viewerConnected = true;
+                                this.streamActive = true;
+                                this.hasLiveStream = true;
+                            });
+                        }
                     }
                 });
             } catch(e) {
@@ -723,18 +740,27 @@
                             // Answer any new incoming viewer connection offers
                             this.broadcasterEngine.handleViewerOffers(data.webrtc_offers, this.signalUrl, this.csrfToken);
                         } else {
-                            // Send live heartbeat
+                            // Send live heartbeat with broadcaster token
                             fetch(this.signalUrl, {
                                 method: 'POST',
                                 credentials: 'include',
-                                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrfToken },
-                                body: JSON.stringify({ heartbeat: true })
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json',
+                                    'X-CSRF-TOKEN': this.csrfToken,
+                                    'X-Broadcaster-Token': this.broadcasterToken
+                                },
+                                body: JSON.stringify({ heartbeat: true, broadcaster_token: this.broadcasterToken })
                             }).catch(() => {});
                         }
                     }
 
                     // Sync Live Stream State for Audience
                     if (!this.isBroadcaster) {
+                        if (data.live_stream_url && data.live_stream_url !== this.liveStreamUrl) {
+                            this.liveStreamUrl = data.live_stream_url;
+                        }
+
                         if (data.is_camera_live) {
                             this.isCameraLive = true;
                             if (!this.viewerConnected && !this.isConnectingAudience) {
@@ -1129,39 +1155,35 @@
         <div id="broadcastArenaContainer" 
              class="relative w-full aspect-video sm:rounded-3xl overflow-hidden bg-black shadow-2xl border border-white/10 flex flex-col justify-between">
 
-            <!-- 1. BROADCASTER DEVICE LIVE CAMERA PREVIEW -->
-            @if($isOwner)
-                <video x-show="streamSource === 'camera' && streamActive" id="broadcastVideo" autoplay playsinline muted 
-                       class="absolute inset-0 w-full h-full object-cover z-0"></video>
-            @endif
+            <!-- 1. BROADCASTER DEVICE LIVE CAMERA PREVIEW (Active only on the broadcasting device) -->
+            <video x-show="streamSource === 'camera' && isBroadcasting && streamActive" id="broadcastVideo" autoplay playsinline muted 
+                   class="absolute inset-0 w-full h-full object-cover z-0"></video>
 
-            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (Direct WebRTC P2P + MediaMTX Fallback) -->
-            @if(!$isOwner)
-                <div x-show="isCameraLive" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
-                    <video id="audienceVideoPlayer" autoplay playsinline muted 
-                           class="absolute inset-0 w-full h-full object-cover"></video>
+            <!-- 2. AUDIENCE LIVE IN-APP CAMERA STREAM (Active on all viewing devices whenever camera is live) -->
+            <div x-show="isCameraLive && !isBroadcasting" class="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
+                <video id="audienceVideoPlayer" autoplay playsinline muted 
+                       class="absolute inset-0 w-full h-full object-cover"></video>
 
-                    <!-- Stream Connecting / Buffering Loader -->
-                    <div x-show="!viewerConnected" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-black">
-                        <div class="w-12 h-12 rounded-full border-4 border-red-500 border-t-transparent animate-spin mb-3"></div>
-                        <div class="text-sm font-black text-white flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-                            <span>Connecting to Live Video Feed...</span>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-1 max-w-xs">Connecting to ultra-low latency direct live stream...</p>
+                <!-- Stream Connecting / Buffering Loader -->
+                <div x-show="!viewerConnected" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-black">
+                    <div class="w-12 h-12 rounded-full border-4 border-red-500 border-t-transparent animate-spin mb-3"></div>
+                    <div class="text-sm font-black text-white flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                        <span>Connecting to Live Video Feed...</span>
                     </div>
-
-                    <!-- Unmute Audio Floating Pill -->
-                    <div x-cloak x-show="viewerConnected && audienceMuted" 
-                         class="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-                        <button type="button" @click="unmuteAudienceAudio()"
-                                class="px-4 py-2 rounded-full bg-red-600/95 hover:bg-red-500 text-white font-extrabold text-xs shadow-2xl flex items-center gap-2 border border-white/30 backdrop-blur-md transition transform active:scale-95 animate-bounce">
-                            <span>🔊</span>
-                            <span>Tap to Unmute Audio</span>
-                        </button>
-                    </div>
+                    <p class="text-xs text-slate-400 mt-1 max-w-xs">Connecting to ultra-low latency direct live stream...</p>
                 </div>
-            @endif
+
+                <!-- Unmute Audio Floating Pill -->
+                <div x-cloak x-show="viewerConnected && audienceMuted" 
+                     class="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+                    <button type="button" @click="unmuteAudienceAudio()"
+                            class="px-4 py-2 rounded-full bg-red-600/95 hover:bg-red-500 text-white font-extrabold text-xs shadow-2xl flex items-center gap-2 border border-white/30 backdrop-blur-md transition transform active:scale-95 animate-bounce">
+                        <span>🔊</span>
+                        <span>Tap to Unmute Audio</span>
+                    </button>
+                </div>
+            </div>
 
             <!-- 3. EMBEDDED YOUTUBE / FACEBOOK LIVE STREAM (Shown when YouTube/FB link is set) -->
             <template x-if="embedStreamUrl && (streamSource === 'youtube' || (!isCameraLive && !{{ $isOwner ? 'true' : 'false' }}))">
