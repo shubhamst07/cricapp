@@ -20,6 +20,7 @@ class MatchMeetup extends Model
         'city',
         'location_name',
         'location_address',
+        'google_maps_url',
         'match_date',
         'match_time',
         'ball_type',
@@ -137,6 +138,19 @@ class MatchMeetup extends Model
 
         $text = rawurlencode("Hi! I saw your match meetup '{$this->title}' in {$this->city} on {$this->formatted_date}. I want to play!");
         return "https://wa.me/{$phone}?text={$text}";
+    }
+
+    /**
+     * Get Google Maps navigation URL for players.
+     */
+    public function getGoogleMapsLinkAttribute(): string
+    {
+        if (!empty($this->google_maps_url)) {
+            return $this->google_maps_url;
+        }
+
+        $query = trim("{$this->location_name}, {$this->location_address}, {$this->city}");
+        return 'https://www.google.com/maps/search/?api=1&query=' . urlencode($query);
     }
 
     /**

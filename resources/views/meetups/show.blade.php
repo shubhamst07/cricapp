@@ -125,7 +125,7 @@
                         <h1 class="text-2xl sm:text-3xl font-black text-white leading-tight">
                             {{ $meetup->title }}
                         </h1>
-                        <div class="flex flex-wrap items-center gap-y-1 gap-x-3 text-slate-300 text-sm mt-2">
+                        <div class="flex flex-wrap items-center gap-y-2 gap-x-3 text-slate-300 text-sm mt-2">
                             <span class="font-bold text-amber-400">🏟️ {{ $meetup->location_name }}</span>
                             <span>•</span>
                             <span class="text-slate-400">📍 {{ $meetup->city }}</span>
@@ -133,6 +133,11 @@
                                 <span>•</span>
                                 <span class="text-slate-400 text-xs">{{ $meetup->location_address }}</span>
                             @endif
+                            <a href="{{ $meetup->google_maps_link }}" target="_blank"
+                               class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition shadow-xs">
+                                <span>🗺️ Google Maps Directions</span>
+                                <span class="text-[10px]">↗</span>
+                            </a>
                         </div>
                     </div>
 
@@ -352,9 +357,43 @@
         </div>
 
         <!-- ============================================================== -->
-        <!-- MATCH DETAILS & INSTRUCTIONS CARD -->
+        <!-- MATCH DETAILS, VENUE & ORGANIZER CARDS -->
         <!-- ============================================================== -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Ground Location & Google Maps Card -->
+            <div class="p-5 sm:p-7 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-black text-base text-white flex items-center gap-2">
+                        <span>📍 Ground & Location</span>
+                    </h3>
+                    @if($meetup->ground)
+                        <a href="{{ route('grounds.show', $meetup->ground) }}" class="text-[11px] text-amber-400 font-bold hover:underline">
+                            Ground Info →
+                        </a>
+                    @endif
+                </div>
+
+                <div class="bg-slate-900/60 p-4 rounded-2xl border border-white/5 space-y-1.5">
+                    <div class="font-black text-white text-base">
+                        🏟️ {{ $meetup->location_name }}
+                    </div>
+                    @if($meetup->location_address)
+                        <div class="text-xs text-slate-300">
+                            {{ $meetup->location_address }}
+                        </div>
+                    @endif
+                    <div class="text-xs text-slate-400 font-bold">
+                        📍 City: {{ $meetup->city }}
+                    </div>
+                </div>
+
+                <a href="{{ $meetup->google_maps_link }}" target="_blank"
+                   class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25">
+                    <span>🗺️ Open in Google Maps</span>
+                    <span class="text-xs">↗</span>
+                </a>
+            </div>
+
             <!-- Instructions & Rules -->
             <div class="p-5 sm:p-7 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-3">
                 <h3 class="font-black text-base text-white flex items-center gap-2">

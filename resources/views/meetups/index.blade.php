@@ -274,6 +274,11 @@
                                         <span class="text-amber-400 font-bold">{{ $meetup->city }}</span>
                                         <span>•</span>
                                         <span class="truncate text-slate-400">{{ $meetup->location_name }}</span>
+                                        <a href="{{ $meetup->google_maps_link }}" target="_blank"
+                                           class="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold ml-1 hover:underline inline-flex items-center gap-0.5"
+                                           title="Open in Google Maps">
+                                            <span>🗺️ Map ↗</span>
+                                        </a>
                                     </div>
                                 </div>
 

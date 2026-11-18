@@ -107,13 +107,19 @@ class MeetupController extends Controller
     public function create(): View
     {
         try {
-            $grounds = Ground::where('is_active', true)->get();
+            $grounds = Ground::where(function ($q) {
+                $q->whereNull('status')
+                  ->orWhere('status', '!=', 'inactive');
+            })->orderBy('name')->get();
+            if ($grounds->isEmpty()) {
+                $grounds = Ground::orderBy('name')->get();
+            }
         } catch (\Throwable $e) {
             $grounds = collect([]);
         }
 
         try {
-            $circles = CricketCircle::where('is_active', true)->get();
+            $circles = CricketCircle::where('is_active', true)->orderBy('name')->get();
         } catch (\Throwable $e) {
             $circles = collect([]);
         }
@@ -134,6 +140,7 @@ class MeetupController extends Controller
             'city' => 'required|string|max:100',
             'location_name' => 'required|string|max:150',
             'location_address' => 'nullable|string|max:255',
+            'google_maps_url' => 'nullable|url|max:500',
             'match_date' => 'required|date|after_or_equal:today',
             'match_time' => 'required|string|max:30',
             'ball_type' => 'required|string|in:tennis,leather,tape,box_turf',

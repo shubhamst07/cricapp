@@ -24,8 +24,20 @@
 
 @section('content')
 <div class="py-6 sm:py-10 bg-slate-950 min-h-screen text-slate-100 font-sans" x-data="{
+    groundsData: {{ Js::from($grounds->keyBy('id')) }},
     dateQuickSelect(val) {
         document.getElementById('match_date').value = val;
+    },
+    onGroundSelect(val) {
+        if (!val || !this.groundsData[val]) return;
+        const g = this.groundsData[val];
+        if (g.name) document.getElementById('location_name').value = g.name;
+        if (g.city) document.getElementById('city').value = g.city;
+        if (g.address) document.getElementById('location_address').value = g.address;
+        const mapsInput = document.getElementById('google_maps_url');
+        if (mapsInput && !mapsInput.value) {
+            mapsInput.value = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent((g.name || '') + ', ' + (g.address || '') + ', ' + (g.city || ''));
+        }
     }
 }">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -104,10 +116,12 @@
                     </div>
 
                     <div>
-                        <label for="ground_id" class="block text-xs font-black uppercase tracking-wider text-slate-300 mb-1.5">
-                            Select Registered Ground (Optional)
+                        <label for="ground_id" class="block text-xs font-black uppercase tracking-wider text-slate-300 mb-1.5 flex items-center justify-between">
+                            <span>Select Registered Ground (Optional)</span>
+                            <span class="text-[10px] text-amber-400 font-bold lowercase">auto-fills venue details</span>
                         </label>
                         <select id="ground_id" name="ground_id"
+                                @change="onGroundSelect($event.target.value)"
                                 class="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-white/10 text-white text-sm focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
                             <option value="">-- Custom Venue / Not Listed --</option>
                             @foreach($grounds as $ground)
@@ -117,6 +131,27 @@
                             @endforeach
                         </select>
                     </div>
+                </div>
+
+                <!-- Google Maps Location Link -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label for="google_maps_url" class="block text-xs font-black uppercase tracking-wider text-emerald-400">
+                            📍 Google Maps Location Link (Optional)
+                        </label>
+                        <span class="text-[11px] text-slate-400">Doosre players ko direct ground map pin milega</span>
+                    </div>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-emerald-400 font-bold text-sm">
+                            🗺️
+                        </span>
+                        <input type="url" id="google_maps_url" name="google_maps_url" value="{{ old('google_maps_url') }}"
+                               placeholder="e.g. https://maps.app.goo.gl/... or paste Google Map location link"
+                               class="w-full pl-11 pr-4 py-3 rounded-2xl bg-slate-900 border border-emerald-500/30 text-white placeholder-slate-500 text-sm focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition" />
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1">
+                        Google Maps me ground ka link copy karke yahan paste karein, taaki match dekhne wale ya squad join karne wale players 1-tap me ground pahunch sakein.
+                    </p>
                 </div>
             </div>
 
