@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->validateCsrfTokens(except: [
             'logout',
+            'matches/*/stream/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

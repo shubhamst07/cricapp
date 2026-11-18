@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use Illuminate\View\View;
 
 class MatchController extends Controller
@@ -556,34 +557,120 @@ class MatchController extends Controller
     }
 
     /**
+     * Proxy WebRTC WHIP publisher handshake to internal MediaMTX.
+     */
+    public function streamWhipProxy(Request $request, CricketMatch $match)
+    {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 204)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'OPTIONS, GET, POST, DELETE')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                ->header('Access-Control-Expose-Headers', 'Location, Link, Accept-Post')
+                ->header('Accept-Post', 'application/sdp');
+        }
+
+        $channel = 'live_match_' . $match->id;
+        $port = config('services.mediamtx.webrtc_port', 8889);
+        $target = "http://127.0.0.1:{$port}/{$channel}/whip";
+
+        if ($request->isMethod('DELETE')) {
+            try {
+                Http::timeout(5)->delete($target);
+            } catch (\Throwable $e) {}
+            return response('', 204);
+        }
+
+        $sdpOffer = $request->getContent();
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/sdp',
+            ])->withBody($sdpOffer, 'application/sdp')->timeout(10)->post($target);
+
+            return response($response->body(), $response->status())
+                ->header('Content-Type', 'application/sdp')
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Expose-Headers', 'Location')
+                ->header('Location', route('matches.stream.whip', $match));
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'MediaMTX streaming engine is currently offline: ' . $e->getMessage()], 503);
+        }
+    }
+
+    /**
+     * Proxy WebRTC WHEP viewer handshake to internal MediaMTX.
+     */
+    public function streamWhepProxy(Request $request, CricketMatch $match)
+    {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 204)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'OPTIONS, GET, POST, DELETE')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                ->header('Access-Control-Expose-Headers', 'Location, Link, Accept-Post')
+                ->header('Accept-Post', 'application/sdp');
+        }
+
+        $channel = 'live_match_' . $match->id;
+        $port = config('services.mediamtx.webrtc_port', 8889);
+        $target = "http://127.0.0.1:{$port}/{$channel}/whep";
+
+        if ($request->isMethod('DELETE')) {
+            try {
+                Http::timeout(5)->delete($target);
+            } catch (\Throwable $e) {}
+            return response('', 204);
+        }
+
+        $sdpOffer = $request->getContent();
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/sdp',
+            ])->withBody($sdpOffer, 'application/sdp')->timeout(10)->post($target);
+
+            return response($response->body(), $response->status())
+                ->header('Content-Type', 'application/sdp')
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Expose-Headers', 'Location')
+                ->header('Location', route('matches.stream.whep', $match));
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'MediaMTX streaming engine is currently offline: ' . $e->getMessage()], 503);
+        }
+    }
+
+    /**
+     * Proxy HLS stream (.m3u8 playlist and .mp4 video segments) to internal MediaMTX.
+     */
+    public function streamHlsProxy(Request $request, CricketMatch $match, $file = 'index.m3u8')
+    {
+        $channel = 'live_match_' . $match->id;
+        $port = config('services.mediamtx.hls_port', 8888);
+        $target = "http://127.0.0.1:{$port}/{$channel}/" . ($file ?: 'index.m3u8');
+
+        try {
+            $response = Http::timeout(10)->get($target);
+            $mime = str_ends_with($file, '.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp4';
+
+            return response($response->body(), $response->status())
+                ->header('Content-Type', $mime)
+                ->header('Access-Control-Allow-Origin', '*');
+        } catch (\Throwable $e) {
+            return response('Stream not found', 404);
+        }
+    }
+
+    /**
      * Build MediaMTX WHIP, WHEP, and HLS streaming endpoints for a match.
      */
     protected function getMediaMtxUrls(CricketMatch $match): array
     {
         $channel = 'live_match_' . $match->id;
-        $hostConfig = config('services.mediamtx.host');
-        $webrtcPort = config('services.mediamtx.webrtc_port', 8889);
-        $hlsPort = config('services.mediamtx.hls_port', 8888);
-
-        if (empty($hostConfig)) {
-            $host = request()->getHost();
-            $scheme = request()->getScheme();
-            $whipUrl = "{$scheme}://{$host}:{$webrtcPort}/{$channel}/whip";
-            $whepUrl = "{$scheme}://{$host}:{$webrtcPort}/{$channel}/whep";
-            $hlsUrl = "{$scheme}://{$host}:{$hlsPort}/{$channel}/index.m3u8";
-        } else {
-            $scheme = parse_url($hostConfig, PHP_URL_SCHEME) ?: request()->getScheme();
-            $hostOnly = parse_url($hostConfig, PHP_URL_HOST) ?: $hostConfig;
-            $whipUrl = "{$scheme}://{$hostOnly}:{$webrtcPort}/{$channel}/whip";
-            $whepUrl = "{$scheme}://{$hostOnly}:{$webrtcPort}/{$channel}/whep";
-            $hlsUrl = "{$scheme}://{$hostOnly}:{$hlsPort}/{$channel}/index.m3u8";
-        }
 
         return [
             'stream_channel' => $channel,
-            'whip_url' => $whipUrl,
-            'whep_url' => $whepUrl,
-            'hls_url' => $hlsUrl,
+            'whip_url' => route('matches.stream.whip', $match),
+            'whep_url' => route('matches.stream.whep', $match),
+            'hls_url' => route('matches.stream.hls', [$match, 'file' => 'index.m3u8']),
         ];
     }
 

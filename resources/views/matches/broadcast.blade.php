@@ -400,13 +400,7 @@
 
             const videoElem = document.getElementById('broadcastVideo');
             
-            // Build dynamic WHIP URL
-            let whipEndpoint = this.whipUrl;
-            if (!whipEndpoint || whipEndpoint.includes('localhost') || whipEndpoint.includes('127.0.0.1')) {
-                const currentHost = window.location.hostname;
-                const port = '{{ config('services.mediamtx.webrtc_port', 8889) }}';
-                whipEndpoint = `${window.location.protocol}//${currentHost}:${port}/${this.streamChannel}/whip`;
-            }
+            const whipEndpoint = this.whipUrl;
 
             this.broadcasterEngine = new CricketStreamBroadcaster({
                 whipUrl: whipEndpoint,
@@ -441,7 +435,11 @@
                 body: JSON.stringify({ is_camera_live: true, heartbeat: true })
             });
 
-            this.showToast('🔴 YOU ARE LIVE! (Self-Hosted MediaMTX Ultra-Low Latency)');
+            if (this.broadcasterEngine && this.broadcasterEngine.isVirtualCamera) {
+                this.showToast('🎮 LIVE! (Ground Simulator - Test on PC without webcam)');
+            } else {
+                this.showToast('🔴 YOU ARE LIVE! (HD Phone Camera Broadcast)');
+            }
         } catch(err) {
             console.error('Camera access / WHIP broadcast error:', err);
             this.showToast('⚠️ Could not start broadcast: ' + (err.message || 'Camera permission denied'));
@@ -518,20 +516,8 @@
                 return;
             }
 
-            const currentHost = window.location.hostname;
-            const webrtcPort = '{{ config('services.mediamtx.webrtc_port', 8889) }}';
-            const hlsPort = '{{ config('services.mediamtx.hls_port', 8888) }}';
-            const channel = data?.stream_channel || this.streamChannel;
-
-            let whepEndpoint = data?.whep_url || this.whepUrl;
-            if (!whepEndpoint || whepEndpoint.includes('localhost') || whepEndpoint.includes('127.0.0.1')) {
-                whepEndpoint = `${window.location.protocol}//${currentHost}:${webrtcPort}/${channel}/whep`;
-            }
-
-            let hlsEndpoint = data?.hls_url || this.hlsUrl;
-            if (!hlsEndpoint || hlsEndpoint.includes('localhost') || hlsEndpoint.includes('127.0.0.1')) {
-                hlsEndpoint = `${window.location.protocol}//${currentHost}:${hlsPort}/${channel}/index.m3u8`;
-            }
+            const whepEndpoint = data?.whep_url || this.whepUrl;
+            const hlsEndpoint = data?.hls_url || this.hlsUrl;
 
             if (!this.viewerEngine) {
                 this.viewerEngine = new CricketStreamViewer({
