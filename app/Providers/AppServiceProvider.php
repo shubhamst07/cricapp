@@ -29,24 +29,27 @@ class AppServiceProvider extends ServiceProvider
         }
 
         // 1. Database Health & Failover Check:
-        // Test primary database connection. If remote DB (e.g. TiDB Cloud) has exhausted quota, is restricted, or refused, auto-failover to SQLite!
+        // Test primary database connection with ultra-fast circuit breaker (cached for 300s).
+        // If remote DB (e.g. TiDB Cloud) has exhausted quota, is restricted, or refused, auto-failover to SQLite!
         $primaryConn = config('database.default', 'sqlite');
         if ($primaryConn !== 'sqlite') {
-            try {
-                DB::connection($primaryConn)->getPdo();
-            } catch (\Throwable $dbEx) {
-                $err = strtolower($dbEx->getMessage());
-                if (
-                    str_contains($err, 'quota') ||
-                    str_contains($err, 'restricted') ||
-                    str_contains($err, 'exhausted') ||
-                    str_contains($err, 'connection refused') ||
-                    str_contains($err, 'access denied') ||
-                    str_contains($err, '1105') ||
-                    str_contains($err, '2002') ||
-                    str_contains($err, 'hy000')
-                ) {
-                    Log::warning("Primary DB [{$primaryConn}] failed ({$dbEx->getMessage()}). Auto-switching to SQLite fallback.");
+            $flagPath = storage_path('framework/mysql_down.flag');
+            $isKnownDown = file_exists($flagPath) && (time() - filemtime($flagPath) < 300);
+
+            if ($isKnownDown) {
+                config(['database.default' => 'sqlite']);
+                DB::purge($primaryConn);
+                DB::setDefaultConnection('sqlite');
+            } else {
+                try {
+                    DB::connection($primaryConn)->getPdo();
+                    if (file_exists($flagPath)) {
+                        @unlink($flagPath);
+                    }
+                } catch (\Throwable $dbEx) {
+                    @touch($flagPath);
+                    $err = strtolower($dbEx->getMessage());
+                    Log::warning("Primary DB [{$primaryConn}] failed ({$dbEx->getMessage()}). Circuit breaker tripped: Auto-switching to SQLite fallback.");
                     config(['database.default' => 'sqlite']);
                     DB::purge($primaryConn);
                     DB::setDefaultConnection('sqlite');

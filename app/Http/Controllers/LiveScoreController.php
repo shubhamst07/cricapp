@@ -57,7 +57,18 @@ class LiveScoreController extends Controller
                 $tab = $live->count() > 0 ? 'live' : ($completed->count() > 0 ? 'recent' : 'upcoming');
             }
 
-            return view('live.index', compact('live', 'scheduled', 'completed', 'matches', 'cacheTtl', 'tab', 'section'));
+            // Top published articles for homepage showcase
+            $articles = collect([]);
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('articles')) {
+                    $articles = \App\Models\Article::published()
+                        ->latest('published_at')
+                        ->take(3)
+                        ->get();
+                }
+            } catch (\Throwable $e) {}
+
+            return view('live.index', compact('live', 'scheduled', 'completed', 'matches', 'cacheTtl', 'tab', 'section', 'articles'));
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('LiveScoreController@index error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return view('live.index', [
@@ -66,8 +77,9 @@ class LiveScoreController extends Controller
                 'completed' => collect([]),
                 'matches' => [],
                 'cacheTtl' => ['current_matches' => 30],
-                'tab' => 'live',
+                'tab' => 'upcoming',
                 'section' => $section,
+                'articles' => collect([]),
             ]);
         }
     }

@@ -73,7 +73,9 @@ Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');
 Route::get('/privacy-policy', [PageController::class, 'privacy'])->name('privacy');
+Route::get('/privacy', [PageController::class, 'privacy']);
 Route::get('/terms-of-service', [PageController::class, 'terms'])->name('terms');
+Route::get('/terms', [PageController::class, 'terms']);
 Route::get('/inquiries', [PageController::class, 'inquiries'])->name('inquiries.index')->middleware('auth');
 Route::get('/test-email', [PageController::class, 'testEmail'])->name('test.email');
 

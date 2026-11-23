@@ -32,6 +32,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 str_contains($msg, 'restricted') ||
                 str_contains($msg, 'exhausted') ||
                 str_contains($msg, '1105') ||
+                str_contains($msg, '2002') ||
+                str_contains($msg, 'connection refused') ||
+                str_contains($msg, 'timed out') ||
                 str_contains($msg, 'no such table') ||
                 str_contains($msg, 'base table or view not found')
             ) {

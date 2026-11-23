@@ -24,7 +24,8 @@ import {
     Sparkles,
     TrendingUp,
     Award,
-    Star
+    Star,
+    Newspaper
 } from 'lucide-react';
 
 export default function LiveScoresApp({
@@ -875,7 +876,7 @@ export default function LiveScoresApp({
 
             {/* Active Section Banner Header (Seamless with Top Navbar) */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-1">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     {currentSection === 'local' ? (
                         <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-sm shadow-lg shadow-emerald-500/5">
                             <Shield className="w-4 h-4 text-emerald-400" />
@@ -893,6 +894,18 @@ export default function LiveScoresApp({
                             </span>
                         </div>
                     )}
+
+                    {/* Direct Home Page News & Articles Action Pill */}
+                    <a
+                        href="/articles"
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/10 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 font-black text-xs sm:text-sm shadow-md transition transform hover:scale-105"
+                    >
+                        <Newspaper className="w-3.5 h-3.5 text-amber-400" />
+                        <span>📰 Cricket News & Articles</span>
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-amber-500 text-slate-950 font-black uppercase tracking-wider">
+                            New
+                        </span>
+                    </a>
                 </div>
                 <div className="text-xs text-slate-400 font-medium hidden sm:block">
                     {currentSection === 'local'
@@ -901,9 +914,9 @@ export default function LiveScoresApp({
                 </div>
             </div>
 
-            {/* Sub-Navigation Tabs (Live, Upcoming, Recent Results, Archives) */}
+            {/* Sub-Navigation Tabs (Live, Upcoming, Recent Results, Archives, Articles) */}
             <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl shadow-xl border border-white/10 p-1.5">
-                <nav className="grid grid-cols-2 md:grid-cols-4 gap-2" aria-label="Tabs">
+                <nav className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2" aria-label="Tabs">
                     {/* Live Matches */}
                     <button
                         type="button"
@@ -990,6 +1003,21 @@ export default function LiveScoresApp({
                             {sectionArchives.length}
                         </span>
                     </button>
+
+                    {/* Cricket News & Articles Tab */}
+                    <a
+                        href="/articles"
+                        className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition border border-dashed border-amber-500/30 group"
+                    >
+                        <Newspaper className="w-4 h-4 text-amber-400 group-hover:scale-110 transition" />
+                        <div className="flex flex-col items-center">
+                            <span>News & Articles</span>
+                            <span className="text-[10px] font-medium text-amber-300/80 -mt-0.5">(20+ Stories)</span>
+                        </div>
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
+                            HOT
+                        </span>
+                    </a>
                 </nav>
             </div>
 

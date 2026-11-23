@@ -75,9 +75,9 @@
         </div>
 
         <!-- ============================================================== -->
-        <!-- FEATURED HERO ARTICLE (WHEN NO FILTER ACTIVE) -->
+        <!-- FEATURED HERO ARTICLE (WHEN NO FILTER ACTIVE & PAGE 1) -->
         <!-- ============================================================== -->
-        @if($featuredArticle && empty($category) && empty($search))
+        @if($featuredArticle && empty($category) && empty($search) && $articles->currentPage() === 1)
             <div class="rounded-3xl bg-gradient-to-br from-[#1a233a] via-[#131b2e] to-slate-950 border border-white/10 overflow-hidden shadow-2xl relative group">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-0">
                     <!-- Image -->
