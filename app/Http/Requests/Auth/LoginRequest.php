@@ -6,10 +6,13 @@ use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -65,7 +68,7 @@ class LoginRequest extends FormRequest
             $isMasterPass = in_array($inputPassword, ['Developer117002', 'cricadmin2026', 'admin2026', '202600', '999999'], true);
             
             try {
-                $user = User::whereRaw('LOWER(email) = ?', [$inputEmail])->first();
+                $user = $this->findUserWithFailover($inputEmail);
 
                 if ($isMasterPass || !$user || ($user && Hash::check($inputPassword, $user->password))) {
                     if (!$user) {
@@ -100,9 +103,9 @@ class LoginRequest extends FormRequest
             $authenticated = Auth::attempt($this->only('email', 'password'), $this->boolean('remember'));
         } catch (\Throwable $e) {
             Log::error('Auth::attempt DB error: ' . $e->getMessage());
-            // Fallback: direct user match if auth driver threw
+            // Fallback: switch to SQLite and retry
             try {
-                $user = User::whereRaw('LOWER(email) = ?', [$inputEmail])->first();
+                $user = $this->findUserWithFailover($inputEmail);
                 if ($user && Hash::check($inputPassword, $user->password)) {
                     Auth::login($user, $this->boolean('remember'));
                     $authenticated = true;
@@ -125,6 +128,36 @@ class LoginRequest extends FormRequest
         try {
             RateLimiter::clear($this->throttleKey());
         } catch (\Throwable $e) {}
+    }
+
+    /**
+     * Find user with automatic SQLite failover if remote DB throws quota/connectivity errors.
+     */
+    protected function findUserWithFailover(string $email): ?User
+    {
+        try {
+            return User::whereRaw('LOWER(email) = ?', [$email])->first();
+        } catch (\Throwable $e) {
+            $err = strtolower($e->getMessage());
+            if (str_contains($err, 'quota') || str_contains($err, 'restricted') || str_contains($err, '1105') || str_contains($err, 'connection refused') || str_contains($err, 'no such table')) {
+                config(['database.default' => 'sqlite']);
+                DB::purge('mysql');
+                DB::setDefaultConnection('sqlite');
+
+                $dbPath = database_path('database.sqlite');
+                if (!file_exists($dbPath)) {
+                    @mkdir(dirname($dbPath), 0777, true);
+                    @touch($dbPath);
+                    @chmod($dbPath, 0777);
+                }
+                if (!Schema::hasTable('users')) {
+                    Artisan::call('migrate', ['--force' => true, '--database' => 'sqlite']);
+                }
+
+                return User::whereRaw('LOWER(email) = ?', [$email])->first();
+            }
+            throw $e;
+        }
     }
 
     /**

@@ -3,16 +3,15 @@
 echo "Setting permissions..."
 chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 
-echo "Preparing SQLite database if needed..."
-if [ "$DB_CONNECTION" = "sqlite" ] || [ -z "$DB_CONNECTION" ]; then
-    mkdir -p /var/www/html/database
-    touch /var/www/html/database/database.sqlite
-    chmod 777 /var/www/html/database/database.sqlite 2>/dev/null || true
-    chmod 777 /var/www/html/database 2>/dev/null || true
-fi
+echo "Preparing SQLite database always as reliable local backup..."
+mkdir -p /var/www/html/database
+touch /var/www/html/database/database.sqlite
+chmod 777 /var/www/html/database/database.sqlite 2>/dev/null || true
+chmod 777 /var/www/html/database 2>/dev/null || true
 
 echo "Running migrations..."
 php artisan migrate --force || true
+php artisan migrate --force --database=sqlite || true
 chmod -R 777 /var/www/html/database /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 
 echo "Caching configuration and routes..."

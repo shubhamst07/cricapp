@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -48,7 +49,7 @@ class PasswordResetLinkController extends Controller
         ];
 
         try {
-            $user = User::whereRaw('LOWER(email) = ?', [$inputEmail])->first();
+            $user = $this->findUserWithFailover($inputEmail);
 
             // Auto-provision admin account if not already created
             if (!$user && (in_array($inputEmail, $adminEmails, true) || str_contains($inputEmail, 'shubhamthakurst'))) {
@@ -219,7 +220,7 @@ class PasswordResetLinkController extends Controller
 
         // OTP Verified successfully! Update password
         try {
-            $user = User::whereRaw('LOWER(email) = ?', [$inputEmail])->first();
+            $user = $this->findUserWithFailover($inputEmail);
             if (!$user) {
                 $user = User::create([
                     'name' => 'Shubham Thakur',
@@ -251,6 +252,28 @@ class PasswordResetLinkController extends Controller
     }
 
     /**
+     * Find user with automatic SQLite failover if remote DB throws quota/connectivity errors.
+     */
+    protected function findUserWithFailover(string $email): ?User
+    {
+        try {
+            return User::whereRaw('LOWER(email) = ?', [$email])->first();
+        } catch (\Throwable $e) {
+            $err = strtolower($e->getMessage());
+            if (str_contains($err, 'quota') || str_contains($err, 'restricted') || str_contains($err, '1105') || str_contains($err, 'connection refused') || str_contains($err, 'no such table')) {
+                config(['database.default' => 'sqlite']);
+                DB::purge('mysql');
+                DB::setDefaultConnection('sqlite');
+
+                $this->ensureDatabaseReady();
+
+                return User::whereRaw('LOWER(email) = ?', [$email])->first();
+            }
+            throw $e;
+        }
+    }
+
+    /**
      * Ensure database tables exist before operations.
      */
     protected function ensureDatabaseReady(): void
@@ -266,7 +289,7 @@ class PasswordResetLinkController extends Controller
             }
 
             if (!Schema::hasTable('users') || !Schema::hasTable('sessions')) {
-                Artisan::call('migrate', ['--force' => true]);
+                Artisan::call('migrate', ['--force' => true, '--database' => config('database.default', 'sqlite')]);
             }
         } catch (\Throwable $e) {
             Log::warning('Auto-migration in PasswordResetLinkController: ' . $e->getMessage());
