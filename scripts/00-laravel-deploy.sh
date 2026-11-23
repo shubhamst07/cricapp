@@ -13,6 +13,7 @@ fi
 
 echo "Running migrations..."
 php artisan migrate --force || true
+chmod -R 777 /var/www/html/database /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 
 echo "Caching configuration and routes..."
 php artisan config:cache || true
