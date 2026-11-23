@@ -34,7 +34,120 @@
             </div>
         @endif
 
-        <form action="{{ route('articles.store') }}" method="POST" enctype="multipart/form-data" 
+        <!-- 🤖 AI Humanize Cricket Article Bot Widget -->
+        <div class="p-6 sm:p-7 rounded-3xl bg-gradient-to-br from-indigo-950/70 via-slate-900/90 to-amber-950/30 border border-amber-500/30 shadow-2xl relative overflow-hidden backdrop-blur-md space-y-5">
+            <!-- Decorative Glow Accents -->
+            <div class="absolute -top-12 -right-12 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-12 -left-12 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="relative flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center text-slate-950 text-xl font-black shadow-lg shadow-amber-500/25">
+                        🤖
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-black text-base sm:text-lg text-white tracking-tight">
+                                AI Humanize Cricket Article Bot
+                            </h3>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Ready
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Apna topic/idea likho ya neeche kisi chip par tap karo — ye bot 100% human tone, headings, quotes aur tags ke sath article draft karke form auto-fill kar dega.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Topic Prompt Input -->
+            <div class="space-y-2">
+                <label for="ai_topic_input" class="block text-xs font-black uppercase tracking-wider text-amber-300">
+                    Enter Topic / Idea (English or Hinglish)
+                </label>
+                <div class="relative">
+                    <input type="text" id="ai_topic_input" 
+                           placeholder="e.g. Why Rohit Sharma's Powerplay Aggression Changed Indian Cricket Forever..." 
+                           class="w-full pl-4 pr-10 py-3 rounded-2xl bg-slate-900/90 border border-amber-500/30 text-white placeholder-slate-500 text-sm focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 transition shadow-inner" />
+                    <button type="button" onclick="document.getElementById('ai_topic_input').value=''" 
+                            title="Clear input"
+                            class="absolute right-3 top-3 text-slate-400 hover:text-white transition text-xs font-bold">
+                        ✕
+                    </button>
+                </div>
+
+                <!-- Trending / Suggested Chips -->
+                <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span class="text-[11px] font-bold text-slate-400 mr-1">Trending Topics:</span>
+                    <button type="button" onclick="setAiPrompt(this.innerText)" 
+                            class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/10 hover:border-amber-400/40 text-[11px] text-slate-300 hover:text-amber-200 transition">
+                        👑 Virat Kohli Run Chase Psychology
+                    </button>
+                    <button type="button" onclick="setAiPrompt(this.innerText)" 
+                            class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/10 hover:border-amber-400/40 text-[11px] text-slate-300 hover:text-amber-200 transition">
+                        🚀 Rohit Sharma Powerplay Intent
+                    </button>
+                    <button type="button" onclick="setAiPrompt(this.innerText)" 
+                            class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/10 hover:border-amber-400/40 text-[11px] text-slate-300 hover:text-amber-200 transition">
+                        🎯 Jasprit Bumrah Yorker Science
+                    </button>
+                    <button type="button" onclick="setAiPrompt(this.innerText)" 
+                            class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/10 hover:border-amber-400/40 text-[11px] text-slate-300 hover:text-amber-200 transition">
+                        🏏 Gully & Himachal Grassroots Cricket
+                    </button>
+                    <button type="button" onclick="setAiPrompt(this.innerText)" 
+                            class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/10 hover:border-amber-400/40 text-[11px] text-slate-300 hover:text-amber-200 transition">
+                        🏆 IPL 2026 Mega Auction Gamechangers
+                    </button>
+                    <button type="button" onclick="setAiPrompt(this.innerText)" 
+                            class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/10 hover:border-amber-400/40 text-[11px] text-slate-300 hover:text-amber-200 transition">
+                        📖 Master the Cover Drive: 3 Rules
+                    </button>
+                </div>
+            </div>
+
+            <!-- Controls: Tone, Category, and Generate Trigger -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div>
+                    <label for="ai_tone" class="block text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
+                        Narrative Tone
+                    </label>
+                    <select id="ai_tone" 
+                            class="w-full px-3 py-2.5 rounded-xl bg-slate-900/90 border border-white/10 text-white text-xs focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
+                        <option value="narrative" selected>📖 Storytelling & Passionate Narrative</option>
+                        <option value="tactical">🎯 Tactical & Technical Breakdown</option>
+                        <option value="editorial">🔥 Expert Opinion & Editorial</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="ai_category_pref" class="block text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
+                        Category Mode
+                    </label>
+                    <select id="ai_category_pref" 
+                            class="w-full px-3 py-2.5 rounded-xl bg-slate-900/90 border border-white/10 text-white text-xs focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
+                        <option value="auto" selected>⚡ Auto-Detect from Topic</option>
+                        @foreach($categories as $cat)
+                            <option value="{{ $cat }}">{{ $cat }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="flex items-end">
+                    <button type="button" id="btn_generate_article" onclick="generateHumanArticle()" 
+                            class="w-full px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 transition transform active:scale-95 flex items-center justify-center gap-2">
+                        <span id="btn_generate_icon">✨</span>
+                        <span id="btn_generate_text">Generate Human Article</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Status & Feedback -->
+            <div id="ai_status_box" class="hidden p-3.5 rounded-2xl text-xs font-bold transition"></div>
+        </div>
+
+        <form id="article_create_form" action="{{ route('articles.store') }}" method="POST" enctype="multipart/form-data" 
               class="p-6 sm:p-8 rounded-3xl bg-[#131b2e] border border-white/10 shadow-2xl space-y-5">
             @csrf
 
@@ -167,4 +280,126 @@
 
     </div>
 </div>
+
+<script>
+    function setAiPrompt(topic) {
+        // Strip out leading emoji if present
+        const clean = topic.replace(/^[\p{Emoji}\s]+/u, '').trim();
+        const input = document.getElementById('ai_topic_input');
+        input.value = clean;
+        input.focus();
+    }
+
+    async function generateHumanArticle() {
+        const input = document.getElementById('ai_topic_input');
+        const toneSelect = document.getElementById('ai_tone');
+        const catSelect = document.getElementById('ai_category_pref');
+        const btn = document.getElementById('btn_generate_article');
+        const btnText = document.getElementById('btn_generate_text');
+        const btnIcon = document.getElementById('btn_generate_icon');
+        const statusBox = document.getElementById('ai_status_box');
+
+        const promptVal = input.value.trim();
+        if (!promptVal) {
+            input.focus();
+            input.classList.add('ring-2', 'ring-rose-500');
+            setTimeout(() => input.classList.remove('ring-2', 'ring-rose-500'), 1500);
+            return;
+        }
+
+        const toneVal = toneSelect ? toneSelect.value : 'narrative';
+        const catVal = catSelect ? catSelect.value : 'auto';
+
+        // Set Loading state
+        btn.disabled = true;
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+        btnIcon.innerHTML = `<svg class="animate-spin h-3.5 w-3.5 text-slate-950" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>`;
+        btnText.innerText = 'Crafting Human Story...';
+
+        statusBox.className = 'p-3.5 rounded-2xl text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center gap-2 transition';
+        statusBox.innerHTML = `
+            <span class="animate-spin">⏳</span>
+            <span>AI Bot is analyzing tactical angles, player quotes, and human narrative structure... Please wait a moment.</span>
+        `;
+        statusBox.classList.remove('hidden');
+
+        try {
+            const response = await fetch('{{ route("articles.generate") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    prompt: promptVal,
+                    tone: toneVal,
+                    category: catVal !== 'auto' ? catVal : null
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success && result.data) {
+                const art = result.data;
+
+                // Populate Form Fields
+                const titleField = document.getElementById('title');
+                if (titleField && art.title) titleField.value = art.title;
+
+                const categoryField = document.getElementById('category');
+                if (categoryField && art.category) {
+                    for (let opt of categoryField.options) {
+                        if (opt.value.toLowerCase() === art.category.toLowerCase()) {
+                            opt.selected = true;
+                            break;
+                        }
+                    }
+                }
+
+                const imgUrlField = document.querySelector('input[name="featured_image_url"]');
+                if (imgUrlField && art.featured_image_url) imgUrlField.value = art.featured_image_url;
+
+                const excerptField = document.getElementById('excerpt');
+                if (excerptField && art.excerpt) excerptField.value = art.excerpt;
+
+                const contentField = document.getElementById('content');
+                if (contentField && art.content) contentField.value = art.content;
+
+                const tagsField = document.getElementById('tags');
+                if (tagsField && art.tags) tagsField.value = art.tags;
+
+                // Flash success box
+                statusBox.className = 'p-4 rounded-2xl text-xs font-bold bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 space-y-1 transition';
+                statusBox.innerHTML = `
+                    <div class="flex items-center gap-2 text-sm font-black text-emerald-200">
+                        <span>✨</span> <span>Humanized Article Successfully Generated!</span>
+                    </div>
+                    <p class="text-xs text-slate-300">
+                        Title, Cover Image, Excerpt, Content (with tactical headings ###) aur Tags neeche form me populate ho chuke hain. Aap publish karne se pehle review ya edit kar sakte hain.
+                    </p>
+                `;
+
+                // Scroll to form smoothly
+                const formElem = document.getElementById('article_create_form');
+                if (formElem) {
+                    formElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } else {
+                throw new Error(result.message || 'Server error while generating article');
+            }
+        } catch (err) {
+            statusBox.className = 'p-3.5 rounded-2xl text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 flex items-center gap-2 transition';
+            statusBox.innerHTML = `
+                <span>⚠️</span>
+                <span>Error generating article: ${err.message || 'Something went wrong'}. Please retry.</span>
+            `;
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            btnIcon.innerHTML = '✨';
+            btnText.innerText = 'Generate Human Article';
+        }
+    }
+</script>
 @endsection

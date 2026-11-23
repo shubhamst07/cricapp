@@ -224,6 +224,7 @@ Route::get('/ads.txt', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/admin/articles/create', [ArticleController::class, 'create'])->name('articles.create');
     Route::post('/admin/articles', [ArticleController::class, 'store'])->name('articles.store');
+    Route::post('/admin/articles/generate', [ArticleController::class, 'generateArticle'])->name('articles.generate');
     Route::get('/admin/articles/{article}/edit', [ArticleController::class, 'edit'])->name('articles.edit');
     Route::put('/admin/articles/{article}', [ArticleController::class, 'update'])->name('articles.update');
     Route::delete('/admin/articles/{article}', [ArticleController::class, 'destroy'])->name('articles.destroy');

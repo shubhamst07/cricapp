@@ -17,7 +17,6 @@ class AiCommentaryService
 
         foreach ($deliveries as $item) {
             $rawCheck = trim(strip_tags((string)($item['desc'] ?? $item['rawText'] ?? '')));
-            // Drop invalid template tokens (e.g. $2b, $B0$) or corrupted short items
             if ($rawCheck === '$2b' || str_contains($rawCheck, '$2b') || str_starts_with($rawCheck, '$')) {
                 continue;
             }
@@ -88,10 +87,6 @@ class AiCommentaryService
         $isWide = (stripos($rawDesc, 'wide') !== false || $badgeStr === 'WD');
         $isNoBall = (stripos($rawDesc, 'no ball') !== false || $badgeStr === 'NB');
 
-        // Synthesize dynamic AI commentary across 3 distinct languages:
-        // 1. English
-        // 2. Pure Devanagari Hindi
-        // 3. Hinglish (Roman Hindi)
         $aiEng = '';
         $aiHin = '';
         $aiHinglish = '';
@@ -103,284 +98,158 @@ class AiCommentaryService
                 "OUT! Silence in the batting camp! {$bowler} produces a piece of magic to dismiss {$batsman}."
             ];
             $wicketHi = [
-                "आउट! बड़ा झटका! {$bowler} की सटीक गेंद पर {$batsman} चकमा खा गए और पवेलियन लौटना पड़ा।",
-                "विकेट! मैच का बड़ा मोड़! {$bowler} ने अपनी चतुराई से {$batsman} को फंसाया और विकेट चटकाया।",
-                "आउट! शानदार गेंदबाज़ी! {$bowler} ने टीम को दिलाई बड़ी सफलता, {$batsman} आउट होकर वापस जाते हुए।"
+                "आउट! बड़ा झटका! {$bowler} की सटीक गेंद पर {$batsman} पवेलियन लौटते हुए।",
+                "विकेट! मैच में जबरदस्त मोड़! {$bowler} ने अपनी चतुराई भरी गेंद से {$batsman} का कीमती विकेट चटकाया।",
+                "क्लीन बोल्ड/आउट! गेंदबाज का शानदार प्रदर्शन! {$bowler} ने {$batsman} को चलता किया।"
             ];
             $wicketHn = [
-                "OUT! Bada jhatka! {$bowler} ne shandar bowling karte hue {$batsman} ko pavilion bhej diya hai.",
-                "WICKET! High drama in the middle! {$batsman} ne bada shot khelne ki koshish ki aur wicket gawa baithe.",
-                "OUT! Zabardast bowling! {$bowler} ne match me team ki mazboot wapsi karwayi, {$batsman} out!"
+                "OUT! Zabardast breakthrough! {$bowler} ne {$batsman} ko out karke match me apni team ki wapsi karwayi.",
+                "WICKET! Bada wicket gir gaya! {$batsman} lamba shot lagane ke chakkar me {$bowler} ka shikar bane.",
+                "OUT! Pavilion ki taraf lautate hue {$batsman}! {$bowler} ki behtareen bowling ne kamaal kar diya."
             ];
-            $choiceIdx = abs(crc32($over . $title)) % count($wicketEn);
-            $aiEng = $wicketEn[$choiceIdx];
-            $aiHin = $wicketHi[$choiceIdx];
-            $aiHinglish = $wicketHn[$choiceIdx];
+            $idx = abs(crc32($over . $title . 'w')) % count($wicketEn);
+            $aiEng = $wicketEn[$idx];
+            $aiHin = $wicketHi[$idx];
+            $aiHinglish = $wicketHn[$idx];
         } elseif ($isSix) {
             $sixEn = [
-                "SIX! That is colossal! {$batsman} picks the length early off {$bowler} and launches it high, handsome and into the crowd!",
-                "BOOM! Massive maximum! Clean connection from {$batsman}, towering over the boundary ropes!",
-                "SIX! Into the stands! {$batsman} dances down the track against {$bowler} and smokes it all the way!"
+                "SIX! Into the stands! {$batsman} dances down the track against {$bowler} and smokes it all the way!",
+                "MAXIMUM! That is pure timing and elegance! {$batsman} hammers {$bowler} high over the ropes!",
+                "SIX! Out of the ground! A colossal hit by {$batsman} off {$bowler} that clears deep midwicket with ease!"
             ];
             $sixHi = [
-                "छक्का! गगनचुंबी शॉट! {$batsman} ने गेंद की लेंथ को जल्दी भांपा और सीधे दर्शकों के बीच भेज दिया!",
-                "शानदार छक्का! गेंद बल्ले के बीचों-बीच लगी और सीमा रेखा के काफी दूर जाकर गिरी!",
-                "विशाल छक्का! {$batsman} ने आगे बढ़कर {$bowler} की गेंद को स्टैंड्स में पहुंचाया!"
+                "विशाल छक्का! {$batsman} ने आगे बढ़कर {$bowler} की गेंद को स्टैंड्स में पहुंचाया!",
+                "सिक्स! क्या गजब का टाइमिंग और पावर! गेंद सीधे दर्शकों के बीच जाकर गिरी!",
+                "शानदार छक्का! {$batsman} का बल्ले पर आया जबर्दस्त प्रहार, गेंद हवा में लहराते हुए बाउंड्री पार!"
             ];
             $sixHn = [
-                "SIX! Gagan-chumbi chhakka! {$batsman} ne {$bowler} ki delivery par poora bharosa dikhaya aur stadium me bhej diya!",
-                "BOOM! Shandar 6 run! Clean connection from {$batsman}, boundary ke bohot door!",
-                "SIX! Zabardast hitting! {$batsman} ne aage badhkar seedha stand me mara!"
+                "SIX! Zabardast hitting! {$batsman} ne aage badhkar seedha stand me mara!",
+                "MAXIMUM! Kya kamaal ki timing! {$batsman} ne {$bowler} ki ball ko boundary ke bahar bhej diya!",
+                "CHHAKKA! Ball hawa me aur seedha 6 runs ke liye boundary paar!"
             ];
-            $choiceIdx = abs(crc32($over . $title)) % count($sixEn);
-            $aiEng = $sixEn[$choiceIdx];
-            $aiHin = $sixHi[$choiceIdx];
-            $aiHinglish = $sixHn[$choiceIdx];
+            $idx = abs(crc32($over . $title . '6')) % count($sixEn);
+            $aiEng = $sixEn[$idx];
+            $aiHin = $sixHi[$idx];
+            $aiHinglish = $sixHn[$idx];
         } elseif ($isFour) {
             $fourEn = [
-                "FOUR! Cracking stroke! {$batsman} finds the gap with supreme timing off {$bowler}, racing away to the ropes.",
-                "FOUR! Pure elegance! Leans into the drive and threads the infield with exquisite perfection.",
-                "FOUR! Beautiful boundary! {$batsman} uses the pace of {$bowler} smartly to beat the chasing fielder."
+                "FOUR! Exquisite placement! {$batsman} pierces the gap between point and cover with surgical precision against {$bowler}.",
+                "BOUNDARY! Crisp timing off the willow! {$batsman} drives {$bowler} handsomely to the fence.",
+                "FOUR! Beautifully executed shot! {$batsman} waits for the length and carves {$bowler} away for four valuable runs."
             ];
             $fourHi = [
-                "चौका! बेहतरीन टाइमिंग! {$batsman} ने खूबसूरती से गैप ढूंढा और गेंद बिजली की तेजी से सीमा रेखा पार।",
-                "लाजवाब चौका! कलाइयों का शानदार इस्तेमाल, फील्डर के पास रोकने का कोई मौका नहीं।",
-                "खूबसूरत बाउंड्री! {$batsman} ने गेंद की गति का पूरा फायदा उठाया और 4 रन बटोरे।"
+                "शानदार चौका! {$batsman} ने गैप तलाशते हुए गेंद को बाउंड्री लाइन के पार भेजा।",
+                "चौका! बल्ले का खूबसूरत कनेक्शन, फील्डर के पास कोई मौका नहीं और गेंद सीमा रेखा के पार।",
+                "चार रन! नजाकत भरा शॉट, टाइमिंग इतनी सटीक कि गेंद गोली की रफ्तार से बाउंड्री तक पहुंची।"
             ];
             $fourHn = [
-                "FOUR! Khubsoorat chauka! {$batsman} ne gap dhundha aur gend bijli ki tezi se boundary paar!",
-                "FOUR! Lajawab shot! Timing ke sath shot lagaya aur fielder ke paas koi mauka nahi tha.",
-                "FOUR! Shandar boundary! {$batsman} ne bowler ki speed ka faayda uthaya aur 4 run bhatore."
+                "FOUR! Khubsurat shot! {$batsman} ne gap nikal kar ball ko boundary line ke paar bheja.",
+                "CHAUKA! Behtareen timing! Fielders sirf ball ko boundary ki taraf jate hue dekhte reh gaye.",
+                "FOUR! Khoobsurat cover drive/cut shot, 4 runs milenge batting team ko!"
             ];
-            $choiceIdx = abs(crc32($over . $title)) % count($fourEn);
-            $aiEng = $fourEn[$choiceIdx];
-            $aiHin = $fourHi[$choiceIdx];
-            $aiHinglish = $fourHn[$choiceIdx];
-        } elseif ($isWide) {
-            $aiEng = "Wide called. {$bowler} strays down leg, and the umpire stretches both arms out for an extra.";
-            $aiHin = "वाइड गेंद! {$bowler} लेग स्टंप से काफी बाहर भटके, अंपायर ने दोनों हाथ फैलाकर अतिरिक्त रन का इशारा किया।";
-            $aiHinglish = "Wide ball! {$bowler} ne line miss ki, umpire ka ishara extra run ke liye.";
-        } elseif ($isNoBall) {
-            $aiEng = "No ball signaled! Overstepping from {$bowler}. Extra run conceded and a Free Hit coming up!";
-            $aiHin = "नो बॉल! गेंदबाज का पैर क्रीज से बाहर, बल्लेबाजी टीम को मिला 1 अतिरिक्त रन और फ्री हिट का मौका!";
-            $aiHinglish = "No ball! {$bowler} ka pair line se bahar, batting team ko mila extra run aur Free Hit!";
-        } elseif ($badge === '1') {
-            $singleEn = [
-                "{$bowler} bowls on a good length, {$batsman} taps it gently towards mid-on for a brisk single.",
-                "Pitched up on middle and leg, pushed through the vacant gap to rotate the strike comfortably.",
-                "Controlled nudge into the off-side gap, scampering through for an easy single."
-            ];
-            $singleHi = [
-                "{$bowler} की अच्छी लेंथ गेंद, {$batsman} ने हल्के हाथों से मिड-ऑन की तरफ धकेलकर 1 रन लिया।",
-                "पैड पर आती हुई गेंद, फ्लिक करके खाली जगह में खेला और आसानी से स्ट्राइक रोटेट की।",
-                "कंट्रोल्ड शॉट, ऑफ साइड में खेलकर दौड़ते हुए 1 रन पूरा किया।"
-            ];
-            $singleHn = [
-                "{$bowler} ki acchi length delivery, {$batsman} ne single lekar strike rotate ki.",
-                "Middle stump par delivery, {$batsman} ne aaram se 1 run poora kiya.",
-                "Controlled nudge into the off-side gap, scampering through for an easy single."
-            ];
-            $choiceIdx = abs(crc32($over . $title)) % count($singleEn);
-            $aiEng = $singleEn[$choiceIdx];
-            $aiHin = $singleHi[$choiceIdx];
-            $aiHinglish = $singleHn[$choiceIdx];
-        } elseif ($badge === '2' || $badge === '3') {
-            $aiEng = "Good running between the wickets! {$batsman} pushes it wide of the fielder and hustles back hard for {$badge} runs.";
-            $aiHin = "विकेटों के बीच बेहतरीन दौड़! {$batsman} ने गेंद को गैप में खेला और फुर्ती से दौड़कर {$badge} रन पूरे किए।";
-            $aiHinglish = "Kamaal ki running between the wickets! {$batsman} ne tej daud lagakar {$badge} run poore kiye.";
+            $idx = abs(crc32($over . $title . '4')) % count($fourEn);
+            $aiEng = $fourEn[$idx];
+            $aiHin = $fourHi[$idx];
+            $aiHinglish = $fourHn[$idx];
+        } elseif ($isWide || $isNoBall) {
+            $extraType = $isWide ? 'Wide ball' : 'No ball';
+            $aiEng = "Extra: {$extraType}! {$bowler} strays off radar and gifts an extra delivery and run to {$batsman}.";
+            $aiHin = "अतिरिक्त रन: {$extraType}! {$bowler} अपनी लाइन से भटके, अंपायर का इशारा अतिरिक्त रन के लिए।";
+            $aiHn = "Extra run! {$bowler} ne line miss ki, {$extraType} ka ishara umpire ki taraf se.";
         } else {
-            // Dot Ball
-            $dotEn = [
-                "Good length delivery around off-stump, {$batsman} plays it with soft hands straight to the fielder.",
-                "Beaten! Lovely seam movement from {$bowler}, beating the defensive push.",
-                "Right in the blockhole! {$batsman} jams the bat down in time to dig it out safely.",
-                "Tidy line and length from {$bowler}, keeping {$batsman} quiet on the backfoot."
-            ];
-            $dotHi = [
-                "ऑफ स्टंप पर अच्छी लेंथ की गेंद, {$batsman} ने रक्षात्मक तरीके से खेला, कोई रन नहीं।",
-                "शानदार स्विंग! गेंद टप्पा खाकर बल्लेबाज के बल्ले को छकाती हुई निकली, डॉट गेंद।",
-                "सटीक यॉर्कर! {$batsman} ने सही समय पर बल्ला नीचे लाकर गेंद को रोका, कोई रन नहीं।",
-                "अनुशासित लाइन और लेंथ, बल्लेबाज को बैकफुट पर रहकर खेलने पर मजबूर किया, डॉट गेंद।"
-            ];
-            $dotHn = [
-                "Off-stump par badhiya delivery, {$batsman} ne defend kiya, koi run nahi.",
-                "Beaten! Shandar swinging delivery, batsman beat hue, dot ball.",
-                "Blockhole me delivery! {$batsman} ne samay par bat lagaya, safe rahe, koi run nahi.",
-                "Tidy line aur length, batsman ko quiet rakha, dot ball."
-            ];
-            $choiceIdx = abs(crc32($over . $title)) % count($dotEn);
-            $aiEng = $dotEn[$choiceIdx];
-            $aiHin = $dotHi[$choiceIdx];
-            $aiHinglish = $dotHn[$choiceIdx];
+            // Dot balls / 1s / 2s
+            $runs = is_numeric($badgeStr) ? (int)$badgeStr : 0;
+            if ($runs === 1) {
+                $singlesEn = [
+                    "Single taken. {$batsman} nudges {$bowler} into the vacant pocket and rotates the strike briskly.",
+                    "Quick single! Good communication between the runners as {$batsman} taps and dashes across.",
+                    "One run added. {$bowler} keeps it tight on good length, tucked away neatly for a single."
+                ];
+                $singlesHi = [
+                    "सिंगल! {$batsman} ने हल्के हाथों से खेलकर स्ट्राइक रोटेट की।",
+                    "एक रन! दोनों बल्लेबाजों के बीच अच्छी समझ, तेजी से दौड़कर रन पूरा किया।",
+                    "स्ट्राइक बदली! गेंदबाज की कसी हुई गेंद को सम्मान देकर 1 रन बटोरा।"
+                ];
+                $singlesHn = [
+                    "Single mil gaya! {$batsman} ne Halke hatho se khelkar strike rotate kar li.",
+                    "Ek run! Dono batsmen ne achhi running dikhayi aur aaram se 1 run le liya.",
+                    "Strike rotation! {$batsman} ne ball ko gap me push kiya aur single le liya."
+                ];
+                $idx = abs(crc32($over . $title . '1')) % count($singlesEn);
+                $aiEng = $singlesEn[$idx];
+                $aiHin = $singlesHi[$idx];
+                $aiHinglish = $singlesHn[$idx];
+            } elseif ($runs === 2 || $runs === 3) {
+                $aiEng = "Brilliant running between the wickets! {$batsman} pushes {$bowler} into the deep and hustles back for {$runs} runs.";
+                $aiHin = "शानदार रनिंग! बल्लेबाजों ने तेजी दिखाते हुए दौड़कर {$runs} रन चुरा लिए।";
+                $aiHn = "Zabardast running! Dono batsmen ne doudkar {$runs} runs poore kiye.";
+            } else {
+                // Dot ball
+                $dotsEn = [
+                    "Dot ball. Solid forward defense by {$batsman} against a probing delivery from {$bowler}.",
+                    "No run. {$bowler} hits the hard length, and {$batsman} can only push it back to the bowler.",
+                    "Dot ball! Good discipline outside off stump, left alone cautiously by {$batsman}."
+                ];
+                $dotsHi = [
+                    "डॉट गेंद! {$bowler} की सटीक लाइन, बल्लेबाज ने संभलकर गेंद को डिफेंड किया।",
+                    "कोई रन नहीं! गेंदबाज का बेहतरीन नियंत्रण, बल्लेबाज को कोई मौका नहीं मिला।",
+                    "डॉट डिलीवरी! कसी हुई गेंदबाजी, बल्लेबाज रन बनाने में असमर्थ।"
+                ];
+                $dotsHn = [
+                    "Dot ball! {$bowler} ki achhi bowling, batsman ne aage aakar defend kiya.",
+                    "Koi run nahi! Bowler ne tight line rakhi, batsman ne koi risk nahi liya.",
+                    "Dot ball! Zabardast control bowler ka, batsman dot ball khelne par majboor."
+                ];
+                $idx = abs(crc32($over . $title . '0')) % count($dotsEn);
+                $aiEng = $dotsEn[$idx];
+                $aiHin = $dotsHi[$idx];
+                $aiHinglish = $dotsHn[$idx];
+            }
         }
 
-        $actionEn = 'no run';
-        if ($isWicket) {
-            $actionEn = 'OUT';
-            $titleHi = "{$bowler} vs {$batsman}, आउट (WICKET)";
-            $titleHn = "{$bowler} to {$batsman}, OUT (Wicket)";
-            $tagHi = 'विकेट ☝️';
-            $tagHn = 'Wicket ☝️';
-        } elseif ($isSix) {
-            $actionEn = 'SIX';
-            $titleHi = "{$bowler} vs {$batsman}, छक्का (SIX)";
-            $titleHn = "{$bowler} to {$batsman}, 6 Runs (Six)";
-            $tagHi = 'छक्का 6';
-            $tagHn = 'Six 6';
-        } elseif ($isFour) {
-            $actionEn = 'FOUR';
-            $titleHi = "{$bowler} vs {$batsman}, चौका (FOUR)";
-            $titleHn = "{$bowler} to {$batsman}, 4 Runs (Four)";
-            $tagHi = 'चौका 4';
-            $tagHn = 'Four 4';
-        } elseif ($isWide) {
-            $actionEn = 'wide';
-            $titleHi = "{$bowler} vs {$batsman}, वाइड (Wide)";
-            $titleHn = "{$bowler} to {$batsman}, Wide Ball";
-            $tagHi = 'अतिरिक्त रन';
-            $tagHn = 'Wide Ball';
-        } elseif ($isNoBall) {
-            $actionEn = 'no ball';
-            $titleHi = "{$bowler} vs {$batsman}, नो बॉल (No Ball)";
-            $titleHn = "{$bowler} to {$batsman}, No Ball";
-            $tagHi = 'नो बॉल';
-            $tagHn = 'No Ball';
-        } elseif ($badge === '1') {
-            $actionEn = '1 run';
-            $titleHi = "{$bowler} vs {$batsman}, 1 रन";
-            $titleHn = "{$bowler} to {$batsman}, 1 Run";
-            $tagHi = '1 रन';
-            $tagHn = '1 Run';
-        } elseif ($badge === '2' || $badge === '3') {
-            $actionEn = "{$badge} runs";
-            $titleHi = "{$bowler} vs {$batsman}, {$badge} रन";
-            $titleHn = "{$bowler} to {$batsman}, {$badge} Runs";
-            $tagHi = "{$badge} रन";
-            $tagHn = "{$badge} Runs";
-        } else {
-            $actionEn = 'no run';
-            $titleHi = "{$bowler} vs {$batsman}, कोई रन नहीं";
-            $titleHn = "{$bowler} to {$batsman}, No Run";
-            $tagHi = 'डॉट गेंद';
-            $tagHn = 'Dot Ball';
-        }
-
-        // Replace raw description, title, and rawText with clean AI output
-        $ball['title'] = "{$bowler} to {$batsman}, {$actionEn}";
         $ball['desc'] = $aiEng;
         $ball['rawText'] = $aiEng;
         $ball['ai_hindi'] = $aiHin;
         $ball['ai_hinglish'] = $aiHinglish;
-        $ball['title_hi'] = $titleHi;
-        $ball['title_hinglish'] = $titleHn;
-        $ball['tag_hi'] = $tagHi;
-        $ball['tag_hinglish'] = $tagHn;
         $ball['is_ai'] = true;
-        $ball['ai_flair'] = 'LiveCricket AI Engine';
 
         return $ball;
     }
 
     /**
-     * Transform an over separator into an AI Over Summary across all 3 languages.
+     * Transform an over summary into original commentary.
      */
-    protected function transformOverSeparator(array $sep): array
+    protected function transformOverSeparator(array $item): array
     {
-        $overNum = $sep['overNumber'] ?? $sep['over'] ?? null;
-        $runs = $sep['overRuns'] ?? 0;
-        $summary = $sep['overSummary'] ?? '';
-        $score = $sep['teamScore'] ?? '';
-        $batTeam = $sep['batTeam'] ?? '';
+        $overRuns = (int) ($item['overRuns'] ?? $item['runs'] ?? 0);
+        $overNum = (int) ($item['overNumber'] ?? $item['over'] ?? 0);
+        $bowler = (string) ($item['bowler'] ?? 'The bowler');
 
-        $sep['desc'] = "End of Over {$overNum}: {$runs} runs conceded ({$summary}). " .
-            ($runs > 10 ? "An expensive over for the bowling side!" : ($runs <= 3 ? "A very tight and disciplined over." : "Steady passage of play in the middle."));
-
-        $sep['ai_hindi'] = "ओवर {$overNum} समाप्त: {$runs} रन बने ({$summary})। " .
-            ($runs > 10 ? "बल्लेबाजी टीम के लिए काफी फायदेमंद ओवर!" : ($runs <= 3 ? "गेंदबाजी टीम का बेहद कसा हुआ और अनुशासित ओवर।" : "मैदान पर सामान्य गति से खेल जारी।"));
-
-        $sep['ai_hinglish'] = "Over {$overNum} samapt: {$runs} run aaye ({$summary}). " .
-            ($runs > 10 ? "Batting team ke liye faydemand over!" : ($runs <= 3 ? "Bowling team ka kafi tight over." : "Match me steady khel chal raha hai."));
-
-        $sep['title'] = "End of Over {$overNum}" . ($batTeam && $score ? " • {$batTeam} {$score}" : "");
-        $sep['title_hi'] = "ओवर {$overNum} समाप्त" . ($batTeam && $score ? " • {$batTeam} {$score}" : "");
-        $sep['title_hinglish'] = "Over {$overNum} Samapt" . ($batTeam && $score ? " • {$batTeam} {$score}" : "");
-
-        $sep['tag'] = "Over {$overNum}";
-        $sep['tag_hi'] = "ओवर {$overNum}";
-        $sep['tag_hinglish'] = "Over {$overNum}";
-        $sep['is_ai'] = true;
-        $sep['ai_flair'] = 'AI Over Recap';
-
-        return $sep;
-    }
-
-    /**
-     * Transform a player quote or interview take into AI commentary across all 3 languages.
-     */
-    protected function transformInterview(array $item): array
-    {
-        $speech = (string) ($item['desc'] ?? $item['rawText'] ?? '');
-        $title = (string) ($item['title'] ?? '');
-        $speaker = '';
-        if (preg_match('/^([^(]+)/', $title, $m)) {
-            $speaker = trim($m[1]);
+        if ($overRuns >= 15) {
+            $eng = "End of Over {$overNum}: Big over for the batting team! {$overRuns} runs plundered off {$bowler}'s spell.";
+            $hin = "ओवर {$overNum} समाप्त: बल्लेबाजी टीम के लिए बड़ा ओवर! इस ओवर में {$overRuns} रन बटोरे।";
+            $hn = "Over {$overNum} khatam: Batting team ke liye bada over! {$overRuns} runs aaye is over me.";
+        } elseif ($overRuns === 0) {
+            $eng = "End of Over {$overNum}: MAIDEN OVER! Top-class discipline by {$bowler}, conceding zero runs.";
+            $hin = "ओवर {$overNum} समाप्त: मेडन ओवर! गेंदबाज ने कसी हुई गेंदबाजी से कोई रन नहीं दिया।";
+            $hn = "Over {$overNum} khatam: MAIDEN OVER! Bowler ne ek bhi run nahi diya, shandaar bowling!";
+        } else {
+            $eng = "End of Over {$overNum}: {$overRuns} runs conceded. {$bowler} finishes a disciplined set of deliveries.";
+            $hin = "ओवर {$overNum} समाप्त: इस ओवर से आए {$overRuns} रन। गेंदबाजी टीम का नियंत्रित प्रदर्शन।";
+            $hn = "Over {$overNum} khatam: Is over se {$overRuns} runs aaye. Match kafi exciting chal raha hai.";
         }
-        $speaker = $speaker ?: 'Player';
 
-        // 1. English
-        $paraSpeech = $this->paraphraseEnglish($speech);
-        $aiEng = "\"{$paraSpeech}\"";
-
-        // 2. Pure Devanagari Hindi
-        $hiSpeech = $this->translateToHindi($paraSpeech ?: $speech);
-        $aiHin = "{$speaker} ने मैच के बाद अपनी राय साझा करते हुए कहा: \"{$hiSpeech}\"";
-
-        // 3. Hinglish
-        $aiHn = "{$speaker} ne match ke baad reaction dete hue kaha: \"{$paraSpeech}\"";
-
-        $item['desc'] = $aiEng;
-        $item['rawText'] = $aiEng;
-        $item['ai_hindi'] = $aiHin;
-        $item['ai_hinglish'] = $aiHn;
-        $item['title'] = "{$speaker} (Post-Match Take)";
-        $item['title_hi'] = "{$speaker} (मैच के बाद बयान)";
-        $item['title_hinglish'] = "{$speaker} (Post-Match Reaction)";
-        $item['tag'] = 'Player Quote 🎙️';
-        $item['tag_hi'] = 'खिलाड़ी का बयान 🎙️';
-        $item['tag_hinglish'] = 'Player Quote 🎙️';
+        $item['desc'] = $eng;
+        $item['rawText'] = $eng;
+        $item['ai_hindi'] = $hin;
+        $item['ai_hinglish'] = $hn;
         $item['is_ai'] = true;
-        $item['ai_flair'] = 'Post-Match Presentation';
 
         return $item;
     }
 
     /**
-     * Transform a match wrap-up announcement into AI commentary across all 3 languages.
-     */
-    protected function transformMatchWrap(array $item): array
-    {
-        $text = (string) ($item['desc'] ?? $item['rawText'] ?? '');
-        $paraText = $this->paraphraseEnglish($text);
-        $hiText = $this->translateToHindi($paraText ?: $text);
-
-        $item['desc'] = "Match Wrap: " . $paraText;
-        $item['rawText'] = "Match Wrap: " . $paraText;
-        $item['ai_hindi'] = "मैच परिणाम सारांश: " . $hiText;
-        $item['ai_hinglish'] = "Match Result Summary: " . $paraText;
-        $item['title'] = 'Match Summary & Wrap-up';
-        $item['title_hi'] = 'मैच सारांश व परिणाम';
-        $item['title_hinglish'] = 'Match Result Summary';
-        $item['tag'] = 'Match Result 🏆';
-        $item['tag_hi'] = 'मैच परिणाम 🏆';
-        $item['tag_hinglish'] = 'Match Result 🏆';
-        $item['is_ai'] = true;
-        $item['ai_flair'] = 'Match Review';
-
-        return $item;
-    }
-
-    /**
-     * Transform a tactical match note into AI commentary across all 3 languages.
+     * Transform a match note into non-verbatim, freshly phrased commentary across English, Hindi, and Hinglish.
      */
     protected function transformNote(array $item): array
     {
@@ -422,18 +291,18 @@ class AiCommentaryService
             $aiEng = "DRS & Review: " . $para;
             $hi = $this->translateToHindi($para ?: $rawTrimmed);
             $aiHin = "डीआरएस व रिव्यू: " . $hi;
-            $aiHn = "DRS Review: Fielding team ne review liya hai, decision third umpire ke paas hai.";
+            $aiHn = "DRS Review: Decision third umpire ke paas refer kiya gaya hai, screen par ball tracking check ho rahi hai.";
             $tagEn = 'DRS Review 📺';
             $tagHi = 'डीआरएस रिव्यू 📺';
             $tagHn = 'DRS Review 📺';
         }
-        // Pattern 5: General analysis / observation note
+        // Pattern 5: General analysis / observation note - ALWAYS fully rewritten
         else {
             $para = $this->paraphraseEnglish($rawTrimmed);
-            $aiEng = "Match Desk Analysis: " . $para;
-            $hi = $this->translateToHindi($para ?: $rawTrimmed);
+            $aiEng = $para;
+            $hi = $this->translateToHindi($para);
             $aiHin = "मैच विश्लेषण: " . $hi;
-            $aiHn = "Match Analysis: " . $para;
+            $aiHn = $this->craftHinglishNote($rawTrimmed);
             $tagEn = 'Tactical Note';
             $tagHi = 'मैच अपडेट 📋';
             $tagHn = 'Match Note 📋';
@@ -457,21 +326,25 @@ class AiCommentaryService
 
     /**
      * Paraphrase English text to ensure original, non-verbatim wording.
+     * Guaranteed to change sentence vocabulary and structure even when external APIs are unavailable.
      */
     public function paraphraseEnglish(string $text): string
     {
         $text = trim(strip_tags($text));
-        if (empty($text) || strlen($text) < 15) {
+        if (empty($text) || strlen($text) < 10) {
             return $text;
         }
 
+        // Apply robust lexical and phrase transformation
+        $rewritten = $this->rewriteCricketText($text);
+
+        // Try external network paraphrasing as an additional layer if available
         $cacheKey = 'para_en_' . md5($text);
         try {
-            return Cache::remember($cacheKey, 86400 * 7, function () use ($text) {
+            return Cache::remember($cacheKey, 86400 * 7, function () use ($text, $rewritten) {
                 try {
-                    // English -> German -> English back-translation produces clean, idiomatic rephrasing
                     $urlDe = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=de&dt=t&q=' . urlencode($text);
-                    $resDe = Http::timeout(3)
+                    $resDe = Http::timeout(2)
                         ->withHeaders(['User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'])
                         ->get($urlDe);
 
@@ -486,7 +359,7 @@ class AiCommentaryService
 
                         if (!empty(trim($deText))) {
                             $urlEn = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=de&tl=en&dt=t&q=' . urlencode($deText);
-                            $resEn = Http::timeout(3)
+                            $resEn = Http::timeout(2)
                                 ->withHeaders(['User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'])
                                 ->get($urlEn);
 
@@ -498,21 +371,100 @@ class AiCommentaryService
                                         $enText .= $p[0] ?? '';
                                     }
                                 }
-                                if (!empty(trim($enText))) {
-                                    return trim($enText);
+                                $enText = trim($enText);
+                                if (!empty($enText) && strtolower($enText) !== strtolower($text)) {
+                                    return "Tactical Desk Update: " . $enText;
                                 }
                             }
                         }
                     }
-                } catch (\Throwable $e) {
-                    // Fall back
-                }
+                } catch (\Throwable $e) {}
 
-                return $text;
+                return $rewritten;
             });
         } catch (\Throwable $e) {
-            return $text;
+            return $rewritten;
         }
+    }
+
+    /**
+     * Rule-based intelligent cricket text rewriter to replace verbatim wording with original prose.
+     */
+    protected function rewriteCricketText(string $text): string
+    {
+        $phraseMap = [
+            'will be disappointed with' => 'will be deeply frustrated by',
+            'will be kicking themselves' => 'are heavily ruing',
+            'batting display' => 'showing with the bat',
+            'batting performance' => 'top-order effort',
+            'morning session' => 'opening session of the day',
+            'afternoon session' => 'post-lunch session',
+            'evening session' => 'final session before stumps',
+            'uneven bounce' => 'variable bounce off the surface',
+            'good length' => 'disciplined channel outside off',
+            'comes into the attack' => 'is drafted into the bowling crease',
+            'is back into the attack' => 'returns for a fresh spell of bowling',
+            'comes to the crease' => 'takes guard at the striker\'s end',
+            'taking a drinks break' => 'pausing for tactical on-field hydration',
+            'taking a review' => 'challenging the on-field decision via DRS',
+            'under pressure' => 'feeling the squeeze under intense fielding',
+            'in trouble' => 'in serious bother on the scoreboard',
+            'collapse' => 'dramatic tumble of wickets',
+            'great shot' => 'glorious strokeplay through the gap',
+            'pitch report' => 'surface conditions assessment',
+        ];
+
+        $synonymMap = [
+            '/\bdisappointed\b/i' => 'aggrieved',
+            '/\bfrustrated\b/i' => 'tested',
+            '/\blosing\b/i' => 'surrendering',
+            '/\buneven\b/i' => 'unpredictable',
+            '/\bpitch\b/i' => 'surface',
+            '/\bcaptain\b/i' => 'skipper',
+            '/\bwicket\b/i' => 'breakthrough',
+            '/\bwickets\b/i' => 'scalps',
+            '/\bquick\b/i' => 'rapid',
+            '/\bpressure\b/i' => 'heat',
+            '/\bbowling\b/i' => 'attack',
+            '/\bbatters\b/i' => 'batsmen',
+        ];
+
+        $transformed = $text;
+        foreach ($phraseMap as $from => $to) {
+            $transformed = str_ireplace($from, $to, $transformed);
+        }
+
+        foreach ($synonymMap as $regex => $to) {
+            $transformed = preg_replace($regex, $to, $transformed, 2);
+        }
+
+        $prefixes = [
+            'Tactical Desk: ',
+            'From the Match Desk: ',
+            'On-Field Analysis: ',
+            'Game Flow Note: ',
+        ];
+        $prefix = $prefixes[abs(crc32($text)) % count($prefixes)];
+
+        return $prefix . ucfirst($transformed);
+    }
+
+    /**
+     * Craft conversational cricket Hinglish for tactical notes.
+     */
+    protected function craftHinglishNote(string $text): string
+    {
+        $lower = strtolower($text);
+
+        if (str_contains($lower, 'wicket') && str_contains($lower, 'run')) {
+            return "Match Desk Note: Batting side ne lagatar wickets gawaye hain, pitch par bounce aur movement ke chalte pressure kafi badh chuka hai.";
+        } elseif (str_contains($lower, 'rain') || str_contains($lower, 'weather')) {
+            return "Mausam Update: Match me mausam ke chalte rukawat aayi hai, ground staff covers ke sath tayyar hai.";
+        } elseif (str_contains($lower, 'injury') || str_contains($lower, 'physio')) {
+            return "Injury Update: Maidan par physio bula liya gaya hai, player ki fitness check ho rahi hai.";
+        }
+
+        return "Match Analysis Note: Match me kafi tight contest chal raha hai, dono teams apni strategy par focus kar rahi hain.";
     }
 
     /**
@@ -530,7 +482,7 @@ class AiCommentaryService
             return Cache::remember($cacheKey, 86400 * 7, function () use ($text) {
                 try {
                     $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=hi&dt=t&q=' . urlencode($text);
-                    $response = Http::timeout(4)
+                    $response = Http::timeout(2)
                         ->withHeaders([
                             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                             'Accept' => '*/*',
@@ -550,9 +502,7 @@ class AiCommentaryService
                             }
                         }
                     }
-                } catch (\Throwable $e) {
-                    // Fall back to original text
-                }
+                } catch (\Throwable $e) {}
 
                 return $text;
             });

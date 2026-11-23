@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Article;
+use App\Services\ArticleGeneratorService;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -143,6 +145,41 @@ class ArticleController extends Controller
         ];
 
         return view('articles.create', compact('categories'));
+    }
+
+    /**
+     * Generate humanized cricket article using AI bot (Admin only).
+     */
+    public function generateArticle(Request $request, ArticleGeneratorService $generator): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $validated = $request->validate([
+            'prompt' => 'required|string|min:3|max:500',
+            'category' => 'nullable|string|max:60',
+            'tone' => 'nullable|string|max:50',
+        ]);
+
+        try {
+            $article = $generator->generate(
+                $validated['prompt'],
+                $validated['category'] ?? null,
+                $validated['tone'] ?? 'narrative'
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $article,
+                'message' => 'Humanized cricket article generated successfully!',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('ArticleController@generateArticle error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate article: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
