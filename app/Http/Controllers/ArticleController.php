@@ -324,7 +324,7 @@ class ArticleController extends Controller
                 return;
             }
 
-            if (Article::count() >= 10) {
+            if (Article::count() >= 20) {
                 return;
             }
 

@@ -193,6 +193,166 @@ class TrendingArticlesSeeder extends Seeder
                 'reading_time' => 4,
                 'published_at' => Carbon::now()->subDays(9),
             ],
+
+            // 11. IPL Auction & Raw Scouting
+            [
+                'title' => "The ₹10 Crore Uncapped Phenomenon: How IPL Franchises Now Scout Indian Raw Talent in State Leagues",
+                'slug' => 'ipl-mega-auction-uncapped-indian-players-scouting-blueprint',
+                'category' => 'Tournament News',
+                'excerpt' => 'Gone are the days when international names guaranteed auction billions. How Tamil Nadu Premier League, Syed Mushtaq Ali, and local maidaans became the real breeding ground for IPL stardom.',
+                'content' => "There was a time when IPL auction rooms were dominated by frantic bidding wars over faded West Indian power-hitters or English all-rounders who would play half the season and fly back home. \n\nToday, the auction tables tell a vastly different story. Multi-million-dollar paychecks are being handed to 21-year-olds from small towns in Vidarbha, Punjab, and Tamil Nadu who have never played an international game.\n\n### The Data Revolution in Domestic Scouting\nFranchises like Mumbai Indians, Chennai Super Kings, and Kolkata Knight Riders no longer rely on newspaper box scores. They employ full-time data analysts and former Ranji veterans who travel with high-speed 240fps cameras to local Syed Mushtaq Ali Trophy matches, TNPL, and UP T20 leagues.\n\nThey aren't just looking at how many runs a batter scored; they are tracking bat-speed metrics, release-point consistency against 140 km/h throwdowns, and ball exit velocity off short balls. If an uncapped batter can consistently clear mid-wicket against hard 8-meter length deliveries, their market value skyrockets instantly.\n\n### The Impact Player Rule Has Accelerated the Shift\nWith the Impact Player rule cementing 8 to 9 specialist batters in every playing XI, utility all-rounders who bowl gentle 118 km/h medium pace are no longer in demand. Franchises want extremes: either an express pacer who clocks 145+ km/h or a pure 200-strike-rate pinch hitter who doesn't mind getting out on 22 off 9 balls.\n\n### What Local Grassroots Players Should Focus On\nIf you are a young player in India tracking your matches on CricApp, remember: consistency alone doesn't get you noticed by scouts—impact does. A match-winning 35 off 14 balls under lights in a tense club final carries ten times more scouting weight than a slow, selfish 60 off 52 balls. Play with intent, play for your team.",
+                'featured_image' => 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Shubham Thakur',
+                'tags' => 'IPL Auction, Uncapped Players, Scouting, Domestic Cricket, T20',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 5,
+                'published_at' => Carbon::now()->subHours(12),
+            ],
+
+            // 12. Jasprit Bumrah Action Breakdown
+            [
+                'title' => "Deconstructing Jasprit Bumrah’s Hyperextension & Short Run-Up: Why You Shouldn't Copy It at Home",
+                'slug' => 'jasprit-bumrah-bowling-action-biomechanics-breakdown',
+                'category' => 'Cricket Tips',
+                'excerpt' => 'Bumrah’s 8-pace run-up and hyper-extended elbow produce lethal 145 km/h thunderbolts. Here is the anatomical science behind why it works for him—and why junior pacers need caution.',
+                'content' => "Visit any cricket coaching camp in Delhi, Mumbai, or Himachal, and within 10 minutes you will spot at least two 14-year-olds attempting a stuttering 7-step run-up, locking their right arm rigid, and snapping their wrist like Jasprit Bumrah.\n\nIt looks cool. But from a sports biomechanics perspective, trying to replicate Bumrah’s unique action without his exact physiological blueprint is one of the fastest ways to suffer a lumbar spine stress fracture.\n\n### The Physics of the Short Stutter Run-Up\nMost traditional fast bowlers—from Dennis Lillee to Brett Lee—generate 70% of their bowling speed from linear kinetic momentum built up during a long, rhythmic 25-meter approach. Bumrah generates virtually zero linear momentum from his jog.\n\nInstead, he relies entirely on rotational torque and elastic recoil. His torso rotates aggressively away from the batter before violently snapping square during the front-foot contact. It is the human equivalent of a drawn bow and arrow.\n\n### The Hyperextended Elbow Lever\nBumrah was born with natural congenital hyperextension in his right elbow joint (roughly 15 to 20 degrees of backward flexion). When he releases the ball, his forearm behaves like a longer lever than a normal arm, releasing the ball closer to the batter (around 2.1 meters in front of the popping crease).\n\nTo a batter, a 142 km/h delivery from Bumrah feels like 150 km/h because it arrives 0.05 seconds quicker than a ball bowled by a bowler releasing from behind the crease.\n\n### The Advice for Aspiring Club Bowlers\nDo not try to force an unnatural locked-arm action. Focus instead on Bumrah's repeatable fundamentals: an upright wrist behind the seam, a bracing front knee at delivery stride, and laser-like eye focus on the off-stump bail. That is what creates world-class bowling.",
+                'featured_image' => 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Dr. Aman Sharma (Sports Physio)',
+                'tags' => 'Jasprit Bumrah, Fast Bowling, Biomechanics, Bowling Action, Sports Science',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 5,
+                'published_at' => Carbon::now()->subDays(1)->subHours(3),
+            ],
+
+            // 13. Border-Gavaskar Fast Bowling Conditions
+            [
+                'title' => "Surviving the Perth Cracks & Gabba Bounce: What Fast Bowling in Australia Demands From Indian Batters",
+                'slug' => 'border-gavaskar-trophy-australia-fast-bowling-conditions',
+                'category' => 'Opinion & Analysis',
+                'excerpt' => 'It is not the raw speed that gets subcontinental batters in Australia—it is the steep bounce above the roll of the bat. A tactical look at chest-high defense and leaving on length.',
+                'content' => "Ask any veteran Indian batter about their first tour to Australia, and they will tell you the same thing: the first time you play a forward defensive stroke at the WACA or Optus Stadium in Perth, the ball hits the manufacturer's sticker at the top of your bat handle, sends a stinging vibration through your thumbs, and loops gently to gully.\n\nIn India, a good-length ball hits the top of off-stump at waist height. In Australia, that exact same length bounces at armpit height. That 18-inch vertical difference is where careers are made or broken.\n\n### The Art of Leaving on Height, Not Just Line\nIn Indian domestic cricket, batters leave balls primarily on line (outside off-stump). In Australia, you must learn to leave balls on height.\n\nWhen Pat Cummins or Mitchell Starc pound the hard deck 7 meters from your stumps, the ball naturally sails over the top of the bails. The secret that helped Cheteshwar Pujara and Rishabh Pant conquer Australia is keeping your hands pulled back close to your chest, resisting the temptation to push out at deliveries you cannot comfortably dominate on the front foot.\n\n### Batting Out of the Crease to Counter Swung Kookaburra\nThe Australian Kookaburra ball swings sharply for only 12 to 15 overs before going soft. By standing 6 to 10 inches outside the popping crease, batters intercept the ball before its maximum arc of swing and cut down the bounce by half a foot.\n\n### Mental Toughness & Body Blows\nYou cannot play Test cricket in Australia without getting hit on the ribs, shoulders, and helmet grille. In the modern game where CricApp tracks every dismissal, understanding that survival against elite pace is a game of patience and courage is the ultimate masterclass.",
+                'featured_image' => 'https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'CricApp Editorial',
+                'tags' => 'Border Gavaskar Trophy, Australia, Test Cricket, Pace and Bounce, Batting Tactics',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 4,
+                'published_at' => Carbon::now()->subDays(2)->subHours(4),
+            ],
+
+            // 14. Hard Length in T20
+            [
+                'title' => "What Exactly is 'The Hard Length' and Why Every T20 Franchise Wants 6-Foot-2 Bowlers Who Can Hit It",
+                'slug' => 'what-is-the-hard-length-in-t20-cricket-explained',
+                'category' => 'Cricket Tips',
+                'excerpt' => 'Between 6 to 8 meters from the stumps, where the ball is neither full enough to drive nor short enough to pull. How hitting the deck hard took over modern cricket.',
+                'content' => "If you have listened to commentary during any recent IPL or international T20 match, you have heard the term 'hard length' repeated fifty times an evening. But what actually separates a 'hard length' from an ordinary good length?\n\n### The 'No-Man’s Land' of Cricket Lengths\nA standard good length is around 5 to 6 meters from the stumps—the zone designed to entice forward drives in Test cricket. However, in modern T20 cricket with 400g bats and 65-meter ropes, a standard good length gets hit straight back over the bowler's head for six.\n\nA short pitch delivery (9+ meters) is easy to spot early and gets pulled over square leg.\n\nThe 'Hard Length' sits exactly in between: **6.8 to 8.2 meters from the stumps**.\n\n### Why It Paralyzes Modern Batters\nWhen a bowler releases the ball into this zone at 135+ km/h:\n1. The batter cannot step forward to drive, because the ball hits the deck too far back and rears up toward their ribs.\n2. The batter cannot rock back to pull, because the ball arrives too quickly and isn't short enough to get under.\n3. The result is a rushed, cramped stroke that hits the splice of the bat and loops to mid-on or cover.\n\n### Height is the Ultimate Multiplier\nThis is why tall fast bowlers like Josh Hazlewood, Prasidh Krishna, and Marco Jansen are so heavily valued. Their steep release height (releasing from 7.5 feet above the ground) makes the hard length ball bounce even more viciously off the pitch. For club bowlers on CricApp, mastering this length is the guaranteed ticket to sub-7 economy rates.",
+                'featured_image' => 'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Coach Vikram',
+                'tags' => 'Hard Length, T20 Bowling, Fast Bowling, Economy Rate, Bowling Tactics',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 4,
+                'published_at' => Carbon::now()->subDays(3)->subHours(2),
+            ],
+
+            // 15. Rishabh Pant Counter Attack
+            [
+                'title' => "The Method Behind Rishabh Pant’s Madness: Why Chaos Against 90mph Pace is Masterful Counter-Attack",
+                'slug' => 'rishabh-pant-test-cricket-counter-attack-genius',
+                'category' => 'Opinion & Analysis',
+                'excerpt' => 'Charging Jimmy Anderson with the second new ball isn’t reckless ego—it breaks the fielding captain’s ring and forces the slips into defensive positions.',
+                'content' => "When Rishabh Pant reversed-swept Jimmy Anderson over the slips for four with an 82-over-old red ball at Ahmedabad, cricket purists nearly dropped their cups of tea. Pundits called it reckless, uncalculated, and disrespectful to Test match traditions.\n\nThey were completely wrong. It was one of the most calculated psychological moves in modern Test history.\n\n### The Strategic Value of Counter-Attack\nIn red-ball cricket, opening bowlers thrive on rhythm and predictable lines. They set four slips, a gully, and bowl repeat deliveries on a fourth-stump corridor. If you defend normally, you are playing entirely on their terms.\n\nPant refuses to let the bowler dictate the terms. By dancing 2 steps down the pitch or backing away to carve through point, he forces the bowler to change their line. The captain is forced to take out third slip and place a deep third man. Suddenly, the bowler has lost their catching cushion, their run-up rhythm is disrupted, and the pressure instantly flips back to the fielding side.\n\n### Low Center of Gravity & Torso Flexibility\nWhat makes Pant's batting work is not blind power—it is extraordinary balance. Even when he falls to his knees while hitting a one-handed six over square leg, his head stays perfectly still over the contact point until long after the ball leaves the bat.\n\n### The Takeaway for Young Attackers\nNever confuse counter-attack with reckless slogging. Pant respects genuine unplayable deliveries. But when the opportunity comes to shift momentum in a tense club match on CricApp, having the bravery to disrupt the bowler's plans can win you matches from completely lost positions.",
+                'featured_image' => 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Rahul Rawat',
+                'tags' => 'Rishabh Pant, Counter Attack, Test Cricket, Batting Aggression, Mindset',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 4,
+                'published_at' => Carbon::now()->subDays(4)->subHours(5),
+            ],
+
+            // 16. Dew Factor in Night Matches
+            [
+                'title' => "The 8 PM Dew Nightmare: How Wet Outfields Turn World-Class Spinners Into Club Bowlers",
+                'slug' => 'dew-factor-indian-night-cricket-tactics-handling',
+                'category' => 'Opinion & Analysis',
+                'excerpt' => 'Gripping a wet leather ball like a bar of soap. The bowling strategies, towel drills, and cross-seam tricks teams use to survive second-innings defending.',
+                'content' => "Every cricketer who has played under floodlights in North India between October and March knows the dreaded sensation: you bend down to field a ball in the outfield at 8:30 PM, and your trousers and hands are instantly soaked with ice-cold dew.\n\nWithin 3 overs, the dry leather cricket ball transforms into a slippery, heavy sponge.\n\n### Why Dew Completely Destroys Spin Bowling\nSpin bowling relies entirely on tactile friction between the finger skin and the raised seam of the ball. When moisture covers the ball, that friction drops to near zero.\n- Finger spinners cannot impart revolutions; the ball slips prematurely out of the hand, resulting in knee-high full tosses.\n- Wrist spinners lose grip on the seam, making googlies and leg-breaks completely flat and easy to pick off the deck.\n\n### The Seamer’s Survival Playbook\nIf your team is defending a total under heavy dew on CricApp:\n1. **Bowl Cross-Seam Exclusively:** A wet upright seam slips unpredictably. Releasing the ball across the seam allows the leather surface to grip the grass and hit the deck with skid and uneven bounce.\n2. **The Dry Towel Relay:** Designate two fielders inside the 30-yard circle whose only job is keeping clean, dry microfiber towels inside their waistbands. Wipe the ball thoroughly after every single delivery.\n3. **Sawdust Around the Delivery Stride:** Wet bowler landing areas cause ankle slips and groin injuries. Always keep a bucket of dry sawdust near the umpire to sprinkle on the bowling crease.\n\nDew is an undeniable part of subcontinental cricket—teams that prepare for it tactically are the ones that defend totals when everyone else panics.",
+                'featured_image' => 'https://images.unsplash.com/photo-1512719994953-eabf50895df7?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Anil K. (Former Ranji Spinner)',
+                'tags' => 'Dew Factor, Night Cricket, Spin Bowling, Match Tactics, Indian Cricket',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 4,
+                'published_at' => Carbon::now()->subDays(5)->subHours(3),
+            ],
+
+            // 17. Bat Knocking Secrets
+            [
+                'title' => "How to Knock In and Oil an English Willow Cricket Bat Properly: Avoid Snapping Your ₹15,000 Blade",
+                'slug' => 'how-to-knock-in-english-willow-cricket-bat-properly',
+                'category' => 'Cricket Tips',
+                'excerpt' => 'Raw linseed oil, wooden mallet drills, edge feathering, and progressive net throwdowns: the definitive 3-week guide to making your bat ping like dynamite.',
+                'content' => "There is no heartbreak in amateur cricket quite like spending your hard-earned ₹12,000 on a pristine Grade-1 English willow bat, walking into the nets the very next evening, facing a bowler with a brand-new leather ball, and hearing the sickening crack of your toe or edge snapping off on ball four.\n\nModern bats are pressed for lightweight balance, not indestructible armor. Without proper knocking-in, even a ₹50,000 professional bat will break within weeks.\n\n### Step 1: The Raw Linseed Oil Coat (Not Boiled Oil!)\nRaw linseed oil keeps the willow fibers flexible and prevents dry brittle cracking. Pour a single coin-sized drop onto the face of the bat and spread it evenly with an old cloth across the face, edges, and toe. \n*Crucial warning:* Never oil the splice (where the handle joins the blade) or the back stickers. Leave the bat horizontal on its back for 24 hours to let the oil soak into the timber.\n\n### Step 2: The Wooden Mallet Knocking Phase\nYou cannot rush this. You need at least 6 to 8 hours of knocking over a 10-day period.\n- Start gently tapping the center of the blade with a specialized wooden cricket mallet.\n- Progressively increase striking force until you are hitting with 80% power.\n- **Glance the edges at a 45-degree angle:** Never hit the sharp side of an edge straight on; strike at an angle to round off the sharp grain and compress the willow fibers.\n\n### Step 3: Progressive Net Testing\nAfter 8 hours of mallet work, test the bat in the nets using old, soft leather balls for 3 sessions. Check the face for seam indentations. If the face leaves deep dents, knock for another 2 hours. Once it withstands full-speed throwdowns without marks, your bat is ready to score centuries on CricApp!",
+                'featured_image' => 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Coach Vikram',
+                'tags' => 'English Willow, Cricket Bat, Bat Knocking, Equipment Care, Cricket Gear',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 5,
+                'published_at' => Carbon::now()->subDays(6)->subHours(4),
+            ],
+
+            // 18. Box Cricket Tactics
+            [
+                'title' => "The Tactical Playbook of Box Cricket: How to Win 6-a-Side Floodlight Turf Tournaments",
+                'slug' => 'box-cricket-turf-tournament-winning-tactics',
+                'category' => 'Local Stories',
+                'excerpt' => 'Net deflections, underarm precision, dot-ball bowling, and wall rebounds: how box cricket evolved into India’s most popular evening sport.',
+                'content' => "Over the last five years, rooftop floodlit turf arenas have revolutionized recreational sports across India. From Bengaluru and Pune to Delhi and Chandigarh, box cricket has replaced open field matches for millions of working professionals and weekend warriors.\n\nHowever, treating box cricket like normal cricket is a recipe for quick elimination. Box cricket is its own sport with its own tactical handbook.\n\n### 1. Bowling the 'Stump-to-Stump' Yorker Line\nIn an enclosed turf arena where boundaries are just 25 meters away, giving width outside off-stump is suicide—batters use the rebound nets for easy twos and fours. The best box bowlers bowl underarm or short-run flat deliveries directly aimed at the base of middle and leg stump. Keep the ball at knee height; batters cannot get elevation without hitting the top net.\n\n### 2. The Art of the 'Net Tap' Single\nPower hitting often works against you in box tournaments because hitting the side net with force often brings 'out' rules or restricts runs. Elite box batters develop the soft-wrist push: tap the ball into a blind corner between two fielders, sprint the 16-yard pitch, and keep the scoreboard ticking.\n\n### 3. Running Between Wickets is 70% of the Game\nIn a 6-over match, you cannot afford more than 6 dot balls across the entire innings. Stealing quick singles on byes, leg-byes, and misfields puts immense pressure on amateur fielders, leading to overthrows and panic run-outs. Track your turf league squads on CricApp to see your win percentage skyrocket!",
+                'featured_image' => 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Shubham Thakur',
+                'tags' => 'Box Cricket, Turf Arena, 6 a Side, Weekend League, Local Cricket',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 4,
+                'published_at' => Carbon::now()->subDays(7)->subHours(2),
+            ],
+
+            // 19. Picking Slower Balls
+            [
+                'title' => "Knuckle Ball, Back-of-the-Hand, and Split-Finger: How Batters Can Pick Slower Deliveries Early",
+                'slug' => 'how-to-pick-slower-ball-variations-batting-guide',
+                'category' => 'Cricket Tips',
+                'excerpt' => 'Do not wait for the ball to pitch. Watch the bowler’s wrist angle, shoulder deceleration, and finger release before the delivery stride to dominate death overs.',
+                'content' => "Every batter has lived through that embarrassing moment: you charge down the track ready to launch a fast bowler into the next zip code, you commit your bat swing at 140 km/h speed, and the ball arrives a full second later at 112 km/h, looping harmlessly off your toe-end to cover.\n\nYou didn't mis-hit the ball—the bowler completely fooled you in the air.\n\n### 1. The Knuckle Ball (Bhuvneshwar Kumar / Andrew Tye)\nWatch the bowler's fingers as they enter the delivery stride. In a knuckle ball, the bowler tucks the tips of their index and middle fingers directly against the leather seam rather than resting on the pads. \n*The giveaway:* The ball will float towards you with **zero rotational spin on the seam**—it wobbles like a beach ball in the breeze.\n\n### 2. The Back-of-the-Hand Slower Delivery (Harshal Patel / Bravo)\nThis variation is released with the back of the bowler's hand facing the batter at release point. Look at the bowler’s wrist in their final rotation. If their wrist is pronated outward, the ball will come out with scrambled leg-spin rotation and dip sharply upon pitching.\n\n### 3. The Shoulder Deceleration Tell\nEven the best bowlers in the world have subtle involuntary physical tells when bowling slower deliveries. Their final approach stride is often 5% slower, and their non-bowling arm drops slightly earlier to slow their rotational torque. If you train your eyes to watch the bowler's chest and shoulder rather than just the pitch, you will pick slower balls 15 meters earlier.",
+                'featured_image' => 'https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Coach Vikram',
+                'tags' => 'Slower Ball, Knuckle Ball, Batting IQ, T20 Cricket, Fast Bowling Variations',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 4,
+                'published_at' => Carbon::now()->subDays(8)->subHours(1),
+            ],
+
+            // 20. Grassroots Umpiring Respect
+            [
+                'title' => "The Toughest Job on the Maidaan: Why Grassroots Cricket Needs Verified, Respected Umpires",
+                'slug' => 'grassroots-cricket-umpiring-challenges-conflict-resolution',
+                'category' => 'Local Stories',
+                'excerpt' => 'Standing 7 hours under the scorching sun for ₹800 without DRS or ultra-edge. Why fair adjudication is the true beating heart of local tournament cricket.',
+                'content' => "Next time you feel like screaming at an umpire in your local Sunday league match over a tight LBW decision, take a moment to stand in their worn-out canvas shoes.\n\nAn amateur cricket umpire stands motionless on hard turf or dusty concrete for 40 to 80 overs in 38-degree heat. They don’t have ball-tracking cameras, UltraEdge sound graphs, or third umpires in air-conditioned booths. They have only their naked human eyes, their ears, and a split second to decide.\n\n### The Pressure of Village Rivalries\nIn local tournaments with cash prizes and local prestige on the line, every appeal is deafening. Ten fielders are charging at the umpire shouting at the top of their lungs, while the batting team's dugout is watching with hostile intensity.\n\nYet, without that certified official standing at the bowler's end, the match dissolves into arguments over waist-high no-balls and disputed run-outs within four overs.\n\n### Why CricApp is Empowering Local Umpires\nThis is why we built our verified Umpire Profiles and booking module on CricApp.in. Local umpires can showcase their years of experience, officiating badges, tournament history, and player reviews. When players know an umpire is certified and respected, disputes drop by 80%.\n\nCricket is a gentleman’s game not because the rules are simple, but because both teams respect the official's verdict. Treat your local umpires with dignity—they make the game possible.",
+                'featured_image' => 'https://images.unsplash.com/photo-1512719994953-eabf50895df7?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Shubham Thakur',
+                'tags' => 'Cricket Umpiring, Grassroots, Fair Play, Spirit of Cricket, Local Match',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 4,
+                'published_at' => Carbon::now()->subDays(9)->subHours(3),
+            ],
         ];
     }
 }
