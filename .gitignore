@@ -1,6 +1,8 @@
 *.log
 *.sqlite
-*.sqlite-journal
+!database/database.sqlite
+*.sqlite
+!database/database.sqlite-journal
 .DS_Store
 .env
 .env.backup
