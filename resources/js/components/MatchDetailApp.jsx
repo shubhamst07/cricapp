@@ -1309,47 +1309,113 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         return '';
     })();
 
-    // Dynamic Browser Tab Title with Live Score (Cricbuzz Style: e.g. "PAK 434/9 & 207/5 (66 ov) - PAK vs SL | LiveCricket")
+    // Dynamic Browser Tab Title with Live Score (Current Active Innings Score ALWAYS FIRST so it fits in the browser tab)
     useEffect(() => {
         try {
-            const scoreParts = [];
+            const getShortTeam = (raw) => {
+                if (!raw) return '';
+                let clean = (raw.includes(',') ? raw.split(',')[0] : raw).replace(/\s*inning\s*\d*/gi, '').trim();
+                return clean.length > 5 ? clean.split(' ').map(w => w[0]).join('').toUpperCase() : clean;
+            };
 
-            // 1. Current innings from scorecard
+            const inningsItems = [];
+
+            // 1. Collect innings from scorecard
             const scInns = scorecard?.data?.innings || scorecard?.innings || [];
-            if (scInns && scInns.length > 0) {
-                scInns.forEach(inn => {
-                    const t = inn.short_name || (inn.team ? (inn.team.length > 5 ? inn.team.split(' ').map(w => w[0]).join('').toUpperCase() : inn.team) : '');
-                    const sc = normalizeScoreString(inn.score);
+            if (Array.isArray(scInns) && scInns.length > 0) {
+                scInns.forEach((inn, idx) => {
+                    const t = inn.short_name || getShortTeam(inn.team);
+                    let sc = normalizeScoreString(inn.score);
+                    let ov = formatCricketOvers(inn.overs);
+
+                    const isCurrent = Boolean(
+                        inn.is_batting ||
+                        (liveCreaseBatTeam && (
+                            (inn.short_name && inn.short_name.toLowerCase() === liveCreaseBatTeam.toLowerCase()) ||
+                            (inn.team && inn.team.toLowerCase().includes(liveCreaseBatTeam.toLowerCase()))
+                        )) ||
+                        (idx === scInns.length - 1 && effectiveStatus === 'live')
+                    );
+
+                    // If this is the active batting inning and miniscore has real-time crease score, update with freshest live score!
+                    if (isCurrent && liveCreaseScore) {
+                        sc = normalizeScoreString(liveCreaseScore);
+                        if (miniscore?.overs) {
+                            ov = formatCricketOvers(miniscore.overs);
+                        }
+                    }
+
                     if (sc && sc !== '0/0') {
-                        const rawOv = formatCricketOvers(inn.overs);
-                        const ov = rawOv ? ` (${rawOv} ov)` : '';
-                        scoreParts.push(`${t ? `${t} ` : ''}${sc}${ov}`.trim());
+                        const ovStr = ov ? ` (${ov} ov)` : '';
+                        inningsItems.push({
+                            text: `${t ? `${t} ` : ''}${sc}${ovStr}`.trim(),
+                            isCurrent,
+                            team: t
+                        });
                     }
                 });
             }
 
             // 2. Fallback to match.score array
-            if (scoreParts.length === 0 && match?.score && Array.isArray(match.score)) {
-                match.score.forEach(s => {
-                    const t = s.batting_team || s.inning || '';
-                    const shortT = t ? (t.length > 5 ? t.split(' ').map(w => w[0]).join('').toUpperCase() : t) : '';
+            if (inningsItems.length === 0 && Array.isArray(match?.score) && match.score.length > 0) {
+                match.score.forEach((s, idx) => {
+                    const t = getShortTeam(s.batting_team || s.inning || '');
                     const runs = s.r ?? s.runs ?? 0;
                     const wkts = s.w ?? s.wickets ?? 0;
-                    const sc = normalizeScoreString(s.display_score || `${runs}/${wkts}`);
+                    let sc = normalizeScoreString(s.display_score || `${runs}/${wkts}`);
+                    let ov = formatCricketOvers(s.overs || s.o);
+
+                    const isCurrent = Boolean(
+                        (liveCreaseBatTeam && (
+                            (s.batting_team && s.batting_team.toLowerCase().includes(liveCreaseBatTeam.toLowerCase())) ||
+                            (s.inning && s.inning.toLowerCase().includes(liveCreaseBatTeam.toLowerCase()))
+                        )) ||
+                        (idx === match.score.length - 1 && effectiveStatus === 'live')
+                    );
+
+                    if (isCurrent && liveCreaseScore) {
+                        sc = normalizeScoreString(liveCreaseScore);
+                        if (miniscore?.overs) {
+                            ov = formatCricketOvers(miniscore.overs);
+                        }
+                    }
+
                     if (sc && sc !== '0/0') {
-                        const rawOv = formatCricketOvers(s.overs || s.o);
-                        const ov = rawOv ? ` (${rawOv} ov)` : '';
-                        scoreParts.push(`${shortT ? `${shortT} ` : ''}${sc}${ov}`.trim());
+                        const ovStr = ov ? ` (${ov} ov)` : '';
+                        inningsItems.push({
+                            text: `${t ? `${t} ` : ''}${sc}${ovStr}`.trim(),
+                            isCurrent,
+                            team: t
+                        });
                     }
                 });
             }
 
             // 3. Fallback to miniscore live crease
-            if (scoreParts.length === 0 && liveCreaseScore) {
-                const liveTeam = liveCreaseBatTeam ? (liveCreaseBatTeam.length > 5 ? liveCreaseBatTeam.split(' ').map(w => w[0]).join('').toUpperCase() : liveCreaseBatTeam) : '';
+            if (inningsItems.length === 0 && liveCreaseScore) {
+                const liveTeam = getShortTeam(liveCreaseBatTeam);
                 const rawOv = formatCricketOvers(miniscore?.overs);
-                const ov = rawOv ? ` (${rawOv} ov)` : '';
-                scoreParts.push(`${liveTeam ? `${liveTeam} ` : ''}${normalizeScoreString(liveCreaseScore)}${ov}`.trim());
+                const ovStr = rawOv ? ` (${rawOv} ov)` : '';
+                inningsItems.push({
+                    text: `${liveTeam ? `${liveTeam} ` : ''}${normalizeScoreString(liveCreaseScore)}${ovStr}`.trim(),
+                    isCurrent: true,
+                    team: liveTeam
+                });
+            }
+
+            // Arrange so CURRENT / LIVE INNINGS is ALWAYS FIRST!
+            let scoreParts = [];
+            if (inningsItems.length > 0) {
+                let currentIdx = inningsItems.findIndex(i => i.isCurrent);
+                if (currentIdx === -1) {
+                    currentIdx = inningsItems.length - 1; // latest innings
+                }
+
+                const currentItem = inningsItems[currentIdx];
+                const otherItems = inningsItems.filter((_, idx) => idx !== currentIdx);
+
+                // Current inning score FIRST, followed by previous innings
+                scoreParts = [currentItem.text, ...otherItems.map(i => i.text)];
             }
 
             const matchName = match?.name || (match?.team1_name && match?.team2_name ? `${match.team1_name} vs ${match.team2_name}` : '');
@@ -1369,7 +1435,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         return () => {
             document.title = 'LiveCricket';
         };
-    }, [match, scorecard, miniscore, liveCreaseScore, liveCreaseBatTeam]);
+    }, [match, scorecard, miniscore, liveCreaseScore, liveCreaseBatTeam, effectiveStatus]);
 
     return (
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">

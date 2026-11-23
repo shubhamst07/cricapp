@@ -7,8 +7,8 @@
     );
 
     $scoreSnippet = '';
+    $scoreParts = [];
     if (!empty($match['score']) && is_array($match['score'])) {
-        $parts = [];
         foreach ($match['score'] as $s) {
             $t = $s['batting_team'] ?? $s['inning'] ?? '';
             $shortT = !empty($t) ? (strlen($t) > 5 ? preg_replace('/(\b\w)\w*\s*/', '$1', $t) : $t) : '';
@@ -17,28 +17,31 @@
             if ($sc && $sc !== '0/0') {
                 $rawOv = \App\Services\CricketDataService::normalizeCricketOvers($s['overs'] ?? $s['o'] ?? null);
                 $ov = !empty($rawOv) ? ' (' . $rawOv . ' ov)' : '';
-                $parts[] = trim(($shortT ? "$shortT " : "") . $sc . $ov);
+                $scoreParts[] = trim(($shortT ? "$shortT " : "") . $sc . $ov);
             }
-        }
-        if (!empty($parts)) {
-            $scoreSnippet = implode(' & ', $parts);
         }
     }
 
-    if (empty($scoreSnippet) && !empty($scorecard['data']['innings'])) {
-        $parts = [];
+    if (empty($scoreParts) && !empty($scorecard['data']['innings'])) {
         foreach ($scorecard['data']['innings'] as $inn) {
             $t = $inn['short_name'] ?? $inn['team'] ?? '';
             $sc = \App\Services\CricketDataService::normalizeScoreString($inn['score'] ?? '');
             if ($sc && $sc !== '0/0') {
                 $rawOv = \App\Services\CricketDataService::normalizeCricketOvers($inn['overs'] ?? null);
                 $ov = !empty($rawOv) ? ' (' . $rawOv . ' ov)' : '';
-                $parts[] = trim(($t ? "$t " : "") . $sc . $ov);
+                $scoreParts[] = trim(($t ? "$t " : "") . $sc . $ov);
             }
         }
-        if (!empty($parts)) {
-            $scoreSnippet = implode(' & ', $parts);
-        }
+    }
+
+    // Place current / latest innings score FIRST so it is immediately visible in the browser tab
+    if (count($scoreParts) > 1) {
+        $currentInning = array_pop($scoreParts);
+        array_unshift($scoreParts, $currentInning);
+    }
+
+    if (!empty($scoreParts)) {
+        $scoreSnippet = implode(' & ', $scoreParts);
     }
 
     $teamsName = $match['name'] ?? trim(($match['team1_name'] ?? '') . ' vs ' . ($match['team2_name'] ?? ''));
