@@ -46,11 +46,11 @@
 
     $teamsName = $match['name'] ?? trim(($match['team1_name'] ?? '') . ' vs ' . ($match['team2_name'] ?? ''));
     if ($scoreSnippet) {
-        $pageTitle = "{$scoreSnippet} - {$teamsName} | LiveCricket";
+        $pageTitle = "{$scoreSnippet} - {$teamsName} | CricApp";
     } elseif ($teamsName) {
-        $pageTitle = "{$teamsName} Live Score | LiveCricket";
+        $pageTitle = "{$teamsName} Live Score | CricApp";
     } else {
-        $pageTitle = "Live Cricket Score | LiveCricket";
+        $pageTitle = "Live Cricket Score | CricApp";
     }
 @endphp
 

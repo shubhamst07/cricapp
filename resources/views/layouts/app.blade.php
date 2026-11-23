@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>@yield('title', config('app.name', 'LiveCricket'))</title>
+        <title>@yield('title', config('app.name', 'CricApp'))</title>
 
         <!-- PWA & Mobile App Meta Tags -->
         <link rel="manifest" href="/manifest.json">
@@ -13,7 +13,7 @@
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title" content="LiveCricket">
+        <meta name="apple-mobile-web-app-title" content="CricApp">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
         <link rel="icon" type="image/x-icon" href="/favicon.ico">
         <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
@@ -144,7 +144,7 @@
                                 <li><a href="{{ route('contact') }}" class="hover:text-indigo-600 dark:hover:text-white transition font-bold text-indigo-600 dark:text-indigo-400">📬 Contact Us</a></li>
                                 <li><a href="{{ route('privacy') }}" class="hover:text-indigo-600 dark:hover:text-white transition">🔒 Privacy Policy</a></li>
                                 <li><a href="{{ route('terms') }}" class="hover:text-indigo-600 dark:hover:text-white transition">⚖️ Terms of Service</a></li>
-                                <li><a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20enquiry%20regarding%20LiveCricket" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-500 transition text-emerald-600 dark:text-emerald-400 font-bold">💬 WhatsApp Founder</a></li>
+                                <li><a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20enquiry%20regarding%20CricApp" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-500 transition text-emerald-600 dark:text-emerald-400 font-bold">💬 WhatsApp Founder</a></li>
                             </ul>
                             <div class="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 flex items-center gap-2">
                                 <button type="button" onclick="toggleTheme()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 transition">
@@ -155,7 +155,7 @@
                     </div>
 
                     <div class="border-t border-slate-200 dark:border-white/10 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-                        <p>© {{ date('Y') }} LiveCricket. Created by <strong class="text-slate-800 dark:text-slate-200">Shubham Thakur</strong> (+91 82197 95479). All rights reserved.</p>
+                        <p>© {{ date('Y') }} CricApp.in. Created by <strong class="text-slate-800 dark:text-slate-200">Shubham Thakur</strong> (+91 82197 95479). All rights reserved.</p>
                         <div class="flex items-center gap-4 flex-wrap">
                             <a href="{{ route('about') }}" class="hover:underline">About</a>
                             <a href="{{ route('contact') }}" class="hover:underline">Contact</a>
@@ -173,10 +173,10 @@
              style="display: none;" 
              class="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-md z-50 bg-[#131b2e]/95 backdrop-blur-xl border border-red-500/30 rounded-2xl p-3.5 sm:p-4 shadow-2xl text-white">
             <div class="flex items-center gap-3">
-                <img src="/icons/icon-192x192.png" alt="LiveCricket" class="w-11 h-11 sm:w-12 sm:h-12 rounded-xl shadow-md border border-white/10 shrink-0">
+                <img src="/icons/icon-192x192.png" alt="CricApp" class="w-11 h-11 sm:w-12 sm:h-12 rounded-xl shadow-md border border-white/10 shrink-0">
                 <div class="flex-1 min-w-0">
                     <h4 class="font-black text-xs sm:text-sm text-white truncate flex items-center gap-1.5">
-                        <span>LiveCricket App</span>
+                        <span>CricApp.in</span>
                         <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-red-600/30 text-red-300">Fast ⚡</span>
                     </h4>
                     <p class="text-[11px] text-slate-300 line-clamp-1">Fast ball-by-ball scores & full screen experience</p>
@@ -203,7 +203,7 @@
                 <div class="flex items-center justify-between border-b border-white/10 pb-3">
                     <div class="flex items-center gap-2">
                         <span class="text-xl">📲</span>
-                        <h3 class="font-black text-base text-white">Install LiveCricket App</h3>
+                        <h3 class="font-black text-base text-white">Install CricApp</h3>
                     </div>
                     <button type="button" onclick="closePwaGuideModal()" class="text-slate-400 hover:text-white font-bold text-sm">
                         ✕
@@ -227,7 +227,7 @@
                             <span>Scroll & tap "Add to Home Screen"</span>
                             <span class="text-base">➕</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 pl-8">LiveCricket app will appear on your home screen!</p>
+                        <p class="text-[11px] text-slate-400 pl-8">CricApp will appear on your home screen!</p>
                     </div>
                 </div>
 
@@ -289,7 +289,7 @@
             // Master trigger called by any Install button across the app
             window.triggerPwaInstall = async function() {
                 if (isRunningStandalone) {
-                    alert('🏏 LiveCricket is already installed on your device!');
+                    alert('🏏 CricApp is already installed on your device!');
                     return;
                 }
 

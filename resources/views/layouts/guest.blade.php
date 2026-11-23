@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>@yield('title', config('app.name', 'LiveCricket'))</title>
+        <title>@yield('title', config('app.name', 'CricApp'))</title>
 
         <!-- PWA & Favicon -->
         <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -98,7 +98,7 @@
         <!-- Minimal Footer -->
         <footer class="w-full border-t border-white/5 py-4 text-center text-xs text-slate-500">
             <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-                <span>© {{ date('Y') }} LiveCricket • The Grassroots Cricket Ecosystem</span>
+                <span>© {{ date('Y') }} CricApp.in • The Grassroots Cricket Ecosystem</span>
                 <div class="flex items-center gap-4 text-slate-400 text-[11px]">
                     <a href="{{ route('live-scores.index') }}" class="hover:text-white transition">Scores</a>
                     <span>•</span>

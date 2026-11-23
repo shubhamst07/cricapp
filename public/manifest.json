@@ -1,7 +1,7 @@
 {
-  "name": "LiveCricket - Scores & Tournaments",
-  "short_name": "LiveCricket",
-  "description": "Real-time ball-by-ball cricket scores, live streaming, CricHeroes scorer, ground booking and umpire profiles.",
+  "name": "CricApp - Real-Time Cricket Scores & Tournaments",
+  "short_name": "CricApp",
+  "description": "Real-time ball-by-ball cricket scores, live streaming, news, ground booking and umpire profiles on CricApp.in.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

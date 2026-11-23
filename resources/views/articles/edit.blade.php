@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Edit Article: ' . $article->title . ' | LiveCricket Admin')
+@section('title', 'Edit Article: ' . $article->title . ' | CricApp Admin')
 
 @section('header')
     <div class="flex items-center gap-3">

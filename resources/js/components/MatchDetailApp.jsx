@@ -1422,18 +1422,18 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
 
             if (scoreParts.length > 0) {
                 const scoreText = scoreParts.join(' & ');
-                document.title = matchName ? `${scoreText} - ${matchName} | LiveCricket` : `${scoreText} | LiveCricket`;
+                document.title = matchName ? `${scoreText} - ${matchName} | CricApp` : `${scoreText} | CricApp`;
             } else if (matchName) {
-                document.title = `${matchName} Live Score | LiveCricket`;
+                document.title = `${matchName} Live Score | CricApp`;
             } else {
-                document.title = 'LiveCricket';
+                document.title = 'CricApp';
             }
         } catch {
-            document.title = 'LiveCricket';
+            document.title = 'CricApp';
         }
 
         return () => {
-            document.title = 'LiveCricket';
+            document.title = 'CricApp';
         };
     }, [match, scorecard, miniscore, liveCreaseScore, liveCreaseBatTeam, effectiveStatus]);
 

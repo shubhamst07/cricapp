@@ -6,7 +6,11 @@ use App\Models\Article;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -17,42 +21,48 @@ class ArticleController extends Controller
      */
     public function index(Request $request): View
     {
-        // Auto-seed sample starter articles if table is empty
+        $this->ensureDatabaseReady();
         $this->ensureStarterArticles();
 
         $category = $request->input('category');
         $search = $request->input('q');
 
-        $query = Article::published()->latest('published_at');
-
-        if (!empty($category) && strtolower($category) !== 'all') {
-            $query->where('category', $category);
-        }
-
-        if (!empty($search)) {
-            $s = trim($search);
-            $query->where(function ($q) use ($s) {
-                $q->where('title', 'LIKE', "%{$s}%")
-                  ->orWhere('excerpt', 'LIKE', "%{$s}%")
-                  ->orWhere('content', 'LIKE', "%{$s}%")
-                  ->orWhere('tags', 'LIKE', "%{$s}%");
-            });
-        }
-
-        // Top featured article
         $featuredArticle = null;
-        if (empty($category) && empty($search)) {
-            $featuredArticle = Article::published()->where('is_featured', true)->latest('published_at')->first();
-            if (!$featuredArticle) {
-                $featuredArticle = Article::published()->latest('published_at')->first();
-            }
-        }
+        $articles = new LengthAwarePaginator([], 0, 9);
 
-        // Exclude featured from the paginated list if it exists
-        if ($featuredArticle) {
-            $articles = (clone $query)->where('id', '!=', $featuredArticle->id)->paginate(9)->withQueryString();
-        } else {
-            $articles = $query->paginate(9)->withQueryString();
+        try {
+            $query = Article::published()->latest('published_at');
+
+            if (!empty($category) && strtolower($category) !== 'all') {
+                $query->where('category', $category);
+            }
+
+            if (!empty($search)) {
+                $s = trim($search);
+                $query->where(function ($q) use ($s) {
+                    $q->where('title', 'LIKE', "%{$s}%")
+                      ->orWhere('excerpt', 'LIKE', "%{$s}%")
+                      ->orWhere('content', 'LIKE', "%{$s}%")
+                      ->orWhere('tags', 'LIKE', "%{$s}%");
+                });
+            }
+
+            // Top featured article
+            if (empty($category) && empty($search)) {
+                $featuredArticle = Article::published()->where('is_featured', true)->latest('published_at')->first();
+                if (!$featuredArticle) {
+                    $featuredArticle = Article::published()->latest('published_at')->first();
+                }
+            }
+
+            // Exclude featured from the paginated list if it exists
+            if ($featuredArticle) {
+                $articles = (clone $query)->where('id', '!=', $featuredArticle->id)->paginate(9)->withQueryString();
+            } else {
+                $articles = $query->paginate(9)->withQueryString();
+            }
+        } catch (\Throwable $e) {
+            Log::error('ArticleController@index error: ' . $e->getMessage());
         }
 
         $categories = [
@@ -74,28 +84,40 @@ class ArticleController extends Controller
      */
     public function show(string $slug): View
     {
+        $this->ensureDatabaseReady();
+        $this->ensureStarterArticles();
+
         $article = Article::where('slug', $slug)->firstOrFail();
 
         // Increment views count safely
-        $article->increment('views_count');
+        try {
+            $article->increment('views_count');
+        } catch (\Throwable $e) {
+            // ignore
+        }
 
         // Related articles (same category or recent, excluding current)
-        $relatedArticles = Article::published()
-            ->where('id', '!=', $article->id)
-            ->where(function ($q) use ($article) {
-                $q->where('category', $article->category)
-                  ->orWhere('is_featured', true);
-            })
-            ->latest('published_at')
-            ->take(3)
-            ->get();
-
-        if ($relatedArticles->isEmpty()) {
+        $relatedArticles = collect();
+        try {
             $relatedArticles = Article::published()
                 ->where('id', '!=', $article->id)
+                ->where(function ($q) use ($article) {
+                    $q->where('category', $article->category)
+                      ->orWhere('is_featured', true);
+                })
                 ->latest('published_at')
                 ->take(3)
                 ->get();
+
+            if ($relatedArticles->isEmpty()) {
+                $relatedArticles = Article::published()
+                    ->where('id', '!=', $article->id)
+                    ->latest('published_at')
+                    ->take(3)
+                    ->get();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Related articles query error: ' . $e->getMessage());
         }
 
         $isAdmin = Auth::check() && (Auth::user()->is_admin ?? false);
@@ -109,6 +131,7 @@ class ArticleController extends Controller
     public function create(): View
     {
         $this->authorizeAdmin();
+        $this->ensureDatabaseReady();
 
         $categories = [
             'Match Report',
@@ -128,6 +151,7 @@ class ArticleController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $this->authorizeAdmin();
+        $this->ensureDatabaseReady();
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -277,11 +301,29 @@ class ArticleController extends Controller
     }
 
     /**
+     * Ensure database migrations are run if articles table is missing.
+     */
+    protected function ensureDatabaseReady(): void
+    {
+        try {
+            if (!Schema::hasTable('articles')) {
+                Artisan::call('migrate', ['--force' => true]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Auto-migration in ArticleController: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Ensure default starter articles exist so the blog page is never empty.
      */
     protected function ensureStarterArticles(): void
     {
         try {
+            if (!Schema::hasTable('articles')) {
+                return;
+            }
+
             if (Article::count() > 0) {
                 return;
             }

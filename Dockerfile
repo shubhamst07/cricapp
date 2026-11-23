@@ -18,7 +18,7 @@ RUN cp conf/nginx/nginx-site.conf /etc/nginx/sites-available/default.conf && \
     cp conf/nginx/nginx-site.conf /etc/nginx/sites-enabled/default.conf
 
 # Install Python & Cricbuzz Engine dependencies
-RUN apk add --no-cache python3 py3-pip py3-lxml py3-beautifulsoup4 py3-requests py3-pydantic && \
+RUN apk add --no-cache bash python3 py3-pip py3-lxml py3-beautifulsoup4 py3-requests py3-pydantic && \
     pip install --no-cache-dir --break-system-packages fastapi uvicorn httpx
 
 # Image configuration variables

@@ -36,7 +36,7 @@ export default function LiveScoresApp({
     initialSection = 'international'
 }) {
     useEffect(() => {
-        document.title = 'LiveCricket - Real-Time Cricket Scores & Updates';
+        document.title = 'CricApp - Real-Time Cricket Scores & Updates';
     }, []);
 
     // Current primary section: 'international' or 'local'

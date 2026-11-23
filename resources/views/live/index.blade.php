@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'LiveCricket - Real-Time Cricket Scores, Ball-by-Ball & Updates')
+@section('title', 'CricApp - Real-Time Cricket Scores, Ball-by-Ball & Updates')
 
 @section('content')
     <div id="live-scores-root"

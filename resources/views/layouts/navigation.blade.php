@@ -16,7 +16,7 @@
                             </svg>
                         </div>
                         <div class="flex items-baseline gap-1">
-                            <span class="font-black text-xl text-slate-900 dark:text-white tracking-tight">Live<span class="text-indigo-600 dark:text-indigo-400">Cricket</span></span>
+                            <span class="font-black text-xl text-slate-900 dark:text-white tracking-tight">Cric<span class="text-amber-500 dark:text-amber-400">App</span><span class="text-xs text-indigo-500 font-bold ml-0.5">.in</span></span>
                             <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
                         </div>
                     </a>
@@ -101,7 +101,7 @@
                 <button type="button" 
                         onclick="triggerPwaInstall()" 
                         class="pwa-install-nav-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs shadow-md shadow-red-600/25 transition transform active:scale-95 cursor-pointer"
-                        title="Install LiveCricket App on your device">
+                        title="Install CricApp on your device">
                     <span>📲 Install App</span>
                 </button>
 
@@ -192,7 +192,7 @@
                 <button type="button" 
                         onclick="triggerPwaInstall()" 
                         class="pwa-install-mobile-btn inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs shadow-md shadow-red-600/30 active:scale-95 transition"
-                        title="Install LiveCricket App on Phone">
+                        title="Install CricApp on Phone">
                     <span>📲</span>
                     <span class="text-[11px] font-bold">Install</span>
                 </button>
