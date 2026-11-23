@@ -1,2 +1,5 @@
 User-agent: *
-Disallow:
+Disallow: /admin/
+Disallow: /profile/
+
+Sitemap: https://cricapp.in/sitemap.xml

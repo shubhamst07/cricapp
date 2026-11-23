@@ -154,6 +154,72 @@ Route::get('/articles', [ArticleController::class, 'index'])->name('articles.ind
 Route::get('/news', [ArticleController::class, 'index'])->name('news.index');
 Route::get('/articles/{slug}', [ArticleController::class, 'show'])->name('articles.show');
 
+// Google SEO Sitemap & AdSense ads.txt
+Route::get('/sitemap.xml', function () {
+    $baseUrl = rtrim(config('app.url', 'https://cricapp.in'), '/');
+    if (!str_starts_with($baseUrl, 'http')) {
+        $baseUrl = 'https://cricapp.in';
+    }
+
+    $urls = [
+        ['loc' => "{$baseUrl}/", 'changefreq' => 'always', 'priority' => '1.0'],
+        ['loc' => "{$baseUrl}/live-scores?section=international", 'changefreq' => 'always', 'priority' => '0.9'],
+        ['loc' => "{$baseUrl}/live-scores?section=local", 'changefreq' => 'always', 'priority' => '0.9'],
+        ['loc' => "{$baseUrl}/articles", 'changefreq' => 'daily', 'priority' => '0.9'],
+        ['loc' => "{$baseUrl}/grounds", 'changefreq' => 'weekly', 'priority' => '0.8'],
+        ['loc' => "{$baseUrl}/umpires", 'changefreq' => 'weekly', 'priority' => '0.8'],
+        ['loc' => "{$baseUrl}/meetups", 'changefreq' => 'daily', 'priority' => '0.8'],
+        ['loc' => "{$baseUrl}/about", 'changefreq' => 'monthly', 'priority' => '0.5'],
+        ['loc' => "{$baseUrl}/contact", 'changefreq' => 'monthly', 'priority' => '0.5'],
+        ['loc' => "{$baseUrl}/privacy", 'changefreq' => 'monthly', 'priority' => '0.5'],
+        ['loc' => "{$baseUrl}/terms", 'changefreq' => 'monthly', 'priority' => '0.5'],
+    ];
+
+    try {
+        if (\Illuminate\Support\Facades\Schema::hasTable('articles')) {
+            $articles = \App\Models\Article::published()->latest('published_at')->take(100)->get();
+            foreach ($articles as $art) {
+                $urls[] = [
+                    'loc' => "{$baseUrl}/articles/{$art->slug}",
+                    'lastmod' => ($art->updated_at ?? $art->created_at)?->toAtomString(),
+                    'changefreq' => 'weekly',
+                    'priority' => '0.8',
+                ];
+            }
+        }
+    } catch (\Throwable $e) {
+        // ignore
+    }
+
+    $xml = '<?xml version="1.0" encoding="UTF-8"?>';
+    $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
+    foreach ($urls as $u) {
+        $xml .= '<url>';
+        $xml .= '<loc>' . htmlspecialchars($u['loc']) . '</loc>';
+        if (!empty($u['lastmod'])) {
+            $xml .= '<lastmod>' . $u['lastmod'] . '</lastmod>';
+        }
+        $xml .= '<changefreq>' . ($u['changefreq'] ?? 'weekly') . '</changefreq>';
+        $xml .= '<priority>' . ($u['priority'] ?? '0.8') . '</priority>';
+        $xml .= '</url>';
+    }
+    $xml .= '</urlset>';
+
+    return response($xml, 200)->header('Content-Type', 'application/xml; charset=utf-8');
+});
+
+Route::get('/ads.txt', function () {
+    $adsenseId = env('ADSENSE_CLIENT_ID', '');
+    $pubId = preg_replace('/^ca-/', '', trim($adsenseId));
+    $content = "# CricApp.in AdSense Verification\n";
+    if (!empty($pubId)) {
+        $content .= "google.com, {$pubId}, DIRECT, f08c47fec0942fa0\n";
+    } else {
+        $content .= "# Configure ADSENSE_CLIENT_ID in Render Environment Variables\n";
+    }
+    return response($content, 200)->header('Content-Type', 'text/plain; charset=utf-8');
+});
+
 // Admin Article Management
 Route::middleware('auth')->group(function () {
     Route::get('/admin/articles/create', [ArticleController::class, 'create'])->name('articles.create');
