@@ -5,7 +5,7 @@
         <div class="hidden lg:flex lg:col-span-6 flex-col justify-center space-y-6 pr-4">
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold w-fit">
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>CRICHEROES & LIVE CRICKET PLATFORM</span>
+                <span>CRICAPP.IN LIVE CRICKET & MATCH ARENA</span>
             </div>
 
             <div class="space-y-3">
@@ -71,7 +71,7 @@
                     <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-wider">
                         <span>🏏 WELCOME BACK</span>
                     </div>
-                    <h2 class="text-2xl font-black text-white">Sign In to LiveCricket</h2>
+                    <h2 class="text-2xl font-black text-white">Sign In to CricApp.in</h2>
                     <p class="text-xs text-slate-400">Enter your credentials to manage your matches & team.</p>
                 </div>
 

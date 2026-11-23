@@ -2128,12 +2128,17 @@ class MatchController extends Controller
             return view('dashboard', $stale);
         }
 
-        $userMatches = $userId
-            ? CricketMatch::with(['scores'])
-                ->where('user_id', $userId)
-                ->orderByDesc('match_date')
-                ->get()
-            : collect([]);
+        $userMatches = collect([]);
+        try {
+            if ($userId && \Illuminate\Support\Facades\Schema::hasTable('matches')) {
+                $userMatches = CricketMatch::with(['scores'])
+                    ->where('user_id', $userId)
+                    ->orderByDesc('match_date')
+                    ->get();
+            }
+        } catch (\Throwable $e) {
+            $userMatches = collect([]);
+        }
 
         $totalMatches = $userMatches->count();
         $liveMatches = $userMatches->where('status', 'live')->count();
@@ -2201,10 +2206,17 @@ class MatchController extends Controller
             $cricbuzzMatches = collect([]);
         }
 
-        $allPosts = MatchPost::with('comments')
-            ->latest()
-            ->take(50)
-            ->get();
+        $allPosts = collect([]);
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('match_posts')) {
+                $allPosts = MatchPost::with('comments')
+                    ->latest()
+                    ->take(50)
+                    ->get();
+            }
+        } catch (\Throwable $e) {
+            $allPosts = collect([]);
+        }
 
         $allPosts->transform(function ($post) use ($cricbuzzMatches) {
             $matched = $cricbuzzMatches->firstWhere('id', (string) $post->match_id);
