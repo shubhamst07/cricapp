@@ -24,6 +24,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/framework/*.flag
 /vendor
 _ide_helper.php
 Homestead.json
