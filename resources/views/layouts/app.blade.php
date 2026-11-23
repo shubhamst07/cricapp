@@ -127,6 +127,7 @@
                             <h4 class="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-slate-200 mb-3">Platform Services</h4>
                             <ul class="space-y-2 text-xs font-medium">
                                 <li><a href="{{ route('matches.index') }}" class="hover:text-indigo-600 dark:hover:text-white transition">⚡ Local Matches Arena</a></li>
+                                <li><a href="{{ route('articles.index') }}" class="hover:text-amber-400 dark:hover:text-amber-400 text-amber-500 font-bold transition">📰 News & Articles</a></li>
                                 <li><a href="{{ route('grounds.index') }}" class="hover:text-indigo-600 dark:hover:text-white transition">🏟️ Cricket Grounds & Turf</a></li>
                                 <li><a href="{{ route('umpires.index') }}" class="hover:text-indigo-600 dark:hover:text-white transition">⚖️ Verified Match Umpires</a></li>
                                 @auth
@@ -167,29 +168,95 @@
             </footer>
         </div>
 
-        <!-- PWA Mobile Install Banner -->
+        <!-- PWA Mobile Install Banner (Floating Bottom Card) -->
         <div id="pwa-install-banner" 
              style="display: none;" 
-             class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-md z-50 bg-[#131b2e]/95 backdrop-blur-md border-2 border-indigo-500/40 rounded-2xl p-4 shadow-2xl text-white">
+             class="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-md z-50 bg-[#131b2e]/95 backdrop-blur-xl border border-red-500/30 rounded-2xl p-3.5 sm:p-4 shadow-2xl text-white">
             <div class="flex items-center gap-3">
-                <img src="/icons/icon-192x192.png" alt="LiveCricket" class="w-12 h-12 rounded-xl shadow-md border border-white/10 shrink-0">
+                <img src="/icons/icon-192x192.png" alt="LiveCricket" class="w-11 h-11 sm:w-12 sm:h-12 rounded-xl shadow-md border border-white/10 shrink-0">
                 <div class="flex-1 min-w-0">
-                    <h4 class="font-black text-sm text-white truncate">Install LiveCricket App</h4>
-                    <p class="text-[11px] text-slate-300 line-clamp-1">Faster live scores, offline support & full screen</p>
+                    <h4 class="font-black text-xs sm:text-sm text-white truncate flex items-center gap-1.5">
+                        <span>LiveCricket App</span>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-red-600/30 text-red-300">Fast ⚡</span>
+                    </h4>
+                    <p class="text-[11px] text-slate-300 line-clamp-1">Fast ball-by-ball scores & full screen experience</p>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    <button id="pwa-install-btn" type="button" 
-                            class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs shadow-md shadow-red-600/30 active:scale-95 transition">
+                    <button type="button" onclick="triggerPwaInstall()" 
+                            class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs shadow-md shadow-red-600/30 active:scale-95 transition cursor-pointer">
                         Install 📲
                     </button>
-                    <button id="pwa-close-btn" type="button" class="p-1.5 text-slate-400 hover:text-white rounded-lg">
+                    <button id="pwa-close-btn" type="button" 
+                            class="p-1.5 text-slate-400 hover:text-white rounded-lg transition" 
+                            title="Dismiss">
                         ✕
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- PWA Service Worker & Install Script -->
+        <!-- PWA Manual Install Instructions Modal (For iOS Safari & Supported Browsers) -->
+        <div id="pwa-guide-modal" 
+             style="display: none;" 
+             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div class="relative w-full max-w-sm rounded-3xl bg-[#131b2e] border border-white/15 p-6 shadow-2xl space-y-5 text-white">
+                <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">📲</span>
+                        <h3 class="font-black text-base text-white">Install LiveCricket App</h3>
+                    </div>
+                    <button type="button" onclick="closePwaGuideModal()" class="text-slate-400 hover:text-white font-bold text-sm">
+                        ✕
+                    </button>
+                </div>
+
+                <!-- Instructions Content (Dynamically shown based on OS) -->
+                <div id="pwa-ios-instructions" class="space-y-3.5 text-xs text-slate-200">
+                    <p class="text-slate-300">Follow these 2 simple steps to install on your <strong>iPhone / iPad</strong>:</p>
+                    <div class="p-3 rounded-xl bg-slate-900 border border-white/5 space-y-2">
+                        <div class="flex items-center gap-2.5 font-bold text-white">
+                            <span class="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-xs">1</span>
+                            <span>Tap Safari Share button</span>
+                            <span class="text-base">⎙</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 pl-8">Located at the bottom of your Safari screen.</p>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-900 border border-white/5 space-y-2">
+                        <div class="flex items-center gap-2.5 font-bold text-white">
+                            <span class="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-xs">2</span>
+                            <span>Scroll & tap "Add to Home Screen"</span>
+                            <span class="text-base">➕</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 pl-8">LiveCricket app will appear on your home screen!</p>
+                    </div>
+                </div>
+
+                <div id="pwa-android-instructions" class="space-y-3.5 text-xs text-slate-200" style="display: none;">
+                    <p class="text-slate-300">To install on <strong>Android / Chrome / Edge</strong>:</p>
+                    <div class="p-3 rounded-xl bg-slate-900 border border-white/5 space-y-2">
+                        <div class="flex items-center gap-2.5 font-bold text-white">
+                            <span class="w-6 h-6 rounded-lg bg-red-600 flex items-center justify-center text-xs">1</span>
+                            <span>Tap Chrome Menu</span>
+                            <span class="text-base">⋮</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 pl-8">At the top-right corner of your browser.</p>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-900 border border-white/5 space-y-2">
+                        <div class="flex items-center gap-2.5 font-bold text-white">
+                            <span class="w-6 h-6 rounded-lg bg-red-600 flex items-center justify-center text-xs">2</span>
+                            <span>Select "Install app" or "Add to Home screen"</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" onclick="closePwaGuideModal()" 
+                        class="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs uppercase tracking-wider shadow-md">
+                    Got It 👍
+                </button>
+            </div>
+        </div>
+
+        <!-- PWA Service Worker & Universal Install Engine -->
         <script>
             // Register Service Worker
             if ('serviceWorker' in navigator) {
@@ -200,41 +267,84 @@
                 });
             }
 
-            // PWA Install Prompt Handler
-            let deferredPrompt = null;
-            const installBanner = document.getElementById('pwa-install-banner');
-            const installBtn = document.getElementById('pwa-install-btn');
-            const closeBtn = document.getElementById('pwa-close-btn');
+            // Universal PWA Install Trigger Engine
+            window.deferredPWAInstallPrompt = null;
+            const isRunningStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
-                deferredPrompt = e;
-                if (!localStorage.getItem('pwa_install_dismissed')) {
-                    if (installBanner) installBanner.style.display = 'block';
+                window.deferredPWAInstallPrompt = e;
+
+                // Show install floating banner if not running in standalone & not snoozed
+                if (!isRunningStandalone) {
+                    const dismissedUntil = localStorage.getItem('pwa_dismissed_until');
+                    const now = Date.now();
+                    if (!dismissedUntil || now > parseInt(dismissedUntil)) {
+                        const banner = document.getElementById('pwa-install-banner');
+                        if (banner) banner.style.display = 'block';
+                    }
                 }
             });
 
-            if (installBtn) {
-                installBtn.addEventListener('click', async () => {
-                    if (!deferredPrompt) return;
-                    deferredPrompt.prompt();
-                    const { outcome } = await deferredPrompt.userChoice;
-                    console.log('User PWA install response:', outcome);
-                    deferredPrompt = null;
-                    if (installBanner) installBanner.style.display = 'none';
-                });
+            // Master trigger called by any Install button across the app
+            window.triggerPwaInstall = async function() {
+                if (isRunningStandalone) {
+                    alert('🏏 LiveCricket is already installed on your device!');
+                    return;
+                }
+
+                if (window.deferredPWAInstallPrompt) {
+                    window.deferredPWAInstallPrompt.prompt();
+                    const { outcome } = await window.deferredPWAInstallPrompt.userChoice;
+                    console.log('PWA prompt user choice:', outcome);
+                    if (outcome === 'accepted') {
+                        window.deferredPWAInstallPrompt = null;
+                        const banner = document.getElementById('pwa-install-banner');
+                        if (banner) banner.style.display = 'none';
+                    }
+                } else {
+                    // Browser didn't provide automatic prompt (e.g. iOS Safari, or Chrome already prompted)
+                    openPwaGuideModal();
+                }
+            };
+
+            function openPwaGuideModal() {
+                const modal = document.getElementById('pwa-guide-modal');
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                const iosBox = document.getElementById('pwa-ios-instructions');
+                const androidBox = document.getElementById('pwa-android-instructions');
+
+                if (isIOS) {
+                    if (iosBox) iosBox.style.display = 'block';
+                    if (androidBox) androidBox.style.display = 'none';
+                } else {
+                    if (iosBox) iosBox.style.display = 'none';
+                    if (androidBox) androidBox.style.display = 'block';
+                }
+
+                if (modal) modal.style.display = 'flex';
             }
 
+            function closePwaGuideModal() {
+                const modal = document.getElementById('pwa-guide-modal');
+                if (modal) modal.style.display = 'none';
+            }
+
+            // Close button snoozes the banner for 24 hours
+            const closeBtn = document.getElementById('pwa-close-btn');
             if (closeBtn) {
                 closeBtn.addEventListener('click', () => {
-                    if (installBanner) installBanner.style.display = 'none';
-                    localStorage.setItem('pwa_install_dismissed', '1');
+                    const banner = document.getElementById('pwa-install-banner');
+                    if (banner) banner.style.display = 'none';
+                    // Snooze for 24 hours
+                    localStorage.setItem('pwa_dismissed_until', (Date.now() + 86400000).toString());
                 });
             }
 
             window.addEventListener('appinstalled', () => {
-                if (installBanner) installBanner.style.display = 'none';
-                deferredPrompt = null;
+                const banner = document.getElementById('pwa-install-banner');
+                if (banner) banner.style.display = 'none';
+                window.deferredPWAInstallPrompt = null;
                 console.log('LiveCricket PWA installed successfully!');
             });
         </script>

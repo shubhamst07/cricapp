@@ -63,12 +63,16 @@ self.addEventListener('fetch', (event) => {
           }
           return await fetch(request);
         } catch (error) {
-          const cache = await caches.open(CACHE_NAME);
-          const cachedResponse = await cache.match(request);
-          if (cachedResponse) {
-            return cachedResponse;
+          try {
+            return await fetch(request);
+          } catch (netErr) {
+            const cache = await caches.open(CACHE_NAME);
+            const cachedResponse = await cache.match(request);
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            return await cache.match(OFFLINE_URL);
           }
-          return await cache.match(OFFLINE_URL);
         }
       })()
     );

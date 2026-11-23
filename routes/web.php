@@ -1,12 +1,13 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\MatchController;
-use App\Http\Controllers\LiveScoreController;
 use App\Http\Controllers\GroundController;
-use App\Http\Controllers\UmpireController;
-use App\Http\Controllers\PageController;
+use App\Http\Controllers\LiveScoreController;
+use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MeetupController;
+use App\Http\Controllers\PageController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UmpireController;
+use App\Http\Controllers\ArticleController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', fn () => response('pong', 200)->header('Content-Type', 'text/plain'));
@@ -147,5 +148,19 @@ Route::get('/matches/{match}/broadcast/state', [MatchController::class, 'broadca
 Route::post('/matches/{match}/stream-signal', [MatchController::class, 'updateStreamSignal'])->name('matches.stream-signal');
 Route::post('/matches/{match}/recording', [MatchController::class, 'uploadRecording'])->name('matches.upload-recording');
 Route::delete('/matches/{match}/recordings/{videoId}', [MatchController::class, 'deleteRecording'])->name('matches.delete-recording');
+
+// Cricket News, Articles & Blog (Public)
+Route::get('/articles', [ArticleController::class, 'index'])->name('articles.index');
+Route::get('/news', [ArticleController::class, 'index'])->name('news.index');
+Route::get('/articles/{slug}', [ArticleController::class, 'show'])->name('articles.show');
+
+// Admin Article Management
+Route::middleware('auth')->group(function () {
+    Route::get('/admin/articles/create', [ArticleController::class, 'create'])->name('articles.create');
+    Route::post('/admin/articles', [ArticleController::class, 'store'])->name('articles.store');
+    Route::get('/admin/articles/{article}/edit', [ArticleController::class, 'edit'])->name('articles.edit');
+    Route::put('/admin/articles/{article}', [ArticleController::class, 'update'])->name('articles.update');
+    Route::delete('/admin/articles/{article}', [ArticleController::class, 'destroy'])->name('articles.destroy');
+});
 
 require __DIR__.'/auth.php';

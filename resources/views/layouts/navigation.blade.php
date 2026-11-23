@@ -69,6 +69,12 @@
                         </span>
                     </x-nav-link>
 
+                    <x-nav-link :href="route('articles.index')" :active="request()->routeIs('articles.*') || request()->routeIs('news.*')">
+                        <span class="inline-flex items-center gap-1.5 font-semibold">
+                            <span>📰 {{ __('News & Articles') }}</span>
+                        </span>
+                    </x-nav-link>
+
                     <x-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
                         <span class="inline-flex items-center gap-1.5 font-semibold">
                             <span>⚖️ {{ __('Umpires') }}</span>
@@ -91,6 +97,14 @@
 
             <!-- Right Side Auth Menu & Theme Toggle -->
             <div class="hidden md:flex md:items-center md:ms-6 gap-3">
+                <!-- Desktop PWA Install Button -->
+                <button type="button" 
+                        onclick="triggerPwaInstall()" 
+                        class="pwa-install-nav-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs shadow-md shadow-red-600/25 transition transform active:scale-95 cursor-pointer"
+                        title="Install LiveCricket App on your device">
+                    <span>📲 Install App</span>
+                </button>
+
                 <!-- Light / Dark Mode Toggle Button -->
                 <button type="button" 
                         onclick="toggleTheme()" 
@@ -131,6 +145,11 @@
                         </x-slot>
 
                         <x-slot name="content">
+                            @if(Auth::user()->is_admin)
+                                <x-dropdown-link :href="route('articles.create')" class="text-amber-500 font-bold hover:bg-slate-100 dark:hover:bg-white/10">
+                                    <span>✍️ {{ __('Write Article (Admin)') }}</span>
+                                </x-dropdown-link>
+                            @endif
                             <x-dropdown-link :href="route('profile.show')" class="text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10">
                                 <span>👤 {{ __('My Profile') }}</span>
                             </x-dropdown-link>
@@ -167,8 +186,17 @@
                 @endauth
             </div>
 
-            <!-- Hamburger & Mobile Theme Toggle -->
+            <!-- Hamburger & Mobile Quick Install & Theme Toggle -->
             <div class="-me-2 flex items-center md:hidden gap-1.5">
+                <!-- Mobile Quick Install Button -->
+                <button type="button" 
+                        onclick="triggerPwaInstall()" 
+                        class="pwa-install-mobile-btn inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs shadow-md shadow-red-600/30 active:scale-95 transition"
+                        title="Install LiveCricket App on Phone">
+                    <span>📲</span>
+                    <span class="text-[11px] font-bold">Install</span>
+                </button>
+
                 <button type="button" 
                         onclick="toggleTheme()" 
                         class="p-2 rounded-xl text-slate-700 dark:text-amber-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
@@ -196,6 +224,19 @@
 
     <!-- Responsive Navigation Menu -->
     <div :class="{'block': open, 'hidden': ! open}" class="hidden md:hidden bg-white dark:bg-[#0b1120] border-t border-slate-200 dark:border-white/10 shadow-lg">
+        <!-- Mobile Drawer PWA Install Banner -->
+        <div class="p-3.5 bg-gradient-to-r from-red-600/10 via-rose-600/10 to-transparent border-b border-slate-200 dark:border-white/5">
+            <button type="button" 
+                    onclick="triggerPwaInstall()" 
+                    class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-red-600/25 active:scale-95 transition flex items-center justify-between">
+                <span class="flex items-center gap-2">
+                    <span class="text-base">📲</span>
+                    <span>Install App on Phone</span>
+                </span>
+                <span class="px-2 py-0.5 rounded-full bg-black/30 text-[10px] font-bold">Free PWA</span>
+            </button>
+        </div>
+
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link :href="route('live-scores.index', ['section' => 'international'])" :active="(request()->routeIs('live-scores.*') || request()->routeIs('home')) && request()->get('section', 'international') === 'international'">
                 <span>🌍 {{ __('International Cricket') }}</span>
@@ -230,6 +271,10 @@
                 <span>🤝 {{ __('Find Players & Meetups') }}</span>
             </x-responsive-nav-link>
 
+            <x-responsive-nav-link :href="route('articles.index')" :active="request()->routeIs('articles.*') || request()->routeIs('news.*')">
+                <span>📰 {{ __('Cricket News & Articles') }}</span>
+            </x-responsive-nav-link>
+
             <x-responsive-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
                 <span>⚖️ {{ __('Match Umpires') }}</span>
             </x-responsive-nav-link>
@@ -257,6 +302,11 @@
                 </div>
 
                 <div class="mt-3 space-y-1">
+                    @if(Auth::user()->is_admin)
+                        <x-responsive-nav-link :href="route('articles.create')" class="text-amber-500 font-bold">
+                            <span>✍️ {{ __('Write Article (Admin)') }}</span>
+                        </x-responsive-nav-link>
+                    @endif
                     <x-responsive-nav-link :href="route('profile.show')">
                         <span>👤 {{ __('My Profile') }}</span>
                     </x-responsive-nav-link>
