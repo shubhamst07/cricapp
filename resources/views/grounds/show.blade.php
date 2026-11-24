@@ -31,7 +31,7 @@
 @endsection
 
 @section('content')
-<div class="py-8 bg-slate-900 min-h-screen text-slate-100 font-sans" x-data="{
+<div class="py-8 bg-slate-50 dark:bg-transparent min-h-screen text-slate-900 dark:text-slate-100 font-sans" x-data="{
     bookingModal: false,
     bookingDate: '{{ date('Y-m-d') }}',
     timeSlot: '06:00 AM - 09:00 AM',
@@ -175,76 +175,76 @@
 
                 <!-- Ground Key Stats Bar -->
                 <div class="grid grid-cols-3 gap-4">
-                    <div class="p-5 rounded-2xl bg-[#131b2e] border border-white/10 text-center">
-                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Matches Hosted</span>
-                        <span class="text-3xl font-black text-emerald-400 mt-1 block">{{ $ground->matches_hosted ?? 0 }}+</span>
+                    <div class="p-5 rounded-2xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 text-center shadow-sm">
+                        <span class="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block">Matches Hosted</span>
+                        <span class="text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{{ $ground->matches_hosted ?? 0 }}+</span>
                     </div>
 
-                    <div class="p-5 rounded-2xl bg-[#131b2e] border border-white/10 text-center">
-                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Pitch Type</span>
-                        <span class="text-sm font-black text-white mt-2 block">{{ $ground->pitch_type }}</span>
+                    <div class="p-5 rounded-2xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 text-center shadow-sm">
+                        <span class="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block">Pitch Type</span>
+                        <span class="text-sm font-black text-slate-900 dark:text-white mt-2 block">{{ $ground->pitch_type }}</span>
                     </div>
 
-                    <div class="p-5 rounded-2xl bg-[#131b2e] border border-white/10 text-center">
-                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Ground Status</span>
-                        <span class="text-xs font-black uppercase text-emerald-400 mt-3 inline-block px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                    <div class="p-5 rounded-2xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 text-center shadow-sm">
+                        <span class="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block">Ground Status</span>
+                        <span class="text-xs font-black uppercase text-emerald-600 dark:text-emerald-400 mt-3 inline-block px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                             {{ ucfirst($ground->status) }} 🟢
                         </span>
                     </div>
                 </div>
 
                 <!-- Amenities Box -->
-                <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-3">
-                    <h3 class="text-base font-black text-white flex items-center gap-2">
+                <div class="p-6 rounded-3xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-xl space-y-3">
+                    <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                         <span>✨ Ground Amenities & Features</span>
                     </h3>
 
                     @if(!empty($ground->amenities) && is_array($ground->amenities))
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2">
                             @foreach($ground->amenities as $am)
-                                <div class="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2 text-xs font-bold text-slate-200">
-                                    <span class="text-emerald-400">✓</span>
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                                    <span class="text-emerald-600 dark:text-emerald-400">✓</span>
                                     <span>{{ $am }}</span>
                                 </div>
                             @endforeach
                         </div>
                     @else
-                        <p class="text-xs text-slate-400">Standard local pitch facilities available.</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Standard local pitch facilities available.</p>
                     @endif
                 </div>
 
                 <!-- Description & Rules -->
-                <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-3">
-                    <h3 class="text-base font-black text-white flex items-center gap-2">
+                <div class="p-6 rounded-3xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-xl space-y-3">
+                    <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                         <span>📝 Ground Overview & Match Guidelines</span>
                     </h3>
-                    <div class="text-xs sm:text-sm text-slate-300 leading-relaxed space-y-2 whitespace-pre-line">
+                    <div class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed space-y-2 whitespace-pre-line">
                         {{ $ground->description ?: 'High quality cricket pitch maintained for competitive local cricket tournaments, corporate matches, and friendly weekend games.' }}
                     </div>
                 </div>
 
                 <!-- Recent Matches Hosted at this Arena -->
-                <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-4">
+                <div class="p-6 rounded-3xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-xl space-y-4">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-base font-black text-white flex items-center gap-2">
+                        <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                             <span>🏟️</span>
                             <span>Matches Hosted at this Arena</span>
                         </h3>
-                        <span class="text-xs text-emerald-400 font-bold">{{ $ground->matches_hosted ?? 0 }} Total Matches</span>
+                        <span class="text-xs text-emerald-600 dark:text-emerald-400 font-bold">{{ $ground->matches_hosted ?? 0 }} Total Matches</span>
                     </div>
 
                     @if(isset($hostedMatches) && $hostedMatches->isNotEmpty())
                         <div class="space-y-2.5">
                             @foreach($hostedMatches as $m)
                                 <a href="{{ route('matches.show', $m) }}"
-                                   class="block p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition group">
+                                   class="block p-3.5 rounded-2xl bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 transition group">
                                     <div class="flex items-center justify-between text-xs mb-1">
-                                        <span class="font-extrabold text-white group-hover:text-emerald-400 transition">{{ $m->team1_name }} vs {{ $m->team2_name }}</span>
-                                        <span class="text-[10px] text-slate-400">{{ $m->match_date?->format('M d, Y') }}</span>
+                                        <span class="font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">{{ $m->team1_name }} vs {{ $m->team2_name }}</span>
+                                        <span class="text-[10px] text-slate-500 dark:text-slate-400">{{ $m->match_date?->format('M d, Y') }}</span>
                                     </div>
-                                    <div class="flex items-center justify-between text-[11px] text-slate-400">
+                                    <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                                         <span>🏆 {{ $m->tournament_name ?? 'Club Match' }} • {{ $m->match_type ?? 'T20' }}</span>
-                                        <span class="font-bold {{ $m->status === 'completed' ? 'text-emerald-400' : 'text-amber-400' }}">
+                                        <span class="font-bold {{ $m->status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' }}">
                                             {{ ucfirst($m->status) }}
                                         </span>
                                     </div>
@@ -252,7 +252,7 @@
                             @endforeach
                         </div>
                     @else
-                        <div class="text-center py-6 text-xs text-slate-400">
+                        <div class="text-center py-6 text-xs text-slate-500 dark:text-slate-400">
                             <span>No matches hosted on LiveCricket recorded yet.</span>
                         </div>
                     @endif
@@ -263,25 +263,25 @@
             <!-- Right Col: Host & Direct Contact -->
             <div class="space-y-6">
 
-                <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-4">
-                    <h3 class="text-base font-black text-white">Contact & Quick Booking</h3>
+                <div class="p-6 rounded-3xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-xl space-y-4">
+                    <h3 class="text-base font-black text-slate-900 dark:text-white">Contact & Quick Booking</h3>
 
-                    <div class="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3 text-xs">
+                    <div class="p-4 rounded-2xl bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/5 space-y-3 text-xs">
                         <div class="flex items-center justify-between">
-                            <span class="text-slate-400">Ground Host:</span>
-                            <span class="font-bold text-white">{{ $ground->user->name }}</span>
+                            <span class="text-slate-500 dark:text-slate-400">Ground Host:</span>
+                            <span class="font-bold text-slate-900 dark:text-white">{{ $ground->user->name }}</span>
                         </div>
                         <div class="flex items-center justify-between">
-                            <span class="text-slate-400">City:</span>
-                            <span class="font-bold text-emerald-400">{{ $ground->city }}</span>
+                            <span class="text-slate-500 dark:text-slate-400">City:</span>
+                            <span class="font-bold text-emerald-600 dark:text-emerald-400">{{ $ground->city }}</span>
                         </div>
                         <div class="flex items-center justify-between">
-                            <span class="text-slate-400">Pitch Type:</span>
-                            <span class="font-bold text-white">{{ $ground->pitch_type }}</span>
+                            <span class="text-slate-500 dark:text-slate-400">Pitch Type:</span>
+                            <span class="font-bold text-slate-900 dark:text-white">{{ $ground->pitch_type }}</span>
                         </div>
                         <div class="flex items-center justify-between">
-                            <span class="text-slate-400">Phone:</span>
-                            <a href="tel:{{ $ground->phone }}" class="font-bold text-blue-400 underline">{{ $ground->phone }}</a>
+                            <span class="text-slate-500 dark:text-slate-400">Phone:</span>
+                            <a href="tel:{{ $ground->phone }}" class="font-bold text-blue-600 dark:text-blue-400 underline">{{ $ground->phone }}</a>
                         </div>
                     </div>
 
@@ -306,13 +306,13 @@
 
                         @if($ground->whatsapp)
                             <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $ground->whatsapp) }}?text=Hi,%20I%20am%20interested%20in%20booking%20slots%20at%20{{ urlencode($ground->name) }}" target="_blank"
-                               class="w-full py-2.5 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white font-bold text-xs transition flex items-center justify-center gap-2">
+                               class="w-full py-2.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white font-bold text-xs transition flex items-center justify-center gap-2">
                                 <span>💬 Chat on WhatsApp</span>
                             </a>
                         @endif
 
                         <a href="tel:{{ $ground->phone }}"
-                           class="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs transition flex items-center justify-center gap-2">
+                           class="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-white/5 dark:hover:bg-white/10 dark:text-slate-300 font-bold text-xs transition flex items-center justify-center gap-2">
                             <span>📞 Call Ground Manager</span>
                         </a>
                     </div>
@@ -325,40 +325,40 @@
     </div>
 
     <!-- Booking Modal -->
-    <div x-cloak x-show="bookingModal" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+    <div x-cloak x-show="bookingModal" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md"
          @keydown.escape.window="bookingModal = false">
-        <div class="relative bg-slate-900 border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4"
+        <div class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4"
              @click.away="bookingModal = false">
 
-            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
                 <div>
-                    <span class="text-[10px] font-black uppercase tracking-wider text-emerald-400">📅 BOOK MATCH SLOT</span>
-                    <h3 class="text-lg font-black text-white">{{ $ground->name }}</h3>
-                    <div class="text-xs text-slate-400">Fee: ₹{{ number_format($ground->price_per_slot, 2) }} / {{ $ground->slot_duration }}</div>
+                    <span class="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">📅 BOOK MATCH SLOT</span>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white">{{ $ground->name }}</h3>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Fee: ₹{{ number_format($ground->price_per_slot, 2) }} / {{ $ground->slot_duration }}</div>
                 </div>
-                <button type="button" @click="bookingModal = false" class="text-slate-400 hover:text-white text-sm font-bold">✕</button>
+                <button type="button" @click="bookingModal = false" class="text-slate-400 hover:text-slate-900 dark:hover:text-white text-sm font-bold">✕</button>
             </div>
 
             <form method="POST" action="{{ route('grounds.book', $ground) }}" class="space-y-4 text-xs">
                 @csrf
 
                 <div>
-                    <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1">Your Team / Club Name *</label>
+                    <label class="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Your Team / Club Name *</label>
                     <input type="text" name="team_name" x-model="teamName" required placeholder="e.g. Royal Strikers CC"
-                           class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                           class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1">Booking Date *</label>
+                        <label class="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Booking Date *</label>
                         <input type="date" name="booking_date" x-model="bookingDate" min="{{ date('Y-m-d') }}" required
-                               class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                               class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                     </div>
 
                     <div>
-                        <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1">Time Slot *</label>
+                        <label class="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Time Slot *</label>
                         <select name="time_slot" x-model="timeSlot" required
-                                class="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                             <option value="06:00 AM - 09:00 AM">🌅 Morning (06:00 AM - 09:00 AM)</option>
                             <option value="09:00 AM - 12:00 PM">☀️ Midday (09:00 AM - 12:00 PM)</option>
                             <option value="01:00 PM - 04:00 PM">🌤️ Afternoon (01:00 PM - 04:00 PM)</option>
@@ -370,19 +370,19 @@
                 </div>
 
                 <div>
-                    <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1">Captain / Organizer Contact Phone *</label>
+                    <label class="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Captain / Organizer Contact Phone *</label>
                     <input type="text" name="contact_phone" x-model="contactPhone" required placeholder="Enter WhatsApp or Phone number"
-                           class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                           class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                 </div>
 
                 <div>
-                    <label class="block font-bold text-slate-300 uppercase tracking-wider mb-1">Match Notes (Optional)</label>
+                    <label class="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Match Notes (Optional)</label>
                     <textarea name="notes" x-model="notes" rows="2" placeholder="e.g. 20 Overs Leather ball match..."
-                              class="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+                              class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
                 </div>
 
-                <div class="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
-                    <button type="button" @click="bookingModal = false" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
+                    <button type="button" @click="bookingModal = false" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-900 dark:hover:text-white">
                         Cancel
                     </button>
                     <button type="submit"

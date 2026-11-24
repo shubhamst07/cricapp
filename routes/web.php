@@ -156,6 +156,33 @@ Route::get('/articles', [ArticleController::class, 'index'])->name('articles.ind
 Route::get('/news', [ArticleController::class, 'index'])->name('news.index');
 Route::get('/articles/{slug}', [ArticleController::class, 'show'])->name('articles.show');
 
+// Direct static fallback for uploaded article images (guarantees images always load)
+Route::get('/uploads/articles/{filename}', function (string $filename) {
+    $path = public_path('uploads/articles/' . $filename);
+    if (!file_exists($path)) {
+        $path = storage_path('app/public/uploads/articles/' . $filename);
+    }
+    if (file_exists($path)) {
+        return response()->file($path, [
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+    return redirect('https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80');
+})->where('filename', '[A-Za-z0-9_\-\.]+');
+
+Route::get('/storage/uploads/articles/{filename}', function (string $filename) {
+    $path = public_path('uploads/articles/' . $filename);
+    if (!file_exists($path)) {
+        $path = storage_path('app/public/uploads/articles/' . $filename);
+    }
+    if (file_exists($path)) {
+        return response()->file($path, [
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+    return redirect('https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80');
+})->where('filename', '[A-Za-z0-9_\-\.]+');
+
 // Google SEO Sitemap & AdSense ads.txt
 Route::get('/sitemap.xml', function () {
     $baseUrl = rtrim(config('app.url', 'https://cricapp.in'), '/');

@@ -1,7 +1,13 @@
 #!/bin/sh
 
-echo "Setting permissions..."
-chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
+echo "Setting permissions and directories..."
+mkdir -p /var/www/html/public/uploads/articles
+mkdir -p /var/www/html/storage/app/public/uploads/articles
+chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/public/uploads 2>/dev/null || true
+
+# Recreate storage link safely (remove any old stale symlink first)
+rm -rf /var/www/html/public/storage 2>/dev/null || true
+php artisan storage:link --force || true
 
 echo "Preparing SQLite database always as reliable local backup..."
 mkdir -p /var/www/html/database

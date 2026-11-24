@@ -20,11 +20,11 @@
 @endsection
 
 @section('content')
-<div class="py-6 sm:py-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
+<div class="py-6 sm:py-8 bg-slate-50 dark:bg-[#080d1a] min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 space-y-6">
 
         @if($errors->any())
-            <div class="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs sm:text-sm font-bold space-y-1">
+            <div class="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs sm:text-sm font-bold space-y-1">
                 <div class="font-black">⚠️ Please fix the following errors:</div>
                 <ul class="list-disc pl-5">
                     @foreach($errors->all() as $error)
@@ -35,7 +35,7 @@
         @endif
 
         <form action="{{ route('articles.update', $article) }}" method="POST" enctype="multipart/form-data" 
-              class="p-6 sm:p-8 rounded-3xl bg-[#131b2e] border border-white/10 shadow-2xl space-y-5">
+              class="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-2xl space-y-5 transition-colors">
             @csrf
             @method('PUT')
 
@@ -84,22 +84,39 @@
                 
                 @if($article->featured_image)
                     <div class="flex items-center gap-3 p-2 bg-slate-900 rounded-xl border border-white/5">
-                        <img src="{{ $article->cover_image_url }}" alt="Preview" class="w-16 h-12 rounded-lg object-cover" />
+                        <img src="{{ $article->cover_image_url }}" alt="Preview" 
+                             onerror="this.src='https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80';"
+                             class="w-16 h-12 rounded-lg object-cover" />
                         <span class="text-xs text-slate-400 truncate">Current Image Set</span>
                     </div>
                 @endif
 
                 <div>
                     <span class="text-[11px] text-slate-400 block mb-1">Option A: Update Direct Image URL</span>
-                    <input type="url" name="featured_image_url" value="{{ old('featured_image_url', Str::startsWith($article->featured_image, ['http://', 'https://']) ? $article->featured_image : '') }}"
+                    <input type="url" name="featured_image_url" id="featured_image_url" value="{{ old('featured_image_url', Str::startsWith($article->featured_image, ['http://', 'https://']) ? $article->featured_image : '') }}"
                            placeholder="https://..."
+                           oninput="previewImageUrl(this.value)"
                            class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white placeholder-slate-500 text-xs focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
                 </div>
 
                 <div>
                     <span class="text-[11px] text-slate-400 block mb-1">Option B: Upload New Image File</span>
-                    <input type="file" name="featured_image_file" accept="image/*"
+                    <input type="file" name="featured_image_file" id="featured_image_file" accept="image/*"
+                           onchange="previewImageFile(event)"
                            class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400 cursor-pointer" />
+                </div>
+
+                <!-- Instant Live Preview Box -->
+                <div id="image_preview_box" class="hidden items-center gap-3 p-3 bg-slate-900/90 rounded-xl border border-amber-500/30">
+                    <img id="image_live_preview" src="" alt="Selected Preview" 
+                         onerror="this.src='https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80';"
+                         class="w-24 h-16 rounded-lg object-cover border border-white/10" />
+                    <div>
+                        <div class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                            <span>✅ New Image Selected & Ready</span>
+                        </div>
+                        <div id="image_preview_name" class="text-[11px] text-slate-400 truncate max-w-xs"></div>
+                    </div>
                 </div>
             </div>
 
@@ -169,4 +186,41 @@
 
     </div>
 </div>
+
+<script>
+    function previewImageUrl(url) {
+        const box = document.getElementById('image_preview_box');
+        const img = document.getElementById('image_live_preview');
+        const name = document.getElementById('image_preview_name');
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+            img.src = url;
+            name.innerText = 'Direct Web Link';
+            box.classList.remove('hidden');
+            box.classList.add('flex');
+        } else {
+            const fileInput = document.getElementById('featured_image_file');
+            if (!fileInput || !fileInput.files.length) {
+                box.classList.add('hidden');
+                box.classList.remove('flex');
+            }
+        }
+    }
+
+    function previewImageFile(event) {
+        const file = event.target.files[0];
+        const box = document.getElementById('image_preview_box');
+        const img = document.getElementById('image_live_preview');
+        const name = document.getElementById('image_preview_name');
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                img.src = e.target.result;
+                name.innerText = file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
+                box.classList.remove('hidden');
+                box.classList.add('flex');
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+</script>
 @endsection

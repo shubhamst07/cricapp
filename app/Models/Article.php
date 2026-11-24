@@ -14,10 +14,18 @@ class Article extends Model
     protected $fillable = [
         'user_id',
         'title',
+        'title_hi',
+        'title_hinglish',
         'slug',
         'category',
+        'category_hi',
+        'category_hinglish',
         'excerpt',
+        'excerpt_hi',
+        'excerpt_hinglish',
         'content',
+        'content_hi',
+        'content_hinglish',
         'featured_image',
         'author_name',
         'tags',
@@ -59,10 +67,20 @@ class Article extends Model
     public function getCoverImageUrlAttribute(): string
     {
         if (!empty($this->featured_image)) {
-            if (Str::startsWith($this->featured_image, ['http://', 'https://', '/'])) {
-                return $this->featured_image;
+            $img = trim($this->featured_image);
+            if (Str::startsWith($img, ['http://', 'https://', '//'])) {
+                return $img;
             }
-            return asset('storage/' . $this->featured_image);
+            if (Str::startsWith($img, '/')) {
+                return $img;
+            }
+            if (Str::startsWith($img, 'uploads/')) {
+                return '/' . $img;
+            }
+            if (Str::startsWith($img, 'storage/')) {
+                return '/' . $img;
+            }
+            return asset('storage/' . $img);
         }
 
         // Beautiful curated cricket background fallbacks based on category
@@ -75,6 +93,14 @@ class Article extends Model
         ];
 
         return $fallbacks[$this->category] ?? 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?auto=format&fit=crop&w=1200&q=80';
+    }
+
+    /**
+     * Alias for cover_image_url.
+     */
+    public function getFeaturedImageUrlAttribute(): string
+    {
+        return $this->cover_image_url;
     }
 
     /**

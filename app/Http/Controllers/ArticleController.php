@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Article;
 use App\Services\ArticleGeneratorService;
+use App\Services\ArticleTranslationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -82,9 +83,9 @@ class ArticleController extends Controller
     }
 
     /**
-     * Display the specified article.
+     * Display the specified article with multi-language support.
      */
-    public function show(string $slug): View
+    public function show(string $slug, ArticleTranslationService $translationService): View
     {
         $this->ensureDatabaseReady();
         $this->ensureStarterArticles();
@@ -96,6 +97,34 @@ class ArticleController extends Controller
             $article->increment('views_count');
         } catch (\Throwable $e) {
             // ignore
+        }
+
+        // Get 3-language translations (English, Hindi, Hinglish)
+        $translations = [];
+        try {
+            $translations = $translationService->getTranslations($article);
+        } catch (\Throwable $e) {
+            Log::warning('Translation error in ArticleController@show: ' . $e->getMessage());
+            $translations = [
+                'en' => [
+                    'title' => $article->title,
+                    'category' => $article->category,
+                    'excerpt' => $article->excerpt,
+                    'content' => $article->content,
+                ],
+                'hi' => [
+                    'title' => $article->title_hi ?: $article->title,
+                    'category' => $article->category_hi ?: $article->category,
+                    'excerpt' => $article->excerpt_hi ?: $article->excerpt,
+                    'content' => $article->content_hi ?: $article->content,
+                ],
+                'hinglish' => [
+                    'title' => $article->title_hinglish ?: $article->title,
+                    'category' => $article->category_hinglish ?: $article->category,
+                    'excerpt' => $article->excerpt_hinglish ?: $article->excerpt,
+                    'content' => $article->content_hinglish ?: $article->content,
+                ],
+            ];
         }
 
         // Related articles (same category or recent, excluding current)
@@ -124,7 +153,7 @@ class ArticleController extends Controller
 
         $isAdmin = Auth::check() && (Auth::user()->is_admin ?? false);
 
-        return view('articles.show', compact('article', 'relatedArticles', 'isAdmin'));
+        return view('articles.show', compact('article', 'relatedArticles', 'isAdmin', 'translations'));
     }
 
     /**
@@ -215,8 +244,18 @@ class ArticleController extends Controller
         // Handle Image upload or URL
         $featuredImage = $validated['featured_image_url'] ?? null;
         if ($request->hasFile('featured_image_file')) {
-            $path = $request->file('featured_image_file')->store('uploads/articles', 'public');
-            $featuredImage = $path;
+            $file = $request->file('featured_image_file');
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) {
+                $ext = 'jpg';
+            }
+            $filename = 'art_' . time() . '_' . Str::random(8) . '.' . $ext;
+            $destDir = public_path('uploads/articles');
+            if (!file_exists($destDir)) {
+                @mkdir($destDir, 0777, true);
+            }
+            $file->move($destDir, $filename);
+            $featuredImage = '/uploads/articles/' . $filename;
         }
 
         // Calculate reading time based on word count
@@ -289,18 +328,39 @@ class ArticleController extends Controller
             $featuredImage = $validated['featured_image_url'];
         }
         if ($request->hasFile('featured_image_file')) {
-            $path = $request->file('featured_image_file')->store('uploads/articles', 'public');
-            $featuredImage = $path;
+            $file = $request->file('featured_image_file');
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) {
+                $ext = 'jpg';
+            }
+            $filename = 'art_' . time() . '_' . Str::random(8) . '.' . $ext;
+            $destDir = public_path('uploads/articles');
+            if (!file_exists($destDir)) {
+                @mkdir($destDir, 0777, true);
+            }
+            $file->move($destDir, $filename);
+            $featuredImage = '/uploads/articles/' . $filename;
         }
 
         $wordCount = str_word_count(strip_tags($validated['content']));
         $readingTime = max(1, (int) ceil($wordCount / 200));
 
+        // Invalidate old translations if title or content changed
+        $translationsChanged = ($article->title !== $validated['title'] || $article->content !== $validated['content']);
+
         $article->update([
             'title' => $validated['title'],
+            'title_hi' => $translationsChanged ? null : $article->title_hi,
+            'title_hinglish' => $translationsChanged ? null : $article->title_hinglish,
             'category' => $validated['category'],
+            'category_hi' => $translationsChanged ? null : $article->category_hi,
+            'category_hinglish' => $translationsChanged ? null : $article->category_hinglish,
             'excerpt' => $validated['excerpt'] ?: Str::limit(strip_tags($validated['content']), 160),
+            'excerpt_hi' => $translationsChanged ? null : $article->excerpt_hi,
+            'excerpt_hinglish' => $translationsChanged ? null : $article->excerpt_hinglish,
             'content' => $validated['content'],
+            'content_hi' => $translationsChanged ? null : $article->content_hi,
+            'content_hinglish' => $translationsChanged ? null : $article->content_hinglish,
             'featured_image' => $featuredImage,
             'author_name' => $validated['author_name'] ?: ($article->author_name ?: Auth::user()->name),
             'tags' => $validated['tags'] ?? null,
