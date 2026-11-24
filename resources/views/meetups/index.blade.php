@@ -33,7 +33,7 @@
 @endsection
 
 @section('content')
-<div class="py-6 sm:py-8 bg-slate-950 min-h-screen text-slate-100 font-sans" x-data="{
+<div class="py-6 sm:py-8 bg-slate-50 dark:bg-transparent min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200" x-data="{
     circleModal: false,
     circleCity: '{{ $city ?: 'Shimla' }}',
     circleName: '',

@@ -3,8 +3,8 @@
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 p-0.5 shadow-md flex items-center justify-center">
-                    <div class="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-white">
-                        <svg class="w-5 h-5 text-rose-400" fill="currentColor" viewBox="0 0 20 20">
+                    <div class="w-full h-full bg-white dark:bg-slate-900 rounded-[14px] flex items-center justify-center text-slate-900 dark:text-white">
+                        <svg class="w-5 h-5 text-rose-500 dark:text-rose-400" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a2 2 0 00-.8 2.4z"/>
                         </svg>
                     </div>
@@ -12,15 +12,15 @@
                 <div>
                     <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                         <span>Cricket Buzz & Social Feed</span>
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 uppercase tracking-wider">LIVE FEED</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 uppercase tracking-wider">LIVE FEED</span>
                     </h2>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Scroll trending match moments, memes, reels & fan banter</p>
                 </div>
             </div>
 
             <div class="flex items-center gap-2">
-                <a href="{{ route('live-scores.index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-white/10 transition shadow-sm">
-                    <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <a href="{{ route('live-scores.index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/10 transition shadow-sm">
+                    <svg class="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                     <span>Match Center</span>
                 </a>
             </div>
@@ -118,16 +118,16 @@
                         const listEl = document.getElementById('comments-list-' + postId);
                         if (listEl) {
                             const newCommentHtml = `
-                                <div class='flex items-start gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5 text-xs animate-in fade-in'>
+                                <div class='flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5 text-xs animate-in fade-in'>
                                     <div class='w-7 h-7 rounded-lg bg-rose-600 text-white font-black text-[10px] flex items-center justify-center shrink-0'>
                                         ${(resJson.data.user_name || 'C').charAt(0).toUpperCase()}
                                     </div>
                                     <div class='min-w-0 flex-1'>
                                         <div class='flex items-center justify-between'>
-                                            <span class='font-bold text-white text-[11px]'>${resJson.data.user_name}</span>
-                                            <span class='text-[10px] text-slate-400'>Just now</span>
+                                            <span class='font-bold text-slate-900 dark:text-white text-[11px]'>${resJson.data.user_name}</span>
+                                            <span class='text-[10px] text-slate-500 dark:text-slate-400'>Just now</span>
                                         </div>
-                                        <p class='text-slate-200 mt-0.5 text-xs leading-relaxed'>${resJson.data.comment}</p>
+                                        <p class='text-slate-700 dark:text-slate-200 mt-0.5 text-xs leading-relaxed'>${resJson.data.comment}</p>
                                     </div>
                                 </div>
                             `;
@@ -207,9 +207,15 @@
             .insta-feed-page {
                 font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
                 min-height: 100vh;
+                background: #f8fafc;
+                color: #0f172a;
+                padding-bottom: 5rem;
+                transition: background-color 0.2s ease, color 0.2s ease;
+            }
+
+            .dark .insta-feed-page {
                 background: #090d16;
                 color: #f8fafc;
-                padding-bottom: 5rem;
             }
 
             .story-ring {
@@ -217,15 +223,25 @@
             }
 
             .insta-card {
-                background: #111827;
-                border: 1px solid rgba(255, 255, 255, 0.08);
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
                 border-radius: 20px;
                 overflow: hidden;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+                transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+            }
+
+            .dark .insta-card {
+                background: #111827;
+                border: 1px solid rgba(255, 255, 255, 0.08);
                 box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-                transition: transform 0.2s ease, border-color 0.2s ease;
             }
 
             .insta-card:hover {
+                border-color: #cbd5e1;
+            }
+
+            .dark .insta-card:hover {
                 border-color: rgba(255, 255, 255, 0.15);
             }
 
@@ -266,13 +282,13 @@
 
         <div class="max-w-4xl mx-auto px-3 sm:px-6 pt-5 space-y-6">
             <!-- ==================== TOP SECTION: CRICKET STORIES / MATCH CAROUSEL ==================== -->
-            <div class="bg-slate-900/80 border border-white/10 rounded-2xl p-4 backdrop-blur-md shadow-xl">
+            <div class="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-2xl p-4 backdrop-blur-md shadow-sm dark:shadow-xl">
                 <div class="flex items-center justify-between mb-3 px-1">
-                    <span class="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                    <span class="text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider flex items-center gap-1.5">
                         <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
                         Trending Match Stories
                     </span>
-                    <span class="text-[11px] text-slate-500 font-bold">Tap to filter match feed</span>
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400 font-bold">Tap to filter match feed</span>
                 </div>
 
                 <div class="flex items-center gap-4 overflow-x-auto stories-scroll pb-1">
@@ -283,13 +299,13 @@
                         class="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer focus:outline-none"
                     >
                         <div class="w-16 h-16 rounded-full p-0.5 transition group-hover:scale-105"
-                             :class="selectedMatch === 'all' ? 'story-ring' : 'bg-slate-700'">
-                            <div class="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-black border-2 border-slate-900">
+                             :class="selectedMatch === 'all' ? 'story-ring' : 'bg-slate-200 dark:bg-slate-700'">
+                            <div class="w-full h-full rounded-full bg-white dark:bg-slate-900 flex items-center justify-center text-slate-900 dark:text-white text-xs font-black border-2 border-white dark:border-slate-900">
                                 ALL 🏏
                             </div>
                         </div>
                         <span class="text-[11px] font-bold truncate max-w-[70px] text-center"
-                              :class="selectedMatch === 'all' ? 'text-white' : 'text-slate-400'">
+                              :class="selectedMatch === 'all' ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'">
                             All Feed
                         </span>
                     </button>
@@ -313,17 +329,17 @@
                         >
                             <div class="w-16 h-16 rounded-full p-0.5 transition group-hover:scale-105 relative"
                                  :class="selectedMatch === '{{ $sm['id'] }}' ? 'story-ring' : 'bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600'">
-                                <div class="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-white text-[11px] font-black border-2 border-slate-900">
+                                <div class="w-full h-full rounded-full bg-white dark:bg-slate-900 flex items-center justify-center text-slate-900 dark:text-white text-[11px] font-black border-2 border-white dark:border-slate-900">
                                     {{ $abbr }}
                                 </div>
                                 @if($isLive)
-                                    <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.2 bg-rose-600 text-[9px] font-black rounded-md text-white border border-slate-900 shadow-sm">
+                                    <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.2 bg-rose-600 text-[9px] font-black rounded-md text-white border border-white dark:border-slate-900 shadow-sm">
                                         LIVE
                                     </span>
                                 @endif
                             </div>
                             <span class="text-[11px] font-bold truncate max-w-[76px] text-center"
-                                  :class="selectedMatch === '{{ $sm['id'] }}' ? 'text-rose-400' : 'text-slate-400'">
+                                  :class="selectedMatch === '{{ $sm['id'] }}' ? 'text-rose-500 dark:text-rose-400 font-extrabold' : 'text-slate-500 dark:text-slate-400'">
                                 {{ Str::limit($sName, 11, '') }}
                             </span>
                         </button>
@@ -334,12 +350,12 @@
             <!-- ==================== INSTAGRAM-STYLE FEED CONTAINER (CENTERED) ==================== -->
             <div class="max-w-2xl mx-auto space-y-6">
                 <!-- Feed Filter & Quick Creator Bar -->
-                <div class="bg-slate-900/80 border border-white/10 rounded-2xl p-3.5 backdrop-blur-md shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-2xl p-3.5 backdrop-blur-md shadow-sm dark:shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                         <button
                             type="button"
                             @click="feedFilter = 'all'"
-                            :class="feedFilter === 'all' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+                            :class="feedFilter === 'all' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'"
                             class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
                         >
                             Explore All
@@ -347,7 +363,7 @@
                         <button
                             type="button"
                             @click="feedFilter = 'meme'"
-                            :class="feedFilter === 'meme' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+                            :class="feedFilter === 'meme' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'"
                             class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
                         >
                             Memes & Pics 😂
@@ -355,7 +371,7 @@
                         <button
                             type="button"
                             @click="feedFilter = 'instagram'"
-                            :class="feedFilter === 'instagram' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+                            :class="feedFilter === 'instagram' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'"
                             class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
                         >
                             Reels 🎬
@@ -363,7 +379,7 @@
                         <button
                             type="button"
                             @click="feedFilter = 'text'"
-                            :class="feedFilter === 'text' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+                            :class="feedFilter === 'text' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'"
                             class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
                         >
                             Fan Takes 💬
@@ -381,12 +397,12 @@
                 </div>
 
                 <!-- Active Match Filter Reset Banner -->
-                <div x-show="selectedMatch !== 'all'" class="p-3 bg-indigo-950/60 border border-indigo-500/30 rounded-2xl flex items-center justify-between text-xs text-indigo-200 animate-in fade-in">
+                <div x-show="selectedMatch !== 'all'" class="p-3 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-500/30 rounded-2xl flex items-center justify-between text-xs text-indigo-700 dark:text-indigo-200 animate-in fade-in">
                     <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                        <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
                         <span>Filtering feed for selected match story</span>
                     </div>
-                    <button type="button" @click="selectedMatch = 'all'" class="font-bold text-white hover:underline cursor-pointer">
+                    <button type="button" @click="selectedMatch = 'all'" class="font-bold text-indigo-900 dark:text-white hover:underline cursor-pointer">
                         ✕ Clear Filter
                     </button>
                 </div>
@@ -405,23 +421,23 @@
                         class="insta-card group"
                     >
                         <!-- 1. Post Header: User, Verified Badge, Match Tag, Options -->
-                        <div class="p-4 flex items-center justify-between border-b border-white/5">
+                        <div class="p-4 flex items-center justify-between border-b border-slate-100 dark:border-white/5">
                             <a href="{{ $post->user_id ? route('profile.user', $post->user_id) : route('profile.show') }}" class="flex items-center gap-3 hover:opacity-85 transition group/user">
                                 <!-- Profile Story Ring -->
                                 <div class="w-10 h-10 rounded-full p-0.5 story-ring shrink-0">
-                                    <div class="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-xs border border-slate-900">
+                                    <div class="w-full h-full rounded-full bg-white dark:bg-slate-900 flex items-center justify-center text-slate-900 dark:text-white font-black text-xs border border-white dark:border-slate-900">
                                         {{ $avatarLetters }}
                                     </div>
                                 </div>
                                 <div class="min-w-0">
                                     <div class="flex items-center gap-1.5">
-                                        <h3 class="font-black text-white text-xs sm:text-sm truncate leading-none group-hover/user:text-blue-400 transition">
+                                        <h3 class="font-black text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-none group-hover/user:text-blue-500 transition">
                                             {{ $post->user_name }}
                                         </h3>
                                         <span class="w-3.5 h-3.5 rounded-full bg-blue-500 text-white text-[9px] flex items-center justify-center font-bold shrink-0">✓</span>
                                     </div>
-                                    <div class="flex items-center gap-1.5 text-[11px] text-slate-400 mt-1">
-                                        <span class="font-bold text-indigo-400 truncate max-w-[200px]" title="{{ $post->match_name }}">
+                                    <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                        <span class="font-bold text-indigo-600 dark:text-indigo-400 truncate max-w-[200px]" title="{{ $post->match_name }}">
                                             🏏 {{ $post->match_name }}
                                         </span>
                                         <span>•</span>
@@ -433,7 +449,7 @@
                             <!-- Match Center Link / 3 dots -->
                             <a
                                 href="{{ route('live-scores.show', $post->match_id) }}"
-                                class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition text-xs font-bold"
+                                class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition text-xs font-bold"
                                 title="Open Live Match Center"
                             >
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
@@ -442,7 +458,7 @@
 
                         <!-- 2. Post Caption / Text -->
                         @if(!empty($post->content))
-                            <div class="px-4 py-3 text-xs sm:text-sm text-slate-200 leading-relaxed font-normal whitespace-pre-line">
+                            <div class="px-4 py-3 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-normal whitespace-pre-line">
                                 {{ $post->content }}
                             </div>
                         @endif
@@ -451,7 +467,7 @@
                         @if($post->media_url && empty($post->insta_url))
                             <!-- Standard Meme / Photo -->
                             <div
-                                class="bg-black/80 relative overflow-hidden flex items-center justify-center"
+                                class="bg-black/90 relative overflow-hidden flex items-center justify-center"
                                 @dblclick="likePost({{ $post->id }})"
                             >
                                 <img
@@ -469,7 +485,7 @@
                             </div>
                         @elseif(!empty($post->insta_url))
                             <!-- Instagram Reel Video Card -->
-                            <div class="p-4 bg-gradient-to-br from-pink-950/20 via-purple-950/20 to-slate-900 border-y border-white/5">
+                            <div class="p-4 bg-gradient-to-br from-pink-100/30 via-purple-100/30 to-slate-100 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-slate-900 border-y border-slate-100 dark:border-white/5">
                                 <a
                                     href="{{ $post->insta_url }}"
                                     target="_blank"
@@ -519,7 +535,7 @@
                                     <button
                                         type="button"
                                         @click="likePost({{ $post->id }})"
-                                        class="flex items-center gap-1.5 text-slate-300 hover:text-rose-500 transition cursor-pointer group/like focus:outline-none"
+                                        class="flex items-center gap-1.5 text-slate-500 dark:text-slate-300 hover:text-rose-500 dark:hover:text-rose-500 transition cursor-pointer group/like focus:outline-none"
                                         :class="likedPosts.includes({{ $post->id }}) ? 'text-rose-500 font-bold' : ''"
                                     >
                                         <svg
@@ -537,8 +553,8 @@
                                     <button
                                         type="button"
                                         @click="toggleComments({{ $post->id }})"
-                                        class="flex items-center gap-1.5 text-slate-300 hover:text-indigo-400 transition cursor-pointer group/cmt focus:outline-none"
-                                        :class="openComments[{{ $post->id }}] ? 'text-indigo-400 font-bold' : ''"
+                                        class="flex items-center gap-1.5 text-slate-500 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition cursor-pointer group/cmt focus:outline-none"
+                                        :class="openComments[{{ $post->id }}] ? 'text-indigo-600 dark:text-indigo-400 font-bold' : ''"
                                     >
                                         <svg class="w-6 h-6 transition-transform group-hover/cmt:scale-125 fill-none stroke-current" stroke-width="2" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
@@ -550,7 +566,7 @@
                                     <button
                                         type="button"
                                         @click="sharePost({{ $post->id }}, '{{ addslashes($post->match_name) }}')"
-                                        class="text-slate-300 hover:text-emerald-400 transition cursor-pointer group/share focus:outline-none"
+                                        class="text-slate-500 dark:text-slate-300 hover:text-emerald-500 dark:hover:text-emerald-400 transition cursor-pointer group/share focus:outline-none"
                                         title="Share this post"
                                     >
                                         <svg class="w-6 h-6 transition-transform group-hover/share:scale-125 fill-none stroke-current" stroke-width="2" viewBox="0 0 24 24">
@@ -563,18 +579,18 @@
                                 <button
                                     type="button"
                                     @click="toggleSave({{ $post->id }})"
-                                    class="text-slate-400 hover:text-amber-400 transition cursor-pointer focus:outline-none"
-                                    :class="savedPosts.includes({{ $post->id }}) ? 'text-amber-400' : ''"
+                                    class="text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 transition cursor-pointer focus:outline-none"
+                                    :class="savedPosts.includes({{ $post->id }}) ? 'text-amber-500 dark:text-amber-400' : ''"
                                 >
-                                    <svg class="w-6 h-6" :class="savedPosts.includes({{ $post->id }}) ? 'fill-amber-400' : 'fill-none stroke-current'" stroke-width="2" viewBox="0 0 24 24">
+                                    <svg class="w-6 h-6" :class="savedPosts.includes({{ $post->id }}) ? 'fill-amber-500 dark:fill-amber-400 text-amber-500 dark:text-amber-400' : 'fill-none stroke-current'" stroke-width="2" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
                                     </svg>
                                 </button>
                             </div>
 
                             <!-- Liked By Summary -->
-                            <div class="text-[11px] font-bold text-slate-400">
-                                Liked by <span class="text-white font-black" id="like-summary-{{ $post->id }}">{{ $post->likes_count }}</span> cricket fans
+                            <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                                Liked by <span class="text-slate-900 dark:text-white font-black" id="like-summary-{{ $post->id }}">{{ $post->likes_count }}</span> cricket fans
                             </div>
 
                             <!-- ==================== 5. COMMENTS SECTION (INSTAGRAM STYLE) ==================== -->
@@ -583,7 +599,7 @@
                                 <button
                                     type="button"
                                     @click="toggleComments({{ $post->id }})"
-                                    class="text-xs font-bold text-slate-400 hover:text-indigo-400 transition cursor-pointer"
+                                    class="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer"
                                 >
                                     <span x-show="!openComments[{{ $post->id }}]">
                                         View all {{ $post->comments_count ?? $post->comments->count() }} comments...
@@ -605,33 +621,33 @@
                                 <!-- Existing Comments List -->
                                 <div id="comments-list-{{ $post->id }}" class="space-y-2 max-h-56 overflow-y-auto pr-1">
                                     @forelse($post->comments as $comment)
-                                        <div class="flex items-start gap-2.5 p-2 rounded-xl bg-white/5 border border-white/5 text-xs">
+                                        <div class="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/5 text-xs">
                                             <div class="w-7 h-7 rounded-lg bg-indigo-600 text-white font-black text-[10px] flex items-center justify-center shrink-0">
                                                 {{ strtoupper(substr($comment->user_name, 0, 1)) }}
                                             </div>
                                             <div class="min-w-0 flex-1">
                                                 <div class="flex items-center justify-between">
-                                                    <span class="font-bold text-white text-[11px]">{{ $comment->user_name }}</span>
-                                                    <span class="text-[10px] text-slate-400">{{ $comment->created_at->diffForHumans() }}</span>
+                                                    <span class="font-bold text-slate-900 dark:text-white text-[11px]">{{ $comment->user_name }}</span>
+                                                    <span class="text-[10px] text-slate-500 dark:text-slate-400">{{ $comment->created_at->diffForHumans() }}</span>
                                                 </div>
-                                                <p class="text-slate-200 mt-0.5 text-xs leading-relaxed">{{ $comment->comment }}</p>
+                                                <p class="text-slate-700 dark:text-slate-200 mt-0.5 text-xs leading-relaxed">{{ $comment->comment }}</p>
                                             </div>
                                         </div>
                                     @empty
-                                        <p class="text-center text-xs text-slate-500 py-2">No comments yet. Be the first to share your take!</p>
+                                        <p class="text-center text-xs text-slate-500 dark:text-slate-400 py-2">No comments yet. Be the first to share your take!</p>
                                     @endforelse
                                 </div>
 
                                 <!-- Add Comment Input Box (Instagram style) -->
-                                <form @submit.prevent="submitComment({{ $post->id }})" class="flex items-center gap-2 pt-2 border-t border-white/10">
-                                    <div class="w-7 h-7 rounded-full bg-slate-800 text-white font-bold text-[10px] flex items-center justify-center shrink-0 border border-white/10">
+                                <form @submit.prevent="submitComment({{ $post->id }})" class="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
+                                    <div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-white font-bold text-[10px] flex items-center justify-center shrink-0 border border-slate-300 dark:border-white/10">
                                         {{ strtoupper(substr(Auth::user()->name ?? 'C', 0, 1)) }}
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Add a comment on this match..."
                                         x-model="newCommentText[{{ $post->id }}]"
-                                        class="flex-1 bg-slate-800/80 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        class="flex-1 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         required
                                     />
                                     <button
@@ -646,12 +662,12 @@
                         </div>
                     </article>
                 @empty
-                    <div class="bg-slate-900/80 border border-white/10 rounded-2xl p-12 text-center text-slate-400 space-y-3">
-                        <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-3xl mx-auto">
+                    <div class="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-2xl p-12 text-center text-slate-500 dark:text-slate-400 space-y-3 shadow-sm dark:shadow-xl">
+                        <div class="w-16 h-16 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-3xl mx-auto">
                             🏏
                         </div>
-                        <h4 class="text-base font-bold text-white">No cricket posts in this category yet</h4>
-                        <p class="text-xs text-slate-400 max-w-sm mx-auto">Tap the button below to be the first to drop a match meme or thought!</p>
+                        <h4 class="text-base font-bold text-slate-900 dark:text-white">No cricket posts in this category yet</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">Tap the button below to be the first to drop a match meme or thought!</p>
                         <button
                             type="button"
                             @click="showCreateModal = true"
@@ -678,19 +694,19 @@
         >
             <div
                 @click.away="showCreateModal = false"
-                class="bg-slate-900 border border-white/10 rounded-3xl max-w-lg w-full p-6 text-white space-y-4 shadow-2xl relative"
+                class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-lg w-full p-6 text-slate-900 dark:text-white space-y-4 shadow-2xl relative"
             >
-                <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
                     <div class="flex items-center gap-2">
                         <span class="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white text-sm">
                             📸
                         </span>
                         <div>
-                            <h3 class="font-black text-base text-white">Create Cricket Feed Post</h3>
-                            <p class="text-[11px] text-slate-400">Share your match take, meme, or reel</p>
+                            <h3 class="font-black text-base text-slate-900 dark:text-white">Create Cricket Feed Post</h3>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Share your match take, meme, or reel</p>
                         </div>
                     </div>
-                    <button type="button" @click="showCreateModal = false" class="text-slate-400 hover:text-white p-1 text-sm font-bold">
+                    <button type="button" @click="showCreateModal = false" class="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 text-sm font-bold">
                         ✕
                     </button>
                 </div>
@@ -698,10 +714,10 @@
                 <form @submit.prevent="submitNewPost" class="space-y-4">
                     <!-- Select Match -->
                     <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">Select Cricket Match</label>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Cricket Match</label>
                         <select
                             x-model="newMatchId"
-                            class="w-full bg-slate-800 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
                             required
                         >
                             @foreach($cricbuzzMatches as $cm)
@@ -714,30 +730,30 @@
 
                     <!-- Author Name -->
                     <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">Your Name / Handle</label>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Your Name / Handle</label>
                         <input
                             type="text"
                             placeholder="e.g. Cricket Fanatic / @viratfan"
                             x-model="newPostName"
-                            class="w-full bg-slate-800 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
                         />
                     </div>
 
                     <!-- Caption -->
                     <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">Post Caption & Thoughts</label>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Post Caption & Thoughts</label>
                         <textarea
                             rows="3"
                             placeholder="What's happening in this match? Drop a meme review or reaction..."
                             x-model="newPostContent"
-                            class="w-full bg-slate-800 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
                             required
                         ></textarea>
                     </div>
 
                     <!-- Photo Upload / Meme Selection -->
                     <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">Photo / Meme (Device File or URL)</label>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Photo / Meme (Device File or URL)</label>
                         <input
                             type="file"
                             accept="image/*"
@@ -762,42 +778,42 @@
                                 placeholder="paste image URL..."
                                 x-model="newPostMedia"
                                 :disabled="!!selectedFile"
-                                class="flex-1 bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 disabled:opacity-50"
+                                class="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 disabled:opacity-50"
                             />
                         </div>
 
                         <!-- Preview Box -->
                         <template x-if="previewUrl">
-                            <div class="mt-2.5 p-2 bg-slate-800/80 border border-indigo-500/40 rounded-xl flex items-center justify-between">
+                            <div class="mt-2.5 p-2 bg-slate-100 dark:bg-slate-800/80 border border-indigo-500/40 rounded-xl flex items-center justify-between">
                                 <div class="flex items-center gap-2.5">
-                                    <img :src="previewUrl" class="w-12 h-12 rounded-lg object-cover border border-white/10" />
+                                    <img :src="previewUrl" class="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-white/10" />
                                     <div class="text-[11px]">
-                                        <p class="font-bold text-white truncate max-w-[200px]" x-text="selectedFile?.name"></p>
-                                        <p class="text-slate-400" x-text="(selectedFile?.size / 1024).toFixed(1) + ' KB'"></p>
+                                        <p class="font-bold text-slate-900 dark:text-white truncate max-w-[200px]" x-text="selectedFile?.name"></p>
+                                        <p class="text-slate-500 dark:text-slate-400" x-text="(selectedFile?.size / 1024).toFixed(1) + ' KB'"></p>
                                     </div>
                                 </div>
-                                <button type="button" @click="removeFile" class="text-rose-400 hover:text-rose-300 p-1 text-sm font-bold">✕</button>
+                                <button type="button" @click="removeFile" class="text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 p-1 text-sm font-bold">✕</button>
                             </div>
                         </template>
                     </div>
 
                     <!-- Instagram Link (Optional) -->
                     <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">Instagram Reel Link (Optional)</label>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Instagram Reel Link (Optional)</label>
                         <input
                             type="url"
                             placeholder="https://instagram.com/reel/..."
                             x-model="newPostInsta"
-                            class="w-full bg-slate-800 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-pink-500"
                         />
                     </div>
 
                     <!-- Submit Button -->
-                    <div class="pt-3 border-t border-white/10 flex justify-end gap-2">
+                    <div class="pt-3 border-t border-slate-200 dark:border-white/10 flex justify-end gap-2">
                         <button
                             type="button"
                             @click="showCreateModal = false"
-                            class="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition"
+                            class="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
                         >
                             Cancel
                         </button>
@@ -813,4 +829,5 @@
             </div>
         </div>
     </div>
+</x-app-layout>
 </x-app-layout>

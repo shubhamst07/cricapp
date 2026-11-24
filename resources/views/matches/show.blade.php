@@ -123,7 +123,7 @@
     $isMatchDone = ($match->status === 'completed' || !empty($match->match_result));
 @endphp
 
-<div class="py-8 bg-slate-900 min-h-screen text-slate-100 font-sans" x-data="{
+<div class="py-8 bg-slate-50 dark:bg-transparent min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200" x-data="{
     scorecardInning: {{ $activeInningNum }},
     scoreInning: {{ $activeInningNum }},
     scoreBattingTeam: '{{ $activeBattingTeam }}',
@@ -543,7 +543,7 @@
         <!-- ============================================== -->
         <!-- CRICHEROES GIANT MATCH BANNER & SCORES -->
         <!-- ============================================== -->
-        <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+        <div class="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-sm dark:shadow-2xl relative overflow-hidden">
             <div class="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-white/10 text-xs">
                 <div>
                     <span class="font-black text-rose-400 uppercase tracking-wider">{{ $match->tournament_name ?? 'Local Tournament' }}</span>
@@ -738,14 +738,14 @@
         <!-- ============================================== -->
         <!-- MATCH VIDEOS & REPLAYS (TV SCOREBOARD & LOGO OVERLAY) -->
         <!-- ============================================== -->
-        <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5" id="matchVideosSection">
+        <div class="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-2xl space-y-5" id="matchVideosSection">
             <!-- Header & Switcher Bar -->
-            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-white/10">
                 <div class="flex items-center gap-3">
                     <span class="text-2xl">🎬</span>
                     <div>
                         <div class="flex items-center gap-2">
-                            <h3 class="text-base sm:text-lg font-black text-white">Match Videos & Replays</h3>
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Match Videos & Replays</h3>
                             <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono text-xs font-bold border border-emerald-500/30" 
                                   x-text="matchVideos.length + ' Video' + (matchVideos.length === 1 ? '' : 's')"></span>
                         </div>
@@ -947,9 +947,9 @@
         <!-- CRICHEROES AUTHENTIC LIVE SCORING ARENA (PITCH & KEYPAD) -->
         <!-- ============================================================== -->
         @if($isOwner)
-            <div class="bg-[#131b2e] border-2 border-emerald-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 relative overflow-hidden">
+            <div class="bg-white dark:bg-[#131b2e] border-2 border-emerald-500/30 rounded-3xl p-6 sm:p-8 shadow-sm dark:shadow-2xl space-y-6 relative overflow-hidden">
                 <!-- Top Status Header -->
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-white/10">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white font-black text-xl flex items-center justify-center shadow-lg shadow-emerald-600/30">
                             🏏
@@ -1325,20 +1325,20 @@
         <!-- ============================================================== -->
         <!-- MASTER NAVIGATION TABS: SCORECARD | LIVE COMMENTARY | SQUADS -->
         <!-- ============================================================== -->
-        <div class="flex items-center gap-2 p-1.5 bg-[#131b2e] border border-white/10 rounded-2xl shadow-xl">
+        <div class="flex items-center gap-2 p-1.5 bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-xl">
             <button type="button" @click="activeMainTab = 'scorecard'"
-                    :class="activeMainTab === 'scorecard' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white font-bold'"
+                    :class="activeMainTab === 'scorecard' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
                     class="flex-1 py-3 px-3 sm:px-5 rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2">
                 <span>📊 Scorecard</span>
             </button>
             <button type="button" @click="activeMainTab = 'commentary'"
-                    :class="activeMainTab === 'commentary' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white font-bold'"
+                    :class="activeMainTab === 'commentary' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
                     class="flex-1 py-3 px-3 sm:px-5 rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2">
                 <span>🎙️ Ball-by-Ball Commentary</span>
-                <span class="px-2 py-0.5 rounded-full text-[10px] bg-black/40 font-mono font-bold" x-text="commentaryList.length"></span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-black/40 text-slate-800 dark:text-white font-mono font-bold" x-text="commentaryList.length"></span>
             </button>
             <button type="button" @click="activeMainTab = 'squads'"
-                    :class="activeMainTab === 'squads' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-400 hover:text-white font-bold'"
+                    :class="activeMainTab === 'squads' ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-black shadow-lg shadow-red-600/30' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
                     class="flex-1 py-3 px-3 sm:px-5 rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2">
                 <span>👥 Squads ({{ $match->team1Players->count() + $match->team2Players->count() }})</span>
             </button>
@@ -1348,12 +1348,12 @@
         <!-- TAB 1: CRICHEROES COMPLETE SCORECARD (INDIVIDUAL RUNS & WICKETS) -->
         <!-- ============================================================== -->
         <div x-show="activeMainTab === 'scorecard'" class="space-y-6">
-        <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+        <div class="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-sm dark:shadow-2xl space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-white/10">
                 <div>
-                    <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider">CRICHEROES SCORECARD</span>
-                    <h3 class="font-black text-xl text-white mt-0.5">Player Personal Runs & Wickets</h3>
-                    <p class="text-slate-400 text-xs">Detailed individual batting & bowling cards with strike rates, maidens, and economy.</p>
+                    <span class="text-[10px] font-black uppercase text-amber-500 dark:text-amber-400 tracking-wider">CRICHEROES SCORECARD</span>
+                    <h3 class="font-black text-xl text-slate-900 dark:text-white mt-0.5">Player Personal Runs & Wickets</h3>
+                    <p class="text-slate-500 dark:text-slate-400 text-xs">Detailed individual batting & bowling cards with strike rates, maidens, and economy.</p>
                 </div>
 
                 <!-- Sleek Active Inning Indicator Badge -->
@@ -1799,28 +1799,28 @@
         <!-- TAB 2: BALL-BY-BALL COMMENTARY FEED (CRICBUZZ / CRICHEROES) -->
         <!-- ============================================================== -->
         <div x-show="activeMainTab === 'commentary'" x-cloak class="space-y-6">
-            <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+            <div class="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-sm dark:shadow-2xl space-y-6">
                 <!-- Header with Filters -->
-                <div class="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
+                <div class="flex items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10">
                     <div class="flex items-center gap-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
                         <span class="text-xs font-black uppercase text-red-500 tracking-wider">LIVE COMMENTARY</span>
                     </div>
 
                     <!-- Commentary Outcome Filter Buttons -->
-                    <div class="flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 self-start sm:self-auto text-xs font-bold">
+                    <div class="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-black/40 rounded-xl border border-slate-200 dark:border-white/10 self-start sm:self-auto text-xs font-bold">
                         <button type="button" @click="commentaryFilter = 'all'"
-                                :class="commentaryFilter === 'all' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'"
+                                :class="commentaryFilter === 'all' ? 'bg-red-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
                                 class="px-3 py-1.5 rounded-lg transition">
                             All Balls
                         </button>
                         <button type="button" @click="commentaryFilter = 'boundaries'"
-                                :class="commentaryFilter === 'boundaries' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'"
+                                :class="commentaryFilter === 'boundaries' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
                                 class="px-3 py-1.5 rounded-lg transition">
                             4s & 6s 💥
                         </button>
                         <button type="button" @click="commentaryFilter = 'wickets'"
-                                :class="commentaryFilter === 'wickets' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'"
+                                :class="commentaryFilter === 'wickets' ? 'bg-rose-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
                                 class="px-3 py-1.5 rounded-lg transition">
                             Wickets ☝️
                         </button>
@@ -1886,18 +1886,18 @@
         <!-- MANUAL MATCH SITUATION & OVERRIDE CONTROLS -->
         <!-- ============================================== -->
         @if($isOwner)
-            <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 shadow-xl space-y-4">
-                <div class="flex items-center justify-between pb-3 border-b border-white/10">
+            <div class="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm dark:shadow-xl space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
                     <div>
-                        <h4 class="font-black text-sm text-white">⚙️ Manual Situation & Result Overrides</h4>
-                        <p class="text-slate-400 text-[11px]">Optional: customize result banners or change innings status manually.</p>
+                        <h4 class="font-black text-sm text-slate-900 dark:text-white">⚙️ Manual Situation & Result Overrides</h4>
+                        <p class="text-slate-500 dark:text-slate-400 text-[11px]">Optional: customize result banners or change innings status manually.</p>
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Match Status</label>
-                        <select x-model="scoreStatus" class="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white">
+                        <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Match Status</label>
+                        <select x-model="scoreStatus" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white">
                             <option value="live">🔴 Live Now</option>
                             <option value="completed">🏆 Completed</option>
                             <option value="scheduled">⏳ Scheduled</option>
@@ -1905,15 +1905,15 @@
                         </select>
                     </div>
                     <div class="sm:col-span-2">
-                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Match Situation / Commentary Note</label>
+                        <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Match Situation / Commentary Note</label>
                         <input type="text" x-model="scoreResult" placeholder="e.g. Royal Strikers need 14 runs in 10 balls to win"
-                               class="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white">
+                               class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white">
                     </div>
                 </div>
 
                 <div class="flex items-center justify-end pt-2">
                     <button type="button" @click="saveManualScore()" 
-                            class="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition">
+                            class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs transition border border-slate-200 dark:border-transparent">
                         Update Situation Banner ⚡
                     </button>
                 </div>
@@ -1925,13 +1925,13 @@
         <!-- ============================================== -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Team 1 Squad -->
-            <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-4">
-                <div class="flex items-center justify-between pb-3 border-b border-white/10">
+            <div class="p-6 rounded-3xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-xl space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
                     <div>
-                        <span class="text-[10px] font-black uppercase text-blue-400">TEAM 1 SQUAD</span>
-                        <h4 class="font-black text-base text-white mt-0.5">{{ $match->team1_name }}</h4>
+                        <span class="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400">TEAM 1 SQUAD</span>
+                        <h4 class="font-black text-base text-slate-900 dark:text-white mt-0.5">{{ $match->team1_name }}</h4>
                     </div>
-                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30">
                         {{ $match->team1Players->count() }} Players
                     </span>
                 </div>
@@ -1987,13 +1987,13 @@
             </div>
 
             <!-- Team 2 Squad -->
-            <div class="p-6 rounded-3xl bg-[#131b2e] border border-white/10 shadow-xl space-y-4">
-                <div class="flex items-center justify-between pb-3 border-b border-white/10">
+            <div class="p-6 rounded-3xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-xl space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
                     <div>
-                        <span class="text-[10px] font-black uppercase text-rose-400">TEAM 2 SQUAD</span>
-                        <h4 class="font-black text-base text-white mt-0.5">{{ $match->team2_name }}</h4>
+                        <span class="text-[10px] font-black uppercase text-rose-500 dark:text-rose-400">TEAM 2 SQUAD</span>
+                        <h4 class="font-black text-base text-slate-900 dark:text-white mt-0.5">{{ $match->team2_name }}</h4>
                     </div>
-                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-600/20 text-rose-400 border border-rose-500/30">
+                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-600/20 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30">
                         {{ $match->team2Players->count() }} Players
                     </span>
                 </div>

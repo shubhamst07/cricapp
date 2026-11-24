@@ -232,7 +232,7 @@ function matchEditData() {
 }
 </script>
 
-<div class="py-8 bg-slate-900 min-h-screen text-slate-100 font-sans" x-data="matchEditData()">
+<div class="py-6 sm:py-8 bg-slate-50 dark:bg-transparent min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200" x-data="matchEditData()">
     <!-- Floating Toast -->
     <div x-cloak x-show="toastMsg" x-transition 
          class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-2 border border-white/20">
@@ -241,7 +241,7 @@ function matchEditData() {
     </div>
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl">
+        <div class="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-sm dark:shadow-2xl">
             <form method="POST" action="{{ route('matches.update', $match) }}" class="space-y-5">
                 @csrf
                 @method('PUT')

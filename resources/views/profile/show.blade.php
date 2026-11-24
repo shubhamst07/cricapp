@@ -431,7 +431,7 @@
                 <div class="py-5 border-b border-white/10">
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Suggested Cricket Creators</span>
-                        <a href="{{ route('dashboard') }}" class="text-xs font-semibold text-blue-400 hover:text-blue-300">View Feed</a>
+                        <a href="{{ route('feed') }}" class="text-xs font-semibold text-blue-400 hover:text-blue-300">View Feed</a>
                     </div>
                     <div class="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-thin">
                         @foreach($suggestedUsers as $suggested)
@@ -491,7 +491,7 @@
                         <h3 class="text-white font-bold text-base">No Posts Yet</h3>
                         <p class="text-slate-400 text-xs mt-1">When {{ $isOwner ? 'you create' : $user->name . ' creates' }} cricket posts or memes, they will appear here.</p>
                         @if($isOwner)
-                            <a href="{{ route('dashboard') }}" class="inline-block mt-4 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg transition">
+                            <a href="{{ route('feed') }}" class="inline-block mt-4 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg transition">
                                 Create Your First Post
                             </a>
                         @endif
@@ -718,7 +718,7 @@
                 </div>
                 <h3 class="text-white font-bold text-base">Save Your Favorite Posts</h3>
                 <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Click the bookmark icon on any post in the Cricket Feed to save photos and match moments here.</p>
-                <a href="{{ route('dashboard') }}" class="inline-block mt-4 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition border border-white/10">
+                <a href="{{ route('feed') }}" class="inline-block mt-4 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition border border-white/10">
                     Explore Cricket Feed
                 </a>
             </div>

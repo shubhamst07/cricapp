@@ -1,3 +1,66 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Global CricApp Theme Support */
+@layer components {
+    .ch-card {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+    }
+    .dark .ch-card {
+        background-color: #131b2e;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: none;
+    }
+}
+
+/* Graceful Light Mode for any remaining legacy dark containers */
+html:not(.dark) .bg-\[\#131b2e\] {
+    background-color: #ffffff;
+    border-color: #e2e8f0;
+    color: #0f172a;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+html:not(.dark) input.bg-slate-950,
+html:not(.dark) select.bg-slate-950,
+html:not(.dark) textarea.bg-slate-950 {
+    background-color: #f8fafc;
+    border-color: #cbd5e1;
+    color: #0f172a;
+}
+
+html:not(.dark) .bg-\[\#131b2e\] h1.text-white,
+html:not(.dark) .bg-\[\#131b2e\] h2.text-white,
+html:not(.dark) .bg-\[\#131b2e\] h3.text-white,
+html:not(.dark) .bg-\[\#131b2e\] h4.text-white,
+html:not(.dark) .bg-\[\#131b2e\] span.text-white:not([class*="bg-"]),
+html:not(.dark) .bg-\[\#131b2e\] div.text-white:not([class*="bg-"]) {
+    color: #0f172a;
+}
+
+html:not(.dark) .bg-\[\#131b2e\] .text-slate-100 {
+    color: #0f172a;
+}
+html:not(.dark) .bg-\[\#131b2e\] .text-slate-200 {
+    color: #1e293b;
+}
+html:not(.dark) .bg-\[\#131b2e\] .text-slate-300 {
+    color: #334155;
+}
+html:not(.dark) .bg-\[\#131b2e\] .text-slate-400 {
+    color: #64748b;
+}
+html:not(.dark) .bg-\[\#131b2e\] .border-white\/10,
+html:not(.dark) .bg-\[\#131b2e\] .border-white\/5,
+html:not(.dark) .bg-\[\#131b2e\] .border-white\/20 {
+    border-color: #e2e8f0;
+}
+html:not(.dark) .bg-\[\#131b2e\] .bg-white\/5,
+html:not(.dark) .bg-\[\#131b2e\] .bg-white\/10 {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    border-color: #e2e8f0;
+}

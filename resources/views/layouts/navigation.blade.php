@@ -36,7 +36,7 @@
                         </span>
                     </x-nav-link>
 
-                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+                    <x-nav-link :href="route('feed')" :active="request()->routeIs('feed') || request()->routeIs('dashboard')">
                         <span class="inline-flex items-center gap-1.5 font-bold">
                             <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                             <span>{{ __('Cricket Feed') }}</span>
@@ -246,7 +246,7 @@
                 <span>🏏 {{ __('Local Cricket') }}</span>
             </x-responsive-nav-link>
 
-            <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+            <x-responsive-nav-link :href="route('feed')" :active="request()->routeIs('feed') || request()->routeIs('dashboard')">
                 <span class="inline-flex items-center gap-2 font-bold">
                     <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                     <span>{{ __('Cricket Feed & Memes') }}</span>

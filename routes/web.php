@@ -55,7 +55,10 @@ Route::get('/api/series-schedule', [LiveScoreController::class, 'seriesSchedule'
 Route::get('/live-scores/{matchId}', [LiveScoreController::class, 'show'])->name('live-scores.show');
 Route::view('/offline', 'offline')->name('offline');
 
-Route::get('/dashboard', [MatchController::class, 'dashboard'])->name('dashboard');
+// Cricket Feed & Fan Buzz (Renamed from /dashboard to /feed)
+Route::get('/feed', [MatchController::class, 'dashboard'])->name('feed');
+Route::get('/cricket-feed', fn() => redirect()->route('feed'));
+Route::get('/dashboard', fn() => redirect()->route('feed'))->name('dashboard');
 
 // Public Instagram-style Profiles
 Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');

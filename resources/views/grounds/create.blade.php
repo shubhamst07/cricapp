@@ -15,24 +15,24 @@
 @endsection
 
 @section('content')
-<div class="py-8 bg-slate-900 min-h-screen text-slate-100 font-sans">
+<div class="py-6 sm:py-8 bg-slate-50 dark:bg-transparent min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
 
         @if($errors->any())
-            <div class="p-4 mb-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-bold space-y-1">
+            <div class="p-4 mb-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs font-bold space-y-1">
                 @foreach($errors->all() as $err)
                     <div>• {{ $err }}</div>
                 @endforeach
             </div>
         @endif
 
-        <div class="bg-[#131b2e] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+        <div class="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-sm dark:shadow-2xl space-y-6">
 
-            <div class="pb-4 border-b border-white/10">
-                <h3 class="text-lg font-black text-white flex items-center gap-2">
+            <div class="pb-4 border-b border-slate-200 dark:border-white/10">
+                <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
                     <span>🏟️ Ground Details & Amenities</span>
                 </h3>
-                <p class="text-slate-400 text-xs mt-1">List your cricket ground, turf pitch, or box arena so local cricket teams can book match slots directly.</p>
+                <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">List your cricket ground, turf pitch, or box arena so local cricket teams can book match slots directly.</p>
             </div>
 
             <form method="POST" action="{{ route('grounds.store') }}" enctype="multipart/form-data" class="space-y-5 text-xs"

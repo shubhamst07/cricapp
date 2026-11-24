@@ -118,7 +118,7 @@
                                 <li><a href="{{ route('live-scores.index') }}" class="hover:text-indigo-600 dark:hover:text-white transition">🏏 Live Match Scores</a></li>
                                 <li><a href="{{ route('live-scores.index') }}?tab=upcoming" class="hover:text-indigo-600 dark:hover:text-white transition">📅 Upcoming Fixtures</a></li>
                                 <li><a href="{{ route('live-scores.index') }}?tab=recent" class="hover:text-indigo-600 dark:hover:text-white transition">🏆 Recent Match Results</a></li>
-                                <li><a href="{{ route('dashboard') }}" class="hover:text-indigo-600 dark:hover:text-white transition">🔥 Cricket Feed & Memes</a></li>
+                                <li><a href="{{ route('feed') }}" class="hover:text-indigo-600 dark:hover:text-white transition">🔥 Cricket Feed & Memes</a></li>
                             </ul>
                         </div>
 
