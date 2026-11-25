@@ -25,9 +25,16 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if (! app()->runningInConsole()) {
-            if (request()->isSecure() || request()->server('HTTP_X_FORWARDED_PROTO') === 'https') {
-                URL::forceScheme('https');
-            } elseif (config('app.env') === 'production' && str_starts_with((string) config('app.url'), 'https://')) {
+            $host = (string) request()->header('host', '');
+            if (
+                request()->isSecure() ||
+                request()->server('HTTP_X_FORWARDED_PROTO') === 'https' ||
+                request()->server('HTTP_CF_VISITOR') ||
+                str_contains($host, 'cricapp.in') ||
+                str_contains($host, 'onrender.com') ||
+                config('app.env') === 'production' ||
+                str_starts_with((string) config('app.url'), 'https://')
+            ) {
                 URL::forceScheme('https');
             }
         }

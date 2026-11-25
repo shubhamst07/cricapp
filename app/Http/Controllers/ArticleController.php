@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -64,6 +65,7 @@ class ArticleController extends Controller
             } else {
                 $articles = $query->paginate(9)->withQueryString();
             }
+            $articles->withPath(route('articles.index'));
         } catch (\Throwable $e) {
             Log::error('ArticleController@index error: ' . $e->getMessage());
         }
@@ -403,9 +405,12 @@ class ArticleController extends Controller
     protected function ensureDatabaseReady(): void
     {
         try {
-            if (!Schema::hasTable('articles')) {
-                Artisan::call('migrate', ['--force' => true]);
-            }
+            Cache::remember('articles_db_ready', 86400, function () {
+                if (!Schema::hasTable('articles')) {
+                    Artisan::call('migrate', ['--force' => true]);
+                }
+                return true;
+            });
         } catch (\Throwable $e) {
             Log::warning('Auto-migration in ArticleController: ' . $e->getMessage());
         }
@@ -417,22 +422,25 @@ class ArticleController extends Controller
     protected function ensureStarterArticles(): void
     {
         try {
-            if (!Schema::hasTable('articles')) {
-                return;
-            }
+            Cache::remember('articles_starter_seeded', 86400, function () {
+                if (!Schema::hasTable('articles')) {
+                    return false;
+                }
 
-            if (Article::count() >= 20) {
-                return;
-            }
+                if (Article::count() >= 20) {
+                    return true;
+                }
 
-            $starters = \Database\Seeders\TrendingArticlesSeeder::getTrendingArticles();
+                $starters = \Database\Seeders\TrendingArticlesSeeder::getTrendingArticles();
 
-            foreach ($starters as $s) {
-                Article::firstOrCreate(
-                    ['slug' => $s['slug']],
-                    $s
-                );
-            }
+                foreach ($starters as $s) {
+                    Article::firstOrCreate(
+                        ['slug' => $s['slug']],
+                        $s
+                    );
+                }
+                return true;
+            });
         } catch (\Throwable $e) {
             Log::warning('ensureStarterArticles error: ' . $e->getMessage());
         }
