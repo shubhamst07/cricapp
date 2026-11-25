@@ -16,7 +16,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->commands([
+            \App\Console\Commands\MigrateSqliteToPgsql::class,
+            \App\Console\Commands\SyncLiveCommentaryCommand::class,
+        ]);
     }
 
     /**

@@ -19,6 +19,9 @@ echo "Running migrations..."
 php artisan migrate --force || true
 php artisan migrate --force --database=sqlite || true
 
+echo "Migrating existing SQLite data to cloud PostgreSQL if needed..."
+php artisan db:migrate-sqlite-to-pgsql || true
+
 echo "Seeding starter articles and admin users if needed..."
 php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --force || true
 
