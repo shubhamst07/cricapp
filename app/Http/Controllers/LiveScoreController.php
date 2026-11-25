@@ -40,8 +40,8 @@ class LiveScoreController extends Controller
                     $bundle = $staleBundle;
                 } else {
                     $bundle = $this->buildLiveIndexBundle($cricket, $currentUserId, $currentUserPhone, $forceRefresh);
-                    \Illuminate\Support\Facades\Cache::put($indexCacheKey, $bundle, 45);
-                    \Illuminate\Support\Facades\Cache::put($staleCacheKey, $bundle, 600);
+                    \Illuminate\Support\Facades\Cache::put($indexCacheKey, $bundle, 60);
+                    \Illuminate\Support\Facades\Cache::put($staleCacheKey, $bundle, 900);
                 }
             }
 
@@ -57,15 +57,16 @@ class LiveScoreController extends Controller
                 $tab = $live->count() > 0 ? 'live' : ($completed->count() > 0 ? 'recent' : 'upcoming');
             }
 
-            // Top published articles for homepage showcase
+            // Top published articles for homepage showcase (cached to avoid per-request DB query)
             $articles = collect([]);
             try {
-                if (\Illuminate\Support\Facades\Schema::hasTable('articles')) {
-                    $articles = \App\Models\Article::published()
+                $articles = \Illuminate\Support\Facades\Cache::remember('home_top_articles', 120, function () {
+                    return \App\Models\Article::published()
+                        ->select(['id', 'title', 'slug', 'category', 'excerpt', 'featured_image', 'author_name', 'reading_time', 'published_at', 'is_featured'])
                         ->latest('published_at')
                         ->take(3)
                         ->get();
-                }
+                });
             } catch (\Throwable $e) {}
 
             return view('live.index', compact('live', 'scheduled', 'completed', 'matches', 'cacheTtl', 'tab', 'section', 'articles'));
@@ -195,10 +196,12 @@ class LiveScoreController extends Controller
         $scheduled = collect($matches)->where('status', 'scheduled')->values();
         $completed = collect($matches)->filter(fn($m) => in_array($m['status'] ?? '', ['completed', 'abandoned']))->values();
 
-        // If no scheduled matches found in currentMatches, try to get upcoming matches from all matches
+        // If no scheduled matches found in currentMatches, try cached upcoming matches once per 2 min
         if ($scheduled->isEmpty()) {
             try {
-                $upcomingFromAll = $cricket->getUpcomingMatches();
+                $upcomingFromAll = \Illuminate\Support\Facades\Cache::remember('upcoming_matches_fallback', 120, function () use ($cricket) {
+                    return $cricket->getUpcomingMatches();
+                });
                 if (!empty($upcomingFromAll)) {
                     $scheduled = collect($upcomingFromAll)->values();
                 }

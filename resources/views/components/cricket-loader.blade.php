@@ -68,7 +68,7 @@
     <div id="{{ $id }}"
          role="status"
          aria-live="polite"
-         class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-950/35 dark:bg-[#050914]/70 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
+         class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-950/35 dark:bg-[#050914]/70 backdrop-blur-sm transition-opacity duration-150 opacity-0 pointer-events-none">
         <!-- Top Animated Pitch Progress Bar -->
         <div class="fixed top-0 left-0 right-0 h-[3px] overflow-hidden bg-slate-200/30 dark:bg-white/10">
             <div class="h-full w-1/3 bg-gradient-to-r from-indigo-500 via-emerald-400 to-amber-500 cric-progress-sweep"></div>
@@ -161,16 +161,10 @@
 
             window.CricLoader = { show: showLoader, hide: hideLoader };
 
-            // Hide when page renders or restores from browser Back/Forward cache
-            if (document.readyState === 'loading') {
-                showLoader();
-                document.addEventListener('DOMContentLoaded', () => setTimeout(hideLoader, 160), { once: true });
-            } else {
-                hideLoader();
-            }
-
+            // Ensure arriving page paints immediately without a fullscreen wait overlay;
+            // loader appears actively during link clicks, form submissions, and async actions.
+            hideLoader();
             window.addEventListener('pageshow', hideLoader);
-            window.addEventListener('load', hideLoader);
             window.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') hideLoader();
             });

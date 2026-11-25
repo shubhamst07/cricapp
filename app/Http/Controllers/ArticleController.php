@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Article;
 use App\Services\ArticleGeneratorService;
-use App\Services\ArticleTranslationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,39 +29,59 @@ class ArticleController extends Controller
 
         $featuredArticle = null;
         $articles = new LengthAwarePaginator([], 0, 9);
+        $indexColumns = ['id', 'title', 'slug', 'category', 'excerpt', 'featured_image', 'author_name', 'views_count', 'reading_time', 'published_at', 'is_featured'];
+        $isDefaultBrowse = (empty($category) || strtolower((string) $category) === 'all') && empty($search);
+        $page = max(1, (int) $request->input('page', 1));
 
         try {
-            $query = Article::published()->latest('published_at');
+            if ($isDefaultBrowse) {
+                $bundle = Cache::remember("articles_index_page_{$page}", 120, function () use ($indexColumns, $request) {
+                    $feat = Article::published()
+                        ->select($indexColumns)
+                        ->where('is_featured', true)
+                        ->latest('published_at')
+                        ->first();
+                    if (!$feat) {
+                        $feat = Article::published()
+                            ->select($indexColumns)
+                            ->latest('published_at')
+                            ->first();
+                    }
 
-            if (!empty($category) && strtolower($category) !== 'all') {
-                $query->where('category', $category);
-            }
+                    $listQuery = Article::published()->select($indexColumns)->latest('published_at');
+                    if ($feat) {
+                        $listQuery->where('id', '!=', $feat->id);
+                    }
+                    $list = $listQuery->paginate(9)->withQueryString();
+                    $list->withPath(route('articles.index'));
 
-            if (!empty($search)) {
-                $s = trim($search);
-                $query->where(function ($q) use ($s) {
-                    $q->where('title', 'LIKE', "%{$s}%")
-                      ->orWhere('excerpt', 'LIKE', "%{$s}%")
-                      ->orWhere('content', 'LIKE', "%{$s}%")
-                      ->orWhere('tags', 'LIKE', "%{$s}%");
+                    return [
+                        'featuredArticle' => $feat,
+                        'articles' => $list,
+                    ];
                 });
-            }
 
-            // Top featured article
-            if (empty($category) && empty($search)) {
-                $featuredArticle = Article::published()->where('is_featured', true)->latest('published_at')->first();
-                if (!$featuredArticle) {
-                    $featuredArticle = Article::published()->latest('published_at')->first();
-                }
-            }
-
-            // Exclude featured from the paginated list if it exists
-            if ($featuredArticle) {
-                $articles = (clone $query)->where('id', '!=', $featuredArticle->id)->paginate(9)->withQueryString();
+                $featuredArticle = $bundle['featuredArticle'] ?? null;
+                $articles = $bundle['articles'] ?? $articles;
             } else {
+                $query = Article::published()->select($indexColumns)->latest('published_at');
+
+                if (!empty($category) && strtolower($category) !== 'all') {
+                    $query->where('category', $category);
+                }
+
+                if (!empty($search)) {
+                    $s = trim($search);
+                    $query->where(function ($q) use ($s) {
+                        $q->where('title', 'LIKE', "%{$s}%")
+                          ->orWhere('excerpt', 'LIKE', "%{$s}%")
+                          ->orWhere('tags', 'LIKE', "%{$s}%");
+                    });
+                }
+
                 $articles = $query->paginate(9)->withQueryString();
+                $articles->withPath(route('articles.index'));
             }
-            $articles->withPath(route('articles.index'));
         } catch (\Throwable $e) {
             Log::error('ArticleController@index error: ' . $e->getMessage());
         }
@@ -82,9 +101,9 @@ class ArticleController extends Controller
     }
 
     /**
-     * Display the specified article with multi-language support.
+     * Display the specified article.
      */
-    public function show(string $slug, ArticleTranslationService $translationService): View
+    public function show(string $slug): View
     {
         $article = Article::where('slug', $slug)->firstOrFail();
 
@@ -93,34 +112,6 @@ class ArticleController extends Controller
             $article->increment('views_count');
         } catch (\Throwable $e) {
             // ignore
-        }
-
-        // Get 3-language translations (English, Hindi, Hinglish)
-        $translations = [];
-        try {
-            $translations = $translationService->getTranslations($article);
-        } catch (\Throwable $e) {
-            Log::warning('Translation error in ArticleController@show: ' . $e->getMessage());
-            $translations = [
-                'en' => [
-                    'title' => $article->title,
-                    'category' => $article->category,
-                    'excerpt' => $article->excerpt,
-                    'content' => $article->content,
-                ],
-                'hi' => [
-                    'title' => $article->title_hi ?: $article->title,
-                    'category' => $article->category_hi ?: $article->category,
-                    'excerpt' => $article->excerpt_hi ?: $article->excerpt,
-                    'content' => $article->content_hi ?: $article->content,
-                ],
-                'hinglish' => [
-                    'title' => $article->title_hinglish ?: $article->title,
-                    'category' => $article->category_hinglish ?: $article->category,
-                    'excerpt' => $article->excerpt_hinglish ?: $article->excerpt,
-                    'content' => $article->content_hinglish ?: $article->content,
-                ],
-            ];
         }
 
         // Related articles (same category or recent, excluding current)
@@ -149,7 +140,7 @@ class ArticleController extends Controller
 
         $isAdmin = Auth::check() && (Auth::user()->is_admin ?? false);
 
-        return view('articles.show', compact('article', 'relatedArticles', 'isAdmin', 'translations'));
+        return view('articles.show', compact('article', 'relatedArticles', 'isAdmin'));
     }
 
     /**
@@ -275,12 +266,7 @@ class ArticleController extends Controller
             'published_at' => $validated['status'] === 'published' ? Carbon::now() : null,
         ]);
 
-        // Auto-generate translations immediately
-        try {
-            app(\App\Services\ArticleTranslationService::class)->getTranslations($article);
-        } catch (\Throwable $e) {
-            Log::warning('Translation failed on article store: ' . $e->getMessage());
-        }
+        $this->clearArticleCache();
 
         return redirect()->route('articles.show', $article->slug)
             ->with('success', '🏏 Article published successfully! It is now live for all cricket fans.');
@@ -373,13 +359,7 @@ class ArticleController extends Controller
             'published_at' => $article->published_at ?: Carbon::now(),
         ]);
 
-        if ($translationsChanged) {
-            try {
-                app(\App\Services\ArticleTranslationService::class)->getTranslations($article);
-            } catch (\Throwable $e) {
-                Log::warning('Translation failed on article update: ' . $e->getMessage());
-            }
-        }
+        $this->clearArticleCache();
 
         return redirect()->route('articles.show', $article->slug)
             ->with('success', '✅ Article updated successfully.');
@@ -434,9 +414,21 @@ class ArticleController extends Controller
         $this->authorizeAdmin();
 
         $article->delete();
+        $this->clearArticleCache();
 
         return redirect()->route('articles.index')
             ->with('success', 'Article deleted successfully.');
+    }
+
+    /**
+     * Invalidate cached article lists and homepage showcase.
+     */
+    protected function clearArticleCache(): void
+    {
+        Cache::forget('home_top_articles');
+        for ($p = 1; $p <= 5; $p++) {
+            Cache::forget("articles_index_page_{$p}");
+        }
     }
 
     /**

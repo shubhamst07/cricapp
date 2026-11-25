@@ -66,20 +66,31 @@ class MeetupController extends Controller
             });
         }
 
+        $page = max(1, (int) $request->input('page', 1));
+        $isDefaultGuest = (empty($city) || strtolower($city) === 'all') && ($when === 'all') && (empty($ballType) || $ballType === 'all') && empty($search) && !Auth::check();
+
         try {
-            $meetups = $query->paginate(12)->withQueryString();
+            if ($isDefaultGuest) {
+                $meetups = \Illuminate\Support\Facades\Cache::remember("meetups_index_page_{$page}", 60, function () use ($query) {
+                    return $query->paginate(12)->withQueryString();
+                });
+            } else {
+                $meetups = $query->paginate(12)->withQueryString();
+            }
         } catch (\Throwable $e) {
             $meetups = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 12);
         }
 
         // Popular / Active Cities for Quick Filter Pills
         try {
-            $popularCities = MatchMeetup::where('match_date', '>=', Carbon::today())
-                ->select('city')
-                ->distinct()
-                ->pluck('city')
-                ->filter()
-                ->values();
+            $popularCities = \Illuminate\Support\Facades\Cache::remember('meetups_popular_cities', 300, function () {
+                return MatchMeetup::where('match_date', '>=', Carbon::today())
+                    ->select('city')
+                    ->distinct()
+                    ->pluck('city')
+                    ->filter()
+                    ->values();
+            });
         } catch (\Throwable $e) {
             $popularCities = collect([]);
         }

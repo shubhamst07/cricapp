@@ -78,6 +78,11 @@ class AuthenticatedSessionController extends Controller
     protected function ensureDatabaseReady(): void
     {
         try {
+            $flag = storage_path('framework/auth_db_ready.flag');
+            if (file_exists($flag) && (time() - filemtime($flag) < 3600)) {
+                return;
+            }
+
             $dbPath = database_path('database.sqlite');
             if (config('database.default') === 'sqlite') {
                 if (!file_exists($dbPath)) {
@@ -90,6 +95,7 @@ class AuthenticatedSessionController extends Controller
             if (!Schema::hasTable('users') || !Schema::hasTable('sessions') || !Schema::hasTable('articles')) {
                 Artisan::call('migrate', ['--force' => true]);
             }
+            @touch($flag);
         } catch (\Throwable $e) {
             Log::warning('Auto-migration in AuthenticatedSessionController: ' . $e->getMessage());
         }

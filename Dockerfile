@@ -33,9 +33,25 @@ ENV PHP_CATCHALL true
 ENV APP_ENV production
 ENV APP_DEBUG false
 ENV LOG_CHANNEL stderr
+ENV SESSION_DRIVER file
+ENV CACHE_STORE file
 ENV COMPOSER_ALLOW_SUPERUSER 1
 ENV DB_CONNECTION pgsql
 ENV DATABASE_URL postgresql://neondb_owner:npg_CkRzSU1qGZ4m@ep-orange-night-bexqhg2o.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
+
+# Enable tuned PHP OPcache in production (zero per-request disk stat overhead)
+RUN for d in /etc/php82/conf.d /etc/php83/conf.d /usr/local/etc/php/conf.d; do \
+      if [ -d "$d" ]; then \
+        { \
+          echo 'opcache.enable=1'; \
+          echo 'opcache.memory_consumption=192'; \
+          echo 'opcache.interned_strings_buffer=16'; \
+          echo 'opcache.max_accelerated_files=20000'; \
+          echo 'opcache.validate_timestamps=0'; \
+          echo 'opcache.save_comments=1'; \
+        } > "$d/99-opcache-prod.ini"; \
+      fi; \
+    done
 
 # Install composer packages at build time
 RUN composer install --no-dev --optimize-autoloader

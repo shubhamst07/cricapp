@@ -43,34 +43,44 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
-        // 1. Database Health & Failover Check:
-        // Test primary database connection with ultra-fast circuit breaker (cached for 300s).
+        // 1. Fast per-container DB boot check (avoids remote PDO + Schema::hasTable on every HTTP request)
         $primaryConn = config('database.default', 'sqlite');
-        if ($primaryConn !== 'sqlite') {
-            $flagPath = storage_path("framework/db_down_{$primaryConn}.flag");
-            $isKnownDown = file_exists($flagPath) && (time() - filemtime($flagPath) < 300);
+        $bootVerifiedFlag = storage_path("framework/db_boot_ok_{$primaryConn}.flag");
+        $flagPath = storage_path("framework/db_down_{$primaryConn}.flag");
+        $isKnownDown = file_exists($flagPath) && (time() - filemtime($flagPath) < 300);
 
-            if ($isKnownDown) {
+        if ($primaryConn !== 'sqlite' && $isKnownDown) {
+            config(['database.default' => 'sqlite']);
+            DB::purge($primaryConn);
+            DB::setDefaultConnection('sqlite');
+        }
+
+        $activeConn = config('database.default', 'sqlite');
+        $bootOkFresh = file_exists($bootVerifiedFlag) && (time() - filemtime($bootVerifiedFlag) < 3600);
+
+        // Skip expensive connection checks & schema introspection when already verified for this web runtime
+        if (! app()->runningInConsole() && $bootOkFresh && ! $isKnownDown) {
+            return;
+        }
+
+        if ($primaryConn !== 'sqlite' && ! $isKnownDown) {
+            try {
+                DB::connection($primaryConn)->getPdo();
+                if (file_exists($flagPath)) {
+                    @unlink($flagPath);
+                }
+            } catch (\Throwable $dbEx) {
+                @touch($flagPath);
+                @unlink($bootVerifiedFlag);
+                Log::warning("Primary DB [{$primaryConn}] failed ({$dbEx->getMessage()}). Circuit breaker tripped: Auto-switching to SQLite fallback.");
                 config(['database.default' => 'sqlite']);
                 DB::purge($primaryConn);
                 DB::setDefaultConnection('sqlite');
-            } else {
-                try {
-                    DB::connection($primaryConn)->getPdo();
-                    if (file_exists($flagPath)) {
-                        @unlink($flagPath);
-                    }
-                } catch (\Throwable $dbEx) {
-                    @touch($flagPath);
-                    Log::warning("Primary DB [{$primaryConn}] failed ({$dbEx->getMessage()}). Circuit breaker tripped: Auto-switching to SQLite fallback.");
-                    config(['database.default' => 'sqlite']);
-                    DB::purge($primaryConn);
-                    DB::setDefaultConnection('sqlite');
-                }
             }
         }
 
         // 2. Ensure SQLite database directory & file exist
+        $hasCoreTables = false;
         try {
             $dbConnection = config('database.default', 'sqlite');
             if ($dbConnection === 'sqlite' || empty($dbConnection)) {
@@ -85,20 +95,22 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
 
-            // 3. Auto-run migrations in web runtime only if essential tables are missing (throttled with 60s lock)
+            // 3. Auto-run migrations only when essential tables are missing (once per container boot / 5m lock)
             if (! app()->runningInConsole()) {
                 $migLock = storage_path('framework/boot_migrate.lock');
-                $locked = file_exists($migLock) && (time() - filemtime($migLock) < 60);
-                if (! $locked && (!Schema::hasTable('users') || !Schema::hasTable('sessions') || !Schema::hasTable('articles'))) {
+                $locked = file_exists($migLock) && (time() - filemtime($migLock) < 300);
+                $hasCoreTables = Schema::hasTable('users') && Schema::hasTable('sessions') && Schema::hasTable('articles');
+                if (! $hasCoreTables && ! $locked) {
                     @touch($migLock);
                     Artisan::call('migrate', ['--force' => true, '--database' => $dbConnection ?: 'sqlite']);
+                    $hasCoreTables = Schema::hasTable('users') && Schema::hasTable('sessions') && Schema::hasTable('articles');
                 }
             }
         } catch (\Throwable $e) {
             Log::warning('AppServiceProvider boot DB initialization: ' . $e->getMessage());
         }
 
-        // 4. Resilient session fallback: If sessions table is missing or DB unreachable, fall back to file driver
+        // 4. Resilient session fallback: only needed if using database driver
         try {
             if (config('session.driver') === 'database' && !Schema::hasTable('sessions')) {
                 config(['session.driver' => 'file']);
@@ -107,7 +119,7 @@ class AppServiceProvider extends ServiceProvider
             config(['session.driver' => 'file']);
         }
 
-        // 5. Resilient cache fallback: If cache table is missing or DB unreachable, fall back to file driver
+        // 5. Resilient cache fallback: only needed if using database driver
         try {
             if (config('cache.default') === 'database' && !Schema::hasTable('cache')) {
                 config(['cache.default' => 'file']);
@@ -116,13 +128,13 @@ class AppServiceProvider extends ServiceProvider
             config(['cache.default' => 'file']);
         }
 
-        // 6. Ensure Master Admin Account always exists (checked every 300s to avoid per-request hashing overhead)
+        // 6. Ensure Master Admin Account always exists (checked at most once every 24h per server)
         try {
             $activeConn = config('database.default', 'sqlite');
             $adminFlag = storage_path("framework/admin_synced_{$activeConn}.flag");
-            $recentlySynced = file_exists($adminFlag) && (time() - filemtime($adminFlag) < 300);
+            $recentlySynced = file_exists($adminFlag) && (time() - filemtime($adminFlag) < 86400);
 
-            if (! $recentlySynced && Schema::hasTable('users')) {
+            if (! $recentlySynced && ($hasCoreTables || Schema::hasTable('users'))) {
                 $adminAccounts = [
                     'shubhamthakurst07@gmail.com' => 'Shubham Thakur',
                     'shubhamthakurst0007@gmail.com' => 'Shubham Thakur',
@@ -153,6 +165,10 @@ class AppServiceProvider extends ServiceProvider
                     }
                 }
                 @touch($adminFlag);
+            }
+
+            if (! app()->runningInConsole() && $hasCoreTables && ! $isKnownDown && ($activeConn === $primaryConn || $primaryConn === 'sqlite')) {
+                @touch($bootVerifiedFlag);
             }
         } catch (\Throwable $e) {
             Log::warning('Admin auto-provision in AppServiceProvider: ' . $e->getMessage());
