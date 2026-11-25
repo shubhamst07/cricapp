@@ -65,12 +65,9 @@
          data-commentary='@json($commentary ?? [])'
          data-match-id='{{ $match["id"] ?? "" }}'
          data-is-admin='{{ $isAdmin ? "true" : "false" }}'>
-        {{-- Loading Skeleton while React mounts --}}
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse space-y-6">
-            <div class="h-8 w-40 bg-gray-200 rounded-lg"></div>
-            <div class="h-44 bg-gray-200 rounded-2xl"></div>
-            <div class="h-32 bg-gray-200 rounded-2xl"></div>
-            <div class="h-64 bg-gray-200 rounded-2xl"></div>
+        {{-- Animated Bat & Ball Loader while React mounts --}}
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <x-cricket-loader inline="true" label="Loading live match scorecard & ball-by-ball commentary..." />
         </div>
     </div>
 @endsection

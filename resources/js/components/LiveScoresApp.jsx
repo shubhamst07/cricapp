@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import AdSlot from './AdSlot';
+import CricketLoader from './CricketLoader';
 import {
     Radio,
     Calendar,
@@ -1411,9 +1412,8 @@ export default function LiveScoresApp({
                             )}
 
                             {loadingScorecard ? (
-                                <div className="py-12 text-center text-slate-400">
-                                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500 dark:text-indigo-400" />
-                                    <p className="text-xs font-medium">Fetching real-time scorecard...</p>
+                                <div className="py-10">
+                                    <CricketLoader compact label="Fetching real-time scorecard..." />
                                 </div>
                             ) : scorecardData && scorecardData.data ? (
                                 <div className="space-y-4">
@@ -1502,9 +1502,8 @@ export default function LiveScoresApp({
                         {/* Modal Body */}
                         <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
                             {loadingPlayerProfile ? (
-                                <div className="py-20 text-center space-y-3">
-                                    <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
-                                    <p className="text-xs font-bold text-slate-400">Loading {selectedPlayer.name}'s records & statistics...</p>
+                                <div className="py-10">
+                                    <CricketLoader label={`Loading ${selectedPlayer.name}'s records & statistics...`} />
                                 </div>
                             ) : playerProfileData ? (
                                 <>
@@ -1835,12 +1834,12 @@ export default function LiveScoresApp({
                             {/* Modal Body */}
                             <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
                                 {loadingPointsTable && !isLiveFeed && (!standings || standings.length === 0) ? (
-                                    <div className="py-16 text-center space-y-4">
-                                        <div className="w-10 h-10 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                                        <div>
-                                            <p className="text-sm font-bold text-white">Fetching Live Points Table</p>
-                                            <p className="text-xs text-slate-400 mt-1">Connecting to official tournament standings for {titleText}...</p>
-                                        </div>
+                                    <div className="py-10">
+                                        <CricketLoader
+                                            dark
+                                            label="Fetching Live Points Table"
+                                            sublabel={`Connecting to official tournament standings for ${titleText}...`}
+                                        />
                                     </div>
                                 ) : (!standings || standings.length === 0) ? (
                                     <div className="py-12 text-center space-y-3 px-4 bg-slate-900/50 rounded-2xl border border-white/5">
@@ -2118,12 +2117,12 @@ export default function LiveScoresApp({
                             {/* Modal Body: Fixtures List */}
                             <div className="p-4 sm:p-6 overflow-y-auto space-y-3">
                                 {loadingSchedule && (!currentTabMatches || currentTabMatches.length === 0) ? (
-                                    <div className="py-16 text-center space-y-4">
-                                        <div className="w-10 h-10 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                                        <div>
-                                            <p className="text-sm font-bold text-white">Fetching Tournament Schedule</p>
-                                            <p className="text-xs text-slate-400 mt-1">Retrieving official fixture calendar for {titleText}...</p>
-                                        </div>
+                                    <div className="py-10">
+                                        <CricketLoader
+                                            dark
+                                            label="Fetching Tournament Schedule"
+                                            sublabel={`Retrieving official fixture calendar for ${titleText}...`}
+                                        />
                                     </div>
                                 ) : (!currentTabMatches || currentTabMatches.length === 0) ? (
                                     <div className="py-12 text-center space-y-3 px-4 bg-slate-900/50 rounded-2xl border border-white/5">

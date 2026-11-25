@@ -53,6 +53,9 @@
         @vite(['resources/css/app.css', 'resources/js/app.jsx'])
     </head>
     <body class="font-sans antialiased bg-slate-50 text-slate-900 dark:bg-[#080d1a] dark:text-slate-100 min-h-screen selection:bg-indigo-600 selection:text-white relative overflow-x-hidden flex flex-col justify-between transition-colors duration-200">
+        <!-- Global Animated Cricket Bat & Ball Loader -->
+        <x-cricket-loader label="Loading pitch..." />
+
         <!-- Ambient Stadium Lights Effect -->
         <div class="fixed inset-0 pointer-events-none -z-10 overflow-hidden dark:opacity-100 opacity-20 transition-opacity">
             <div class="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/15 rounded-full blur-[130px]"></div>

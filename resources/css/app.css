@@ -64,3 +64,81 @@ html:not(.dark) .bg-\[\#131b2e\] .bg-white\/10 {
     color: #0f172a;
     border-color: #e2e8f0;
 }
+
+/* Global Cricket Bat & Ball Loader Animations */
+@keyframes cricBatSwing {
+    0%, 100% {
+        transform: rotate(18deg);
+    }
+    40% {
+        transform: rotate(-10deg);
+    }
+    55% {
+        transform: rotate(-14deg);
+    }
+}
+
+@keyframes cricBallBounce {
+    0%, 100% {
+        transform: translate(0px, -22px) scale(1);
+    }
+    38% {
+        transform: translate(-3px, 11px) scale(1.06, 0.9);
+    }
+    52% {
+        transform: translate(1px, 3px) scale(1);
+    }
+}
+
+@keyframes cricBallSeam {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes cricBallShadow {
+    0%, 100% {
+        transform: scaleX(0.55);
+        opacity: 0.25;
+    }
+    38% {
+        transform: scaleX(1.15);
+        opacity: 0.75;
+    }
+}
+
+@keyframes cricProgressSweep {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(300%);
+    }
+}
+
+.cric-bat-arm {
+    transform-origin: 78px 16px;
+    animation: cricBatSwing 1.05s ease-in-out infinite;
+}
+
+.cric-ball-body {
+    transform-origin: 45px 55px;
+    animation: cricBallBounce 1.05s ease-in-out infinite;
+}
+
+.cric-ball-seam {
+    transform-origin: 45px 55px;
+    animation: cricBallSeam 1.4s linear infinite;
+}
+
+.cric-pitch-shadow {
+    transform-origin: 45px 78px;
+    animation: cricBallShadow 1.05s ease-in-out infinite;
+}
+
+.cric-progress-sweep {
+    animation: cricProgressSweep 1.15s ease-in-out infinite;
+}

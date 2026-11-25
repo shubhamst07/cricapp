@@ -39,6 +39,8 @@
         @vite(['resources/css/app.css', 'resources/js/app.jsx'])
     </head>
     <body class="font-sans antialiased bg-slate-50 text-slate-900 dark:bg-[#080d1a] dark:text-slate-100 min-h-screen selection:bg-indigo-600 selection:text-white relative overflow-x-hidden flex flex-col justify-between transition-colors duration-200">
+        <!-- Global Animated Cricket Bat & Ball Loader -->
+        <x-cricket-loader label="Loading pitch..." />
 
         <!-- Ambient Stadium Lights Effect -->
         <div class="fixed inset-0 pointer-events-none -z-10 overflow-hidden dark:opacity-100 opacity-20 transition-opacity">
@@ -48,36 +50,48 @@
             <div class="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-25"></div>
         </div>
 
-        <!-- Top Header Navigation (Consistent with Main App Navbar) -->
+        <!-- Top Header Navigation (Consistent Stadium Command Bar) -->
         <header x-data="{ isDark: document.documentElement.classList.contains('dark') }"
                 @theme-changed.window="isDark = document.documentElement.classList.contains('dark')"
-                class="w-full border-b border-slate-200/80 dark:border-white/10 bg-white/90 dark:bg-[#0b1120]/90 backdrop-blur-xl sticky top-0 z-30 transition-colors duration-200">
+                class="w-full border-b border-slate-200/80 dark:border-white/10 bg-white/90 dark:bg-[#080e1c]/90 backdrop-blur-xl sticky top-0 z-30 transition-colors duration-200">
+            <div class="h-[2.5px] w-full bg-gradient-to-r from-indigo-600 via-emerald-400 to-amber-500"></div>
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
                 <a href="{{ route('live-scores.index') }}" class="flex items-center gap-2.5 group whitespace-nowrap shrink-0">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-sm shadow-indigo-600/25 group-hover:scale-105 transition transform">
-                        <svg class="w-5 h-5 fill-none stroke-current" stroke-width="2" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                            <path d="M2 12h20" />
-                        </svg>
+                    <div class="relative w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 via-blue-600 to-emerald-500 p-[1px] shadow-md shadow-indigo-600/25 group-hover:scale-105 transition transform">
+                        <div class="w-full h-full rounded-[11px] bg-slate-950/90 flex items-center justify-center">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M8 20V6M12 20V6M16 20V6" stroke="#e2e8f0" stroke-width="1.8" stroke-linecap="round" />
+                                <path d="M7.2 5.5H11.5M12.5 5.5H16.8" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" />
+                                <circle cx="17.5" cy="14.5" r="3.5" fill="#e11d48" stroke="#fff1f2" stroke-width="0.9" />
+                            </svg>
+                        </div>
                     </div>
-                    <span class="font-black text-xl text-slate-900 dark:text-white tracking-tight">Cric<span class="text-indigo-600 dark:text-amber-400">App</span><span class="text-xs text-indigo-500 dark:text-indigo-400 font-bold ml-0.5">.in</span></span>
+                    <div class="flex flex-col leading-none">
+                        <div class="flex items-baseline">
+                            <span class="font-black text-lg sm:text-xl text-slate-900 dark:text-white tracking-tight">Cric</span>
+                            <span class="font-black text-lg sm:text-xl bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent tracking-tight">App</span>
+                            <span class="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 ml-0.5">.in</span>
+                        </div>
+                        <span class="text-[8.5px] font-extrabold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                            Cricket Arena
+                        </span>
+                    </div>
                 </a>
 
-                <div class="hidden sm:inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100/90 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08]">
-                    <a href="{{ route('live-scores.index') }}" class="px-3 py-2 rounded-lg text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-white/[0.06] transition">
+                <div class="hidden sm:inline-flex items-center gap-0.5 p-1 rounded-2xl bg-slate-100/90 dark:bg-[#0f172a]/90 border border-slate-200/90 dark:border-white/[0.09] shadow-inner">
+                    <a href="{{ route('live-scores.index') }}" class="px-3 py-2 rounded-xl text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/75 dark:hover:bg-white/[0.06] transition">
                         Live Scores
                     </a>
-                    <a href="{{ route('articles.index') }}" class="px-3 py-2 rounded-lg text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-white/[0.06] transition">
+                    <a href="{{ route('articles.index') }}" class="px-3 py-2 rounded-xl text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/75 dark:hover:bg-white/[0.06] transition">
                         News &amp; Articles
                     </a>
-                    <a href="{{ route('grounds.index') }}" class="px-3 py-2 rounded-lg text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-white/[0.06] transition">
+                    <a href="{{ route('grounds.index') }}" class="px-3 py-2 rounded-xl text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/75 dark:hover:bg-white/[0.06] transition">
                         Grounds
                     </a>
-                    <a href="{{ route('about') }}" class="px-3 py-2 rounded-lg text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-white/[0.06] transition">
+                    <a href="{{ route('about') }}" class="px-3 py-2 rounded-xl text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/75 dark:hover:bg-white/[0.06] transition">
                         About
                     </a>
-                    <a href="{{ route('contact') }}" class="px-3 py-2 rounded-lg text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-white/[0.06] transition">
+                    <a href="{{ route('contact') }}" class="px-3 py-2 rounded-xl text-[13px] font-semibold leading-none whitespace-nowrap text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/75 dark:hover:bg-white/[0.06] transition">
                         Contact
                     </a>
                 </div>
