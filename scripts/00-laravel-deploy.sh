@@ -19,8 +19,8 @@ echo "Running migrations..."
 php artisan migrate --force || true
 php artisan migrate --force --database=sqlite || true
 
-echo "Seeding starter articles if needed..."
-php artisan db:seed --class="Database\\Seeders\\TrendingArticlesSeeder" --force || true
+echo "Seeding starter articles and admin users if needed..."
+php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --force || true
 
 chmod -R 777 /var/www/html/database /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 
