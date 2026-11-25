@@ -70,7 +70,11 @@
 <div class="py-6 sm:py-8 bg-slate-50 dark:bg-[#080d1a] min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200" 
      x-data="{ 
          copied: false, 
-         lang: 'en',
+         lang: localStorage.getItem('cricapp_article_lang') || 'en',
+         setLang(l) {
+             this.lang = l;
+             localStorage.setItem('cricapp_article_lang', l);
+         },
          translations: {{ Js::from($translations) }}
      }">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
@@ -100,19 +104,19 @@
 
             <!-- Language Buttons -->
             <div class="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
-                <button type="button" @click="lang = 'en'"
+                <button type="button" @click="setLang('en')"
                         :class="lang === 'en' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
-                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5">
+                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
                     <span>🇬🇧 English</span>
                 </button>
-                <button type="button" @click="lang = 'hi'"
+                <button type="button" @click="setLang('hi')"
                         :class="lang === 'hi' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
-                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5">
+                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
                     <span>🇮🇳 हिंदी</span>
                 </button>
-                <button type="button" @click="lang = 'hinglish'"
+                <button type="button" @click="setLang('hinglish')"
                         :class="lang === 'hinglish' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
-                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5">
+                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
                     <span>🏏 Hinglish</span>
                 </button>
             </div>

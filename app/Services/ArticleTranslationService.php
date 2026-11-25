@@ -144,9 +144,13 @@ class ArticleTranslationService
             'content' => $article->content,
         ];
 
-        // Check if Hindi & Hinglish are already cached or in the database
-        $hasHi = !empty($article->title_hi) && !empty($article->content_hi);
-        $hasHinglish = !empty($article->title_hinglish) && !empty($article->content_hinglish);
+        // Check if Hindi & Hinglish are already cached or in the database with actual Devanagari
+        $hasHi = !empty($article->title_hi) 
+            && !empty($article->content_hi) 
+            && preg_match('/[\x{0900}-\x{097F}]/u', $article->title_hi);
+        $hasHinglish = !empty($article->title_hinglish) 
+            && !empty($article->content_hinglish)
+            && ($article->title_hinglish !== $article->title);
 
         if ($hasHi && $hasHinglish) {
             return [
@@ -310,7 +314,7 @@ class ArticleTranslationService
     }
 
     /**
-     * Translate text from English to Hindi using Google Translate API with caching.
+     * Translate text from English to Hindi using MyMemory & Google Translate API with caching.
      */
     public function translateToHindi(string $text): string
     {
@@ -319,42 +323,97 @@ class ArticleTranslationService
             return '';
         }
 
-        $cacheKey = 'art_trans_hi_' . md5($text);
+        // If already Devanagari Hindi, return as is
+        if (preg_match('/[\x{0900}-\x{097F}]/u', $text)) {
+            return $text;
+        }
+
+        $cacheKey = 'art_trans_hi_v2_' . md5($text);
 
         try {
             return Cache::remember($cacheKey, 86400 * 30, function () use ($text) {
-                try {
-                    $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=hi&dt=t&q=' . urlencode($text);
-                    $response = Http::timeout(4)
-                        ->withHeaders([
-                            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                            'Accept' => '*/*',
-                        ])
-                        ->get($url);
-
-                    if ($response->successful()) {
-                        $arr = $response->json();
-                        if (is_array($arr) && isset($arr[0]) && is_array($arr[0])) {
-                            $translated = '';
-                            foreach ($arr[0] as $part) {
-                                $translated .= $part[0] ?? '';
-                            }
-                            $translated = trim($translated);
-                            if (!empty($translated)) {
-                                return $translated;
-                            }
-                        }
+                // If text is long, chunk it by sentences to prevent API overflow
+                if (mb_strlen($text) > 250) {
+                    $sentences = preg_split('/(?<=[.!?\n])\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
+                    $translatedSentences = [];
+                    foreach ($sentences as $sentence) {
+                        $translatedSentences[] = $this->translateChunkToHindi($sentence);
                     }
-                } catch (\Throwable $e) {
-                    Log::warning('TranslateToHindi API error: ' . $e->getMessage());
+                    return implode(' ', $translatedSentences);
                 }
 
-                // Fallback to original text if external API is unreachable
-                return $text;
+                return $this->translateChunkToHindi($text);
             });
         } catch (\Throwable $e) {
+            return $this->translateChunkToHindi($text);
+        }
+    }
+
+    /**
+     * Translate a short sentence/chunk into Hindi using MyMemory with fallbacks.
+     */
+    protected function translateChunkToHindi(string $text): string
+    {
+        $text = trim($text);
+        if (empty($text)) {
+            return '';
+        }
+        if (preg_match('/[\x{0900}-\x{097F}]/u', $text)) {
             return $text;
         }
+
+        // 1. Try MyMemory API (Fast, reliable from servers)
+        try {
+            $url = 'https://api.mymemory.translated.net/get?q=' . urlencode($text) . '&langpair=en|hi';
+            $response = Http::timeout(5)
+                ->withHeaders([
+                    'User-Agent' => 'CricAppNews/2.0 (Cricket Portal)',
+                    'Accept' => 'application/json',
+                ])
+                ->get($url);
+
+            if ($response->successful()) {
+                $json = $response->json();
+                $res = $json['responseData']['translatedText'] ?? null;
+                if (!empty($res)) {
+                    $clean = html_entity_decode(trim($res), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    if (preg_match('/[\x{0900}-\x{097F}]/u', $clean)) {
+                        return $clean;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('MyMemory translation error: ' . $e->getMessage());
+        }
+
+        // 2. Fallback to Google Translate if available
+        try {
+            $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=hi&dt=t&q=' . urlencode($text);
+            $response = Http::timeout(3)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept' => '*/*',
+                ])
+                ->get($url);
+
+            if ($response->successful()) {
+                $arr = $response->json();
+                if (is_array($arr) && isset($arr[0]) && is_array($arr[0])) {
+                    $translated = '';
+                    foreach ($arr[0] as $part) {
+                        $translated .= $part[0] ?? '';
+                    }
+                    $translated = trim($translated);
+                    if (!empty($translated) && preg_match('/[\x{0900}-\x{097F}]/u', $translated)) {
+                        return $translated;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        return $text;
     }
 
     /**
