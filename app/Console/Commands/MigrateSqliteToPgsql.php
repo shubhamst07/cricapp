@@ -52,9 +52,10 @@ class MigrateSqliteToPgsql extends Command
      */
     public function handle(): int
     {
-        $defaultConn = config('database.default');
-        if ($defaultConn !== 'pgsql') {
-            $this->info("Current database is [{$defaultConn}]. This tool only copies data into PostgreSQL ('pgsql').");
+        try {
+            DB::connection('pgsql')->getPdo();
+        } catch (\Throwable $e) {
+            $this->warn("PostgreSQL cloud connection not reachable: " . $e->getMessage());
             return Command::SUCCESS;
         }
 

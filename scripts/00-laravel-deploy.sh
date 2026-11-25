@@ -15,15 +15,19 @@ touch /var/www/html/database/database.sqlite
 chmod 777 /var/www/html/database/database.sqlite 2>/dev/null || true
 chmod 777 /var/www/html/database 2>/dev/null || true
 
-echo "Running migrations..."
-php artisan migrate --force || true
+echo "Clearing config cache to ensure latest database configuration..."
+php artisan config:clear || true
+
+echo "Running migrations on cloud PostgreSQL..."
+php artisan migrate --force --database=pgsql || true
 php artisan migrate --force --database=sqlite || true
 
 echo "Migrating existing SQLite data to cloud PostgreSQL if needed..."
 php artisan db:migrate-sqlite-to-pgsql || true
 
 echo "Seeding starter articles and admin users if needed..."
-php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --force || true
+php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --database=pgsql --force || true
+php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --database=sqlite --force || true
 
 echo "Ensuring full Hindi and Hinglish translations for all articles..."
 php artisan articles:fix-translations || true

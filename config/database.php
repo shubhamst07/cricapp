@@ -17,7 +17,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', (function() {
+    'default' => (function() {
         $dbUrl = env('DATABASE_URL', env('DB_URL'));
         if (!empty($dbUrl)) {
             if (str_starts_with($dbUrl, 'postgres://') || str_starts_with($dbUrl, 'postgresql://')) {
@@ -27,8 +27,19 @@ return [
                 return 'mysql';
             }
         }
+
+        // On production (Render), default to Neon PostgreSQL
+        if (env('APP_ENV') === 'production') {
+            return 'pgsql';
+        }
+
+        $conn = env('DB_CONNECTION');
+        if (!empty($conn) && in_array($conn, ['sqlite', 'mysql', 'pgsql', 'mariadb'])) {
+            return $conn;
+        }
+
         return 'sqlite';
-    })()),
+    })(),
 
     /*
     |--------------------------------------------------------------------------
@@ -104,7 +115,7 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => env('DATABASE_URL', env('DB_URL')),
+            'url' => env('DATABASE_URL', env('DB_URL', 'postgresql://neondb_owner:npg_CkRzSU1qGZ4m@ep-orange-night-bexqhg2o-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require')),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '5432'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -114,7 +125,7 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
-            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'sslmode' => env('DB_SSLMODE', 'require'),
         ],
 
         'sqlsrv' => [
