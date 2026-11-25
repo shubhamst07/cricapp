@@ -35,7 +35,7 @@ ENV APP_DEBUG false
 ENV LOG_CHANNEL stderr
 ENV COMPOSER_ALLOW_SUPERUSER 1
 ENV DB_CONNECTION pgsql
-ENV DATABASE_URL postgresql://neondb_owner:npg_CkRzSU1qGZ4m@ep-orange-night-bexqhg2o-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
+ENV DATABASE_URL postgresql://neondb_owner:npg_CkRzSU1qGZ4m@ep-orange-night-bexqhg2o.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
 
 # Install composer packages at build time
 RUN composer install --no-dev --optimize-autoloader

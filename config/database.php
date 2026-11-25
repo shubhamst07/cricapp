@@ -115,7 +115,11 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => env('DATABASE_URL', env('DB_URL', 'postgresql://neondb_owner:npg_CkRzSU1qGZ4m@ep-orange-night-bexqhg2o-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require')),
+            'url' => (function () {
+                $u = env('DATABASE_URL', env('DB_URL', 'postgresql://neondb_owner:npg_CkRzSU1qGZ4m@ep-orange-night-bexqhg2o.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require'));
+                // Always use Neon direct endpoint so migrations and native prepared statements work reliably
+                return str_replace('-pooler.', '.', (string) $u);
+            })(),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '5432'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -126,6 +130,9 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'require'),
+            'options' => extension_loaded('pdo_pgsql') ? [
+                PDO::ATTR_TIMEOUT => 5,
+            ] : [],
         ],
 
         'sqlsrv' => [

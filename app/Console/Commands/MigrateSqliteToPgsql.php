@@ -48,6 +48,18 @@ class MigrateSqliteToPgsql extends Command
     ];
 
     /**
+     * Boolean columns per table that SQLite stores as 0/1 integers.
+     */
+    protected array $booleanColumns = [
+        'users' => ['is_admin'],
+        'match_players' => ['is_captain', 'is_wicketkeeper'],
+        'contact_inquiries' => ['is_read'],
+        'match_posts' => ['is_approved'],
+        'cricket_circles' => ['is_active'],
+        'articles' => ['is_featured'],
+    ];
+
+    /**
      * Execute the console command.
      */
     public function handle(): int
@@ -65,10 +77,10 @@ class MigrateSqliteToPgsql extends Command
             return Command::SUCCESS;
         }
 
-        // Check if pgsql already has existing data (e.g. articles or matches already migrated)
+        // Check if pgsql already has existing user/article/match data
         $hasData = false;
         try {
-            if (Schema::connection('pgsql')->hasTable('matches') && DB::connection('pgsql')->table('matches')->count() > 0) {
+            if (Schema::connection('pgsql')->hasTable('users') && DB::connection('pgsql')->table('users')->count() > 0) {
                 $hasData = true;
             }
         } catch (\Throwable $e) {
@@ -94,11 +106,18 @@ class MigrateSqliteToPgsql extends Command
                 }
 
                 $this->line("Migrating table [{$table}] ({$rows->count()} rows)...");
+                $boolCols = $this->booleanColumns[$table] ?? [];
 
                 foreach ($rows->chunk(50) as $chunk) {
                     $insertData = [];
                     foreach ($chunk as $row) {
-                        $insertData[] = (array) $row;
+                        $arr = (array) $row;
+                        foreach ($boolCols as $bCol) {
+                            if (array_key_exists($bCol, $arr) && $arr[$bCol] !== null) {
+                                $arr[$bCol] = (bool) $arr[$bCol];
+                            }
+                        }
+                        $insertData[] = $arr;
                     }
                     DB::connection('pgsql')->table($table)->insertOrIgnore($insertData);
                 }
@@ -107,7 +126,7 @@ class MigrateSqliteToPgsql extends Command
                 try {
                     $maxId = DB::connection('pgsql')->table($table)->max('id');
                     if ($maxId) {
-                        DB::connection('pgsql')->statement("SELECT setval(pg_get_serial_sequence('{$table}', 'id'), {$maxId})");
+                        DB::connection('pgsql')->statement("SELECT setval(pg_get_serial_sequence('{$table}', 'id'), {$maxId}, true)");
                     }
                 } catch (\Throwable $seqEx) {
                     // Ignore sequence errors for tables without standard id

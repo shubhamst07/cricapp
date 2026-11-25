@@ -260,8 +260,23 @@ class PasswordResetLinkController extends Controller
             return User::whereRaw('LOWER(email) = ?', [$email])->first();
         } catch (\Throwable $e) {
             $err = strtolower($e->getMessage());
-            if (str_contains($err, 'quota') || str_contains($err, 'restricted') || str_contains($err, '1105') || str_contains($err, 'connection refused') || str_contains($err, 'no such table')) {
+            if (
+                str_contains($err, 'quota') ||
+                str_contains($err, 'restricted') ||
+                str_contains($err, '1105') ||
+                str_contains($err, 'connection refused') ||
+                str_contains($err, 'no such table') ||
+                str_contains($err, 'does not exist') ||
+                str_contains($err, '42p01') ||
+                str_contains($err, '08006') ||
+                str_contains($err, 'could not find driver')
+            ) {
+                $prev = config('database.default');
                 config(['database.default' => 'sqlite']);
+                if ($prev && $prev !== 'sqlite') {
+                    DB::purge($prev);
+                }
+                DB::purge('pgsql');
                 DB::purge('mysql');
                 DB::setDefaultConnection('sqlite');
 

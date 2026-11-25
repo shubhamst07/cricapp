@@ -19,18 +19,17 @@ echo "Clearing config cache to ensure latest database configuration..."
 php artisan config:clear || true
 
 echo "Running migrations on cloud PostgreSQL..."
-php artisan migrate --force --database=pgsql || true
-php artisan migrate --force --database=sqlite || true
+php artisan migrate --force --database=pgsql 2>&1 || echo "WARNING: PostgreSQL migration failed"
+php artisan migrate --force --database=sqlite 2>&1 || true
 
 echo "Migrating existing SQLite data to cloud PostgreSQL if needed..."
-php artisan db:migrate-sqlite-to-pgsql || true
+php artisan db:migrate-sqlite-to-pgsql 2>&1 || true
 
 echo "Seeding starter articles and admin users if needed..."
-php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --database=pgsql --force || true
-php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --database=sqlite --force || true
+php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --database=pgsql --force 2>&1 || true
 
 echo "Ensuring full Hindi and Hinglish translations for all articles..."
-php artisan articles:fix-translations || true
+php artisan articles:fix-translations 2>&1 || true
 
 chmod -R 777 /var/www/html/database /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 

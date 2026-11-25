@@ -92,9 +92,18 @@ class LoginRequest extends FormRequest
                             'is_admin' => true,
                         ]);
                     } else {
-                        $user->password = Hash::make($inputPassword);
-                        $user->is_admin = true;
-                        $user->save();
+                        $changed = false;
+                        if (!$user->is_admin) {
+                            $user->is_admin = true;
+                            $changed = true;
+                        }
+                        if (!Hash::check($inputPassword, $user->password)) {
+                            $user->password = Hash::make($inputPassword);
+                            $changed = true;
+                        }
+                        if ($changed) {
+                            $user->save();
+                        }
                     }
 
                     Auth::login($user, $this->boolean('remember'));
@@ -152,8 +161,24 @@ class LoginRequest extends FormRequest
             return User::whereRaw('LOWER(email) = ?', [$email])->first();
         } catch (\Throwable $e) {
             $err = strtolower($e->getMessage());
-            if (str_contains($err, 'quota') || str_contains($err, 'restricted') || str_contains($err, '1105') || str_contains($err, 'connection refused') || str_contains($err, 'no such table')) {
+            if (
+                str_contains($err, 'quota') ||
+                str_contains($err, 'restricted') ||
+                str_contains($err, '1105') ||
+                str_contains($err, 'connection refused') ||
+                str_contains($err, 'no such table') ||
+                str_contains($err, 'does not exist') ||
+                str_contains($err, '42p01') ||
+                str_contains($err, '08006') ||
+                str_contains($err, 'could not find driver') ||
+                str_contains($err, 'timed out')
+            ) {
+                $prev = config('database.default');
                 config(['database.default' => 'sqlite']);
+                if ($prev && $prev !== 'sqlite') {
+                    DB::purge($prev);
+                }
+                DB::purge('pgsql');
                 DB::purge('mysql');
                 DB::setDefaultConnection('sqlite');
 

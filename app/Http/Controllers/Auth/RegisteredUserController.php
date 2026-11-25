@@ -37,14 +37,14 @@ class RegisteredUserController extends Controller
     {
         $this->ensureDatabaseReady();
 
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'phone' => ['nullable', 'string', 'max:25'],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
-
         try {
+            $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+                'phone' => ['nullable', 'string', 'max:25'],
+                'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            ]);
+
             $user = User::create([
                 'name' => $request->name,
                 'email' => $request->email,
@@ -57,12 +57,14 @@ class RegisteredUserController extends Controller
             Auth::login($user);
 
             return redirect(route('dashboard', absolute: false));
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             Log::error('Registration error: ' . $e->getMessage(), ['exception' => $e]);
 
             return redirect()->back()
                 ->withInput($request->except('password', 'password_confirmation'))
-                ->withErrors(['email' => 'Unable to create account: ' . $e->getMessage()]);
+                ->withErrors(['email' => 'Unable to create account right now: ' . $e->getMessage()]);
         }
     }
 
@@ -72,8 +74,9 @@ class RegisteredUserController extends Controller
     protected function ensureDatabaseReady(): void
     {
         try {
+            $conn = config('database.default', 'sqlite');
             $dbPath = database_path('database.sqlite');
-            if (config('database.default') === 'sqlite') {
+            if ($conn === 'sqlite') {
                 if (!file_exists($dbPath)) {
                     @mkdir(dirname($dbPath), 0777, true);
                     @touch($dbPath);
@@ -82,7 +85,7 @@ class RegisteredUserController extends Controller
             }
 
             if (!Schema::hasTable('users') || !Schema::hasTable('sessions')) {
-                Artisan::call('migrate', ['--force' => true]);
+                Artisan::call('migrate', ['--force' => true, '--database' => $conn ?: 'sqlite']);
             }
         } catch (\Throwable $e) {
             Log::warning('Auto-migration in RegisteredUserController: ' . $e->getMessage());
