@@ -718,9 +718,10 @@
                            class="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-sm shadow-lg shadow-red-600/30 transition">
                             Sign In to Host A Match
                         </a>
+                    @endif
+                @endif
+            </div>
         @endif
-
-    </div>
 
     <!-- ============================================== -->
     <!-- CRICHEROES QUICK SCORER MODAL -->
