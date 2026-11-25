@@ -1,144 +1,127 @@
-<nav x-data="{ open: false, isDark: document.documentElement.classList.contains('dark') }" 
+@php
+    $isInternationalActive = (request()->routeIs('live-scores.*') || request()->routeIs('home')) && request()->get('section', 'international') === 'international';
+    $isLocalActive = request()->routeIs('live-scores.*') && request()->get('section') === 'local';
+    $isFeedActive = request()->routeIs('feed') || request()->routeIs('dashboard');
+    $isMatchesActive = request()->routeIs('matches.*');
+    $isArticlesActive = request()->routeIs('articles.*') || request()->routeIs('news.*');
+    $isMoreActive = request()->routeIs('grounds.*') || request()->routeIs('meetups.*') || request()->routeIs('umpires.*') || request()->routeIs('about') || request()->routeIs('contact');
+@endphp
+
+<nav x-data="{ open: false, isDark: document.documentElement.classList.contains('dark') }"
      @theme-changed.window="isDark = document.documentElement.classList.contains('dark')"
-     class="bg-white/95 dark:bg-[#0b1120]/95 backdrop-blur-xl border-b border-slate-200 dark:border-white/10 shadow-sm dark:shadow-2xl sticky top-0 z-40 transition-colors duration-200">
-    <!-- Primary Navigation Menu -->
+     class="bg-white/90 dark:bg-[#0b1120]/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 sticky top-0 z-40 transition-colors duration-200">
+    <!-- Primary Navigation Bar -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-            <div class="flex">
-                <!-- Logo -->
-                <div class="shrink-0 flex items-center">
-                    <a href="{{ route('live-scores.index') }}" class="flex items-center gap-2.5 group">
-                        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30 group-hover:scale-105 transition transform">
-                            <svg class="w-5 h-5 fill-none stroke-current" stroke-width="2" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="10" />
-                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                                <path d="M2 12h20" />
-                            </svg>
-                        </div>
-                        <div class="flex items-baseline gap-1">
-                            <span class="font-black text-xl text-slate-900 dark:text-white tracking-tight">Cric<span class="text-amber-500 dark:text-amber-400">App</span><span class="text-xs text-indigo-500 font-bold ml-0.5">.in</span></span>
-                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                        </div>
-                    </a>
-                </div>
+        <div class="flex items-center justify-between h-16 gap-4">
 
-                <!-- Navigation Links -->
-                <div class="hidden space-x-6 lg:space-x-8 md:-my-px md:ms-8 md:flex">
-                    <x-nav-link :href="route('live-scores.index', ['section' => 'international'])" :active="(request()->routeIs('live-scores.*') || request()->routeIs('home')) && request()->get('section', 'international') === 'international'">
-                        <span class="inline-flex items-center gap-1.5 font-bold">
-                            <span>🌍 {{ __('International Cricket') }}</span>
-                        </span>
+            <!-- Brand Logo -->
+            <div class="shrink-0 flex items-center">
+                <a href="{{ route('live-scores.index') }}" class="flex items-center gap-2.5 group whitespace-nowrap">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-sm shadow-indigo-600/25 group-hover:scale-105 transition transform">
+                        <svg class="w-5 h-5 fill-none stroke-current" stroke-width="2" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                            <path d="M2 12h20" />
+                        </svg>
+                    </div>
+                    <span class="font-black text-xl text-slate-900 dark:text-white tracking-tight">Cric<span class="text-indigo-600 dark:text-amber-400">App</span><span class="text-xs text-indigo-500 dark:text-indigo-400 font-bold ml-0.5">.in</span></span>
+                </a>
+            </div>
+
+            <!-- Center Desktop Navigation Track (Single-Row, Icon-Free Pill Bar) -->
+            <div class="hidden lg:flex items-center justify-center">
+                <div class="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100/90 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08]">
+                    <x-nav-link :href="route('live-scores.index', ['section' => 'international'])" :active="$isInternationalActive">
+                        {{ __('International') }}
                     </x-nav-link>
 
-                    <x-nav-link :href="route('live-scores.index', ['section' => 'local'])" :active="request()->routeIs('live-scores.*') && request()->get('section') === 'local'">
-                        <span class="inline-flex items-center gap-1.5 font-bold">
-                            <span>🏏 {{ __('Local Cricket') }}</span>
-                        </span>
+                    <x-nav-link :href="route('live-scores.index', ['section' => 'local'])" :active="$isLocalActive">
+                        {{ __('Local Cricket') }}
                     </x-nav-link>
 
-                    <x-nav-link :href="route('feed')" :active="request()->routeIs('feed') || request()->routeIs('dashboard')">
-                        <span class="inline-flex items-center gap-1.5 font-bold">
-                            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                            <span>{{ __('Cricket Feed') }}</span>
-                        </span>
+                    <x-nav-link :href="route('feed')" :active="$isFeedActive">
+                        {{ __('Cricket Feed') }}
                     </x-nav-link>
 
-                    @auth
-                    <x-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>⚡ {{ __('My Matches') }}</span>
-                        </span>
-                    </x-nav-link>
-                    @else
-                    <x-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>⚡ {{ __('Matches') }}</span>
-                        </span>
-                    </x-nav-link>
-                    @endauth
-
-                    <x-nav-link :href="route('grounds.index')" :active="request()->routeIs('grounds.*')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>🏟️ {{ __('Grounds') }}</span>
-                        </span>
+                    <x-nav-link :href="route('matches.index')" :active="$isMatchesActive">
+                        {{ Auth::check() ? __('My Matches') : __('Matches') }}
                     </x-nav-link>
 
-                    <x-nav-link :href="route('meetups.index')" :active="request()->routeIs('meetups.*')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>🤝 {{ __('Find Players') }}</span>
-                        </span>
+                    <x-nav-link :href="route('articles.index')" :active="$isArticlesActive">
+                        {{ __('News & Articles') }}
                     </x-nav-link>
 
-                    <x-nav-link :href="route('articles.index')" :active="request()->routeIs('articles.*') || request()->routeIs('news.*')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>📰 {{ __('News & Articles') }}</span>
-                        </span>
-                    </x-nav-link>
+                    <!-- Clean Explore / More Dropdown -->
+                    <x-dropdown align="right" width="48">
+                        <x-slot name="trigger">
+                            <button type="button"
+                                    class="inline-flex items-center justify-center gap-1 whitespace-nowrap px-3 py-2 rounded-lg text-[13px] leading-none transition-all duration-150 cursor-pointer focus:outline-none {{ $isMoreActive ? 'bg-white dark:bg-indigo-600 text-indigo-600 dark:text-white font-bold shadow-sm' : 'text-slate-600 dark:text-slate-300 font-semibold hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-white/[0.06]' }}">
+                                <span>{{ __('More') }}</span>
+                                <svg class="w-3.5 h-3.5 opacity-75" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                        </x-slot>
 
-                    <x-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>⚖️ {{ __('Umpires') }}</span>
-                        </span>
-                    </x-nav-link>
+                        <x-slot name="content">
+                            <x-dropdown-link :href="route('grounds.index')" :active="request()->routeIs('grounds.*')">
+                                {{ __('Grounds') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('meetups.index')" :active="request()->routeIs('meetups.*')">
+                                {{ __('Find Players') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
+                                {{ __('Umpires') }}
+                            </x-dropdown-link>
 
-                    <x-nav-link :href="route('about')" :active="request()->routeIs('about')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>📖 {{ __('About Us') }}</span>
-                        </span>
-                    </x-nav-link>
+                            <div class="my-1 border-t border-slate-200 dark:border-white/10"></div>
 
-                    <x-nav-link :href="route('contact')" :active="request()->routeIs('contact')">
-                        <span class="inline-flex items-center gap-1.5 font-semibold">
-                            <span>📬 {{ __('Contact Us') }}</span>
-                        </span>
-                    </x-nav-link>
+                            <x-dropdown-link :href="route('about')" :active="request()->routeIs('about')">
+                                {{ __('About Us') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('contact')" :active="request()->routeIs('contact')">
+                                {{ __('Contact Us') }}
+                            </x-dropdown-link>
+                        </x-slot>
+                    </x-dropdown>
                 </div>
             </div>
 
-            <!-- Right Side Auth Menu & Theme Toggle -->
-            <div class="hidden md:flex md:items-center md:ms-6 gap-3">
-                <!-- Desktop PWA Install Button -->
-                <button type="button" 
-                        onclick="triggerPwaInstall()" 
-                        class="pwa-install-nav-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs shadow-md shadow-red-600/25 transition transform active:scale-95 cursor-pointer"
+            <!-- Right Desktop Action Cluster -->
+            <div class="hidden lg:flex items-center gap-2 shrink-0">
+                <button type="button"
+                        onclick="triggerPwaInstall()"
+                        class="pwa-install-nav-btn h-9 px-3.5 inline-flex items-center justify-center rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs whitespace-nowrap shadow-sm transition active:scale-95 cursor-pointer"
                         title="Install CricApp on your device">
-                    <span>📲 Install App</span>
+                    {{ __('Install App') }}
                 </button>
 
-                <!-- Light / Dark Mode Toggle Button -->
-                <button type="button" 
-                        onclick="toggleTheme()" 
-                        class="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-amber-300 hover:bg-slate-200 dark:hover:bg-white/10 transition cursor-pointer shadow-xs"
+                <button type="button"
+                        onclick="toggleTheme()"
+                        class="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/[0.05] text-slate-700 dark:text-amber-300 hover:bg-slate-200/80 dark:hover:bg-white/10 transition cursor-pointer shrink-0"
                         title="Toggle Light / Dark Mode"
                         aria-label="Toggle Light / Dark Mode">
                     <template x-if="isDark">
-                        <span class="flex items-center justify-center text-amber-400">
-                            <!-- Sun Icon for switching to light mode -->
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                            </svg>
-                        </span>
+                        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
                     </template>
                     <template x-if="!isDark">
-                        <span class="flex items-center justify-center text-slate-700">
-                            <!-- Moon Icon for switching to dark mode -->
-                            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                            </svg>
-                        </span>
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
                     </template>
                 </button>
 
                 @auth
-                    <!-- Settings Dropdown for Authenticated User -->
-                    <x-dropdown align="right" width="48" contentClasses="py-1.5 bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl">
+                    <x-dropdown align="right" width="48">
                         <x-slot name="trigger">
-                            <button class="inline-flex items-center gap-2 px-3.5 py-2 border border-slate-200 dark:border-white/10 text-xs font-bold rounded-xl text-slate-800 dark:text-white bg-slate-100/80 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 focus:outline-none transition">
-                                <div class="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-[10px] font-black text-white uppercase">
+                            <button type="button" class="h-9 inline-flex items-center gap-2 pl-2 pr-3 border border-slate-200 dark:border-white/10 text-xs font-bold rounded-xl text-slate-800 dark:text-white bg-slate-100/80 dark:bg-white/[0.05] hover:bg-slate-200/80 dark:hover:bg-white/10 focus:outline-none transition whitespace-nowrap cursor-pointer">
+                                <div class="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-[11px] font-black text-white uppercase shrink-0">
                                     {{ strtoupper(substr(Auth::user()->name, 0, 1)) }}
                                 </div>
-                                <div class="truncate max-w-[120px]">{{ Auth::user()->name }}</div>
-                                <svg class="fill-current h-3.5 w-3.5 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                <span class="truncate max-w-[110px]">{{ Auth::user()->name }}</span>
+                                <svg class="fill-current h-3.5 w-3.5 text-slate-400 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                                 </svg>
                             </button>
@@ -146,74 +129,76 @@
 
                         <x-slot name="content">
                             @if(Auth::user()->is_admin)
-                                <x-dropdown-link :href="route('articles.create')" class="text-amber-500 font-bold hover:bg-slate-100 dark:hover:bg-white/10">
-                                    <span>✍️ {{ __('Write Article (Admin)') }}</span>
+                                <x-dropdown-link :href="route('articles.create')">
+                                    <span class="text-amber-600 dark:text-amber-400 font-bold">{{ __('Write Article (Admin)') }}</span>
                                 </x-dropdown-link>
                             @endif
-                            <x-dropdown-link :href="route('profile.show')" class="text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10">
-                                <span>👤 {{ __('My Profile') }}</span>
+                            <x-dropdown-link :href="route('profile.show')" :active="request()->routeIs('profile.show')">
+                                {{ __('My Profile') }}
                             </x-dropdown-link>
-                            <x-dropdown-link :href="route('inquiries.index')" class="text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10">
-                                <span>📬 {{ __('Contact Inquiries') }}</span>
+                            <x-dropdown-link :href="route('inquiries.index')" :active="request()->routeIs('inquiries.*')">
+                                {{ __('Contact Inquiries') }}
                             </x-dropdown-link>
-                            <x-dropdown-link :href="route('profile.edit')" class="text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10">
-                                <span>⚙️ {{ __('Account Settings') }}</span>
+                            <x-dropdown-link :href="route('profile.edit')" :active="request()->routeIs('profile.edit')">
+                                {{ __('Account Settings') }}
                             </x-dropdown-link>
 
-                            <!-- Authentication -->
+                            <div class="my-1 border-t border-slate-200 dark:border-white/10"></div>
+
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
                                 <x-dropdown-link :href="route('logout')"
                                         onclick="event.preventDefault(); this.closest('form').submit();"
-                                        class="hover:bg-rose-50 dark:hover:bg-rose-950/20">
-                                    <span class="text-rose-600 dark:text-rose-400">🚪 {{ __('Log Out') }}</span>
+                                        class="hover:bg-rose-50 dark:hover:bg-rose-950/30">
+                                    <span class="text-rose-600 dark:text-rose-400 font-bold">{{ __('Log Out') }}</span>
                                 </x-dropdown-link>
                             </form>
                         </x-slot>
                     </x-dropdown>
                 @else
-                    <!-- Guest Links: Login & Register -->
-                    <div class="flex items-center gap-2">
-                        <a href="{{ route('login') }}" class="text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white px-3.5 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition">
-                            Log In
+                    <div class="flex items-center gap-1.5">
+                        <a href="{{ route('login') }}" class="h-9 px-3.5 inline-flex items-center text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/[0.06] whitespace-nowrap transition">
+                            {{ __('Log In') }}
                         </a>
                         @if (Route::has('register'))
-                            <a href="{{ route('register') }}" class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-xs font-black rounded-xl shadow-lg shadow-indigo-600/30 transition transform active:scale-95">
-                                Register ⚡
+                            <a href="{{ route('register') }}" class="h-9 px-4 inline-flex items-center bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-sm whitespace-nowrap transition active:scale-95">
+                                {{ __('Register') }}
                             </a>
                         @endif
                     </div>
                 @endauth
             </div>
 
-            <!-- Hamburger & Mobile Quick Install & Theme Toggle -->
-            <div class="-me-2 flex items-center md:hidden gap-1.5">
-                <!-- Mobile Quick Install Button -->
-                <button type="button" 
-                        onclick="triggerPwaInstall()" 
-                        class="pwa-install-mobile-btn inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs shadow-md shadow-red-600/30 active:scale-95 transition"
-                        title="Install CricApp on Phone">
-                    <span>📲</span>
-                    <span class="text-[11px] font-bold">Install</span>
+            <!-- Mobile / Tablet Compact Controls -->
+            <div class="flex items-center lg:hidden gap-2">
+                <button type="button"
+                        onclick="triggerPwaInstall()"
+                        class="pwa-install-mobile-btn h-9 px-3 inline-flex items-center justify-center rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs whitespace-nowrap active:scale-95 transition"
+                        title="Install CricApp">
+                    {{ __('Install App') }}
                 </button>
 
-                <button type="button" 
-                        onclick="toggleTheme()" 
-                        class="p-2 rounded-xl text-slate-700 dark:text-amber-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                <button type="button"
+                        onclick="toggleTheme()"
+                        class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-700 dark:text-amber-300 bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10"
+                        aria-label="Toggle Light / Dark Mode">
                     <template x-if="isDark">
-                        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                     </template>
                     <template x-if="!isDark">
-                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                         </svg>
                     </template>
                 </button>
 
-                <button @click="open = ! open" class="inline-flex items-center justify-center p-2 rounded-xl text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 focus:outline-none transition">
-                    <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                <button @click="open = ! open"
+                        type="button"
+                        class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 hover:text-slate-900 dark:hover:text-white focus:outline-none transition"
+                        aria-label="Toggle Menu">
+                    <svg class="h-5 w-5" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                         <path :class="{'hidden': open, 'inline-flex': ! open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                         <path :class="{'hidden': ! open, 'inline-flex': open }" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -222,122 +207,103 @@
         </div>
     </div>
 
-    <!-- Responsive Navigation Menu -->
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden md:hidden bg-white dark:bg-[#0b1120] border-t border-slate-200 dark:border-white/10 shadow-lg">
-        <!-- Mobile Drawer PWA Install Banner -->
-        <div class="p-3.5 bg-gradient-to-r from-red-600/10 via-rose-600/10 to-transparent border-b border-slate-200 dark:border-white/5">
-            <button type="button" 
-                    onclick="triggerPwaInstall()" 
-                    class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-red-600/25 active:scale-95 transition flex items-center justify-between">
-                <span class="flex items-center gap-2">
-                    <span class="text-base">📲</span>
-                    <span>Install App on Phone</span>
-                </span>
-                <span class="px-2 py-0.5 rounded-full bg-black/30 text-[10px] font-bold">Free PWA</span>
-            </button>
-        </div>
-
-        <div class="pt-2 pb-3 space-y-1">
-            <x-responsive-nav-link :href="route('live-scores.index', ['section' => 'international'])" :active="(request()->routeIs('live-scores.*') || request()->routeIs('home')) && request()->get('section', 'international') === 'international'">
-                <span>🌍 {{ __('International Cricket') }}</span>
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('live-scores.index', ['section' => 'local'])" :active="request()->routeIs('live-scores.*') && request()->get('section') === 'local'">
-                <span>🏏 {{ __('Local Cricket') }}</span>
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('feed')" :active="request()->routeIs('feed') || request()->routeIs('dashboard')">
-                <span class="inline-flex items-center gap-2 font-bold">
-                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                    <span>{{ __('Cricket Feed & Memes') }}</span>
-                </span>
-            </x-responsive-nav-link>
-
-            @auth
-            <x-responsive-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
-                <span>⚡ {{ __('My Matches') }}</span>
-            </x-responsive-nav-link>
-            @else
-            <x-responsive-nav-link :href="route('matches.index')" :active="request()->routeIs('matches.*')">
-                <span>⚡ {{ __('Matches') }}</span>
-            </x-responsive-nav-link>
-            @endauth
-
-            <x-responsive-nav-link :href="route('grounds.index')" :active="request()->routeIs('grounds.*')">
-                <span>🏟️ {{ __('Grounds & Venues') }}</span>
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('meetups.index')" :active="request()->routeIs('meetups.*')">
-                <span>🤝 {{ __('Find Players & Meetups') }}</span>
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('articles.index')" :active="request()->routeIs('articles.*') || request()->routeIs('news.*')">
-                <span>📰 {{ __('Cricket News & Articles') }}</span>
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
-                <span>⚖️ {{ __('Match Umpires') }}</span>
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('about')" :active="request()->routeIs('about')">
-                <span>📖 {{ __('About Us') }}</span>
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('contact')" :active="request()->routeIs('contact')">
-                <span>📬 {{ __('Contact Us') }}</span>
-            </x-responsive-nav-link>
-        </div>
-
-        <!-- Responsive Settings Options -->
-        <div class="pt-4 pb-3 border-t border-slate-200 dark:border-white/10">
-            @auth
-                <div class="px-4 flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-black uppercase text-white">
-                        {{ strtoupper(substr(Auth::user()->name, 0, 1)) }}
-                    </div>
-                    <div>
-                        <div class="font-bold text-sm text-slate-800 dark:text-white">{{ Auth::user()->name }}</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400">{{ Auth::user()->email }}</div>
-                    </div>
+    <!-- Responsive Navigation Drawer (Clean Categorized Layout, Zero Emojis) -->
+    <div :class="{'block': open, 'hidden': ! open}" class="hidden lg:hidden bg-white dark:bg-[#0b1120] border-t border-slate-200 dark:border-white/10 shadow-xl">
+        <div class="px-4 py-4 space-y-5 max-h-[82vh] overflow-y-auto">
+            <!-- Section 1: Cricket -->
+            <div class="space-y-1">
+                <div class="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5">
+                    Cricket
                 </div>
+                <x-responsive-nav-link :href="route('live-scores.index', ['section' => 'international'])" :active="$isInternationalActive">
+                    {{ __('International') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('live-scores.index', ['section' => 'local'])" :active="$isLocalActive">
+                    {{ __('Local Cricket') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('feed')" :active="$isFeedActive">
+                    {{ __('Cricket Feed') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('matches.index')" :active="$isMatchesActive">
+                    {{ Auth::check() ? __('My Matches') : __('Matches') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('articles.index')" :active="$isArticlesActive">
+                    {{ __('News & Articles') }}
+                </x-responsive-nav-link>
+            </div>
 
-                <div class="mt-3 space-y-1">
-                    @if(Auth::user()->is_admin)
-                        <x-responsive-nav-link :href="route('articles.create')" class="text-amber-500 font-bold">
-                            <span>✍️ {{ __('Write Article (Admin)') }}</span>
-                        </x-responsive-nav-link>
-                    @endif
-                    <x-responsive-nav-link :href="route('profile.show')">
-                        <span>👤 {{ __('My Profile') }}</span>
-                    </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('inquiries.index')">
-                        <span>📬 {{ __('Contact Inquiries') }}</span>
-                    </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('profile.edit')">
-                        <span>⚙️ {{ __('Account Settings') }}</span>
-                    </x-responsive-nav-link>
-
-                    <!-- Authentication -->
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <x-responsive-nav-link :href="route('logout')"
-                                onclick="event.preventDefault(); this.closest('form').submit();">
-                            <span class="text-rose-600 dark:text-rose-400">🚪 {{ __('Log Out') }}</span>
-                        </x-responsive-nav-link>
-                    </form>
+            <!-- Section 2: Community & Venues -->
+            <div class="space-y-1 pt-3 border-t border-slate-200 dark:border-white/10">
+                <div class="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5">
+                    Explore
                 </div>
-            @else
-                <div class="px-4 py-2 flex items-center gap-3">
-                    <a href="{{ route('login') }}" class="flex-1 text-center py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-white/5 rounded-xl">
-                        Log In
-                    </a>
-                    @if (Route::has('register'))
-                        <a href="{{ route('register') }}" class="flex-1 text-center py-2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-xs font-bold rounded-xl shadow-md">
-                            Register ⚡
+                <x-responsive-nav-link :href="route('grounds.index')" :active="request()->routeIs('grounds.*')">
+                    {{ __('Grounds') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('meetups.index')" :active="request()->routeIs('meetups.*')">
+                    {{ __('Find Players') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('umpires.index')" :active="request()->routeIs('umpires.*')">
+                    {{ __('Umpires') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('about')" :active="request()->routeIs('about')">
+                    {{ __('About Us') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('contact')" :active="request()->routeIs('contact')">
+                    {{ __('Contact Us') }}
+                </x-responsive-nav-link>
+            </div>
+
+            <!-- Section 3: Account -->
+            <div class="pt-4 border-t border-slate-200 dark:border-white/10">
+                @auth
+                    <div class="px-3 pb-3 flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-xs font-black uppercase text-white shrink-0">
+                            {{ strtoupper(substr(Auth::user()->name, 0, 1)) }}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-bold text-sm text-slate-900 dark:text-white truncate">{{ Auth::user()->name }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ Auth::user()->email }}</div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        @if(Auth::user()->is_admin)
+                            <x-responsive-nav-link :href="route('articles.create')" :active="request()->routeIs('articles.create')">
+                                <span class="text-amber-600 dark:text-amber-400 font-bold">{{ __('Write Article (Admin)') }}</span>
+                            </x-responsive-nav-link>
+                        @endif
+                        <x-responsive-nav-link :href="route('profile.show')" :active="request()->routeIs('profile.show')">
+                            {{ __('My Profile') }}
+                        </x-responsive-nav-link>
+                        <x-responsive-nav-link :href="route('inquiries.index')" :active="request()->routeIs('inquiries.*')">
+                            {{ __('Contact Inquiries') }}
+                        </x-responsive-nav-link>
+                        <x-responsive-nav-link :href="route('profile.edit')" :active="request()->routeIs('profile.edit')">
+                            {{ __('Account Settings') }}
+                        </x-responsive-nav-link>
+
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <x-responsive-nav-link :href="route('logout')"
+                                    onclick="event.preventDefault(); this.closest('form').submit();">
+                                <span class="text-rose-600 dark:text-rose-400 font-bold">{{ __('Log Out') }}</span>
+                            </x-responsive-nav-link>
+                        </form>
+                    </div>
+                @else
+                    <div class="flex items-center gap-2.5">
+                        <a href="{{ route('login') }}" class="flex-1 text-center py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/[0.06] rounded-xl border border-slate-200 dark:border-white/10">
+                            {{ __('Log In') }}
                         </a>
-                    @endif
-                </div>
-            @endauth
+                        @if (Route::has('register'))
+                            <a href="{{ route('register') }}" class="flex-1 text-center py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-sm">
+                                {{ __('Register') }}
+                            </a>
+                        @endif
+                    </div>
+                @endauth
+            </div>
         </div>
     </div>
 </nav>
