@@ -25,9 +25,6 @@ class ArticleController extends Controller
      */
     public function index(Request $request): View
     {
-        $this->ensureDatabaseReady();
-        $this->ensureStarterArticles();
-
         $category = $request->input('category');
         $search = $request->input('q');
 
@@ -89,9 +86,6 @@ class ArticleController extends Controller
      */
     public function show(string $slug, ArticleTranslationService $translationService): View
     {
-        $this->ensureDatabaseReady();
-        $this->ensureStarterArticles();
-
         $article = Article::where('slug', $slug)->firstOrFail();
 
         // Increment views count safely
