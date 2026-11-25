@@ -25,6 +25,9 @@ php artisan db:migrate-sqlite-to-pgsql || true
 echo "Seeding starter articles and admin users if needed..."
 php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --force || true
 
+echo "Ensuring full Hindi and Hinglish translations for all articles..."
+php artisan articles:fix-translations || true
+
 chmod -R 777 /var/www/html/database /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 
 echo "Caching configuration and routes..."

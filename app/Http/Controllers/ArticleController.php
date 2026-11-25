@@ -275,6 +275,13 @@ class ArticleController extends Controller
             'published_at' => $validated['status'] === 'published' ? Carbon::now() : null,
         ]);
 
+        // Auto-generate translations immediately
+        try {
+            app(\App\Services\ArticleTranslationService::class)->getTranslations($article);
+        } catch (\Throwable $e) {
+            Log::warning('Translation failed on article store: ' . $e->getMessage());
+        }
+
         return redirect()->route('articles.show', $article->slug)
             ->with('success', '🏏 Article published successfully! It is now live for all cricket fans.');
     }
@@ -366,8 +373,57 @@ class ArticleController extends Controller
             'published_at' => $article->published_at ?: Carbon::now(),
         ]);
 
+        if ($translationsChanged) {
+            try {
+                app(\App\Services\ArticleTranslationService::class)->getTranslations($article);
+            } catch (\Throwable $e) {
+                Log::warning('Translation failed on article update: ' . $e->getMessage());
+            }
+        }
+
         return redirect()->route('articles.show', $article->slug)
             ->with('success', '✅ Article updated successfully.');
+    }
+
+    /**
+     * Save client-side or background translations.
+     */
+    public function saveTranslations(Request $request, Article $article): JsonResponse
+    {
+        $validated = $request->validate([
+            'title_hi' => 'nullable|string',
+            'excerpt_hi' => 'nullable|string',
+            'content_hi' => 'nullable|string',
+            'title_hinglish' => 'nullable|string',
+            'excerpt_hinglish' => 'nullable|string',
+            'content_hinglish' => 'nullable|string',
+        ]);
+
+        $updateData = [];
+        if (!empty($validated['title_hi']) && preg_match('/[\x{0900}-\x{097F}]/u', $validated['title_hi'])) {
+            $updateData['title_hi'] = $validated['title_hi'];
+        }
+        if (!empty($validated['excerpt_hi']) && preg_match('/[\x{0900}-\x{097F}]/u', $validated['excerpt_hi'])) {
+            $updateData['excerpt_hi'] = $validated['excerpt_hi'];
+        }
+        if (!empty($validated['content_hi']) && preg_match('/[\x{0900}-\x{097F}]/u', $validated['content_hi'])) {
+            $updateData['content_hi'] = $validated['content_hi'];
+        }
+        if (!empty($validated['title_hinglish'])) {
+            $updateData['title_hinglish'] = $validated['title_hinglish'];
+        }
+        if (!empty($validated['excerpt_hinglish'])) {
+            $updateData['excerpt_hinglish'] = $validated['excerpt_hinglish'];
+        }
+        if (!empty($validated['content_hinglish'])) {
+            $updateData['content_hinglish'] = $validated['content_hinglish'];
+        }
+
+        if (!empty($updateData)) {
+            $article->update($updateData);
+        }
+
+        return response()->json(['success' => true]);
     }
 
     /**

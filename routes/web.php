@@ -158,6 +158,7 @@ Route::delete('/matches/{match}/recordings/{videoId}', [MatchController::class, 
 Route::get('/articles', [ArticleController::class, 'index'])->name('articles.index');
 Route::get('/news', [ArticleController::class, 'index'])->name('news.index');
 Route::get('/articles/{slug}', [ArticleController::class, 'show'])->name('articles.show');
+Route::post('/articles/{article}/save-translations', [ArticleController::class, 'saveTranslations'])->name('articles.save-translations');
 
 // Direct static fallback for uploaded article images (guarantees images always load)
 Route::get('/uploads/articles/{filename}', function (string $filename) {

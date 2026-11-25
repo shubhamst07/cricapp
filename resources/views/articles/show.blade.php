@@ -70,12 +70,123 @@
 <div class="py-6 sm:py-8 bg-slate-50 dark:bg-[#080d1a] min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200" 
      x-data="{ 
          copied: false, 
+         translating: false,
          lang: localStorage.getItem('cricapp_article_lang') || 'en',
-         setLang(l) {
+         translations: {{ Js::from($translations) }},
+         hasDevanagari(str) {
+             return /[\u0900-\u097F]/.test(str || '');
+         },
+         async setLang(l) {
              this.lang = l;
              localStorage.setItem('cricapp_article_lang', l);
+
+             if (l === 'hi') {
+                 if (!this.hasDevanagari(this.translations.hi?.title) || !this.hasDevanagari(this.translations.hi?.content)) {
+                     await this.translateToHindiClient();
+                 }
+             } else if (l === 'hinglish') {
+                 if (!this.translations.hinglish?.title || this.translations.hinglish.title === this.translations.en?.title) {
+                     if (!this.hasDevanagari(this.translations.hi?.title)) {
+                         await this.translateToHindiClient();
+                     }
+                     this.generateHinglishClient();
+                 }
+             }
          },
-         translations: {{ Js::from($translations) }}
+         async callTranslateApi(text) {
+             if (!text || !text.trim()) return '';
+             text = text.trim();
+             try {
+                 const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=hi&dt=t&q=' + encodeURIComponent(text);
+                 const res = await fetch(url);
+                 if (res.ok) {
+                     const data = await res.json();
+                     if (data && data[0]) {
+                         return data[0].map(item => item[0]).join('');
+                     }
+                 }
+             } catch (e) {
+                 try {
+                     const mmUrl = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=en|hi';
+                     const mmRes = await fetch(mmUrl);
+                     if (mmRes.ok) {
+                         const mmJson = await mmRes.json();
+                         if (mmJson.responseData?.translatedText) {
+                             return mmJson.responseData.translatedText;
+                         }
+                     }
+                 } catch (err) {}
+             }
+             return text;
+         },
+         async translateToHindiClient() {
+             this.translating = true;
+             try {
+                 // 1. Translate Title if English
+                 if (!this.hasDevanagari(this.translations.hi?.title)) {
+                     const hiTitle = await this.callTranslateApi(this.translations.en?.title);
+                     if (hiTitle && this.hasDevanagari(hiTitle)) {
+                         this.translations.hi.title = hiTitle;
+                     }
+                 }
+
+                 // 2. Translate Excerpt if English
+                 if (!this.hasDevanagari(this.translations.hi?.excerpt)) {
+                     const hiExcerpt = await this.callTranslateApi(this.translations.en?.excerpt);
+                     if (hiExcerpt && this.hasDevanagari(hiExcerpt)) {
+                         this.translations.hi.excerpt = hiExcerpt;
+                     }
+                 }
+
+                 // 3. Translate Content if container has English
+                 const hiDiv = document.getElementById('article-content-hi');
+                 const enDiv = document.getElementById('article-content-en');
+                 if (hiDiv && enDiv && (!this.translations.hi?.content || !this.hasDevanagari(hiDiv.textContent))) {
+                     const nodes = Array.from(enDiv.querySelectorAll('p, h1, h2, h3, h4, li, blockquote'));
+                     for (const el of nodes) {
+                         const raw = el.innerText.trim();
+                         if (raw && !this.hasDevanagari(raw)) {
+                             const translated = await this.callTranslateApi(raw);
+                             if (translated && this.hasDevanagari(translated)) {
+                                 el.dataset.hi = translated;
+                             }
+                         }
+                     }
+                     // Clone translated structure
+                     const clone = enDiv.cloneNode(true);
+                     clone.id = 'article-content-hi-inner';
+                     clone.querySelectorAll('[data-hi]').forEach(el => {
+                         el.innerText = el.dataset.hi;
+                     });
+                     hiDiv.innerHTML = clone.innerHTML;
+                     this.translations.hi.content = clone.innerHTML;
+                 }
+
+                 // 4. Save to database in background
+                 fetch('{{ route('articles.save-translations', $article) }}', {
+                     method: 'POST',
+                     headers: {
+                         'Content-Type': 'application/json',
+                         'Accept': 'application/json'
+                     },
+                     body: JSON.stringify({
+                         title_hi: this.translations.hi?.title,
+                         excerpt_hi: this.translations.hi?.excerpt,
+                         content_hi: this.translations.hi?.content
+                     })
+                 }).catch(() => {});
+
+             } catch (e) {
+                 console.warn('Live translation error:', e);
+             } finally {
+                 this.translating = false;
+             }
+         },
+         generateHinglishClient() {
+             if (this.translations.hi?.title && this.hasDevanagari(this.translations.hi.title)) {
+                 this.translations.hinglish.title = this.translations.hi.title;
+             }
+         }
      }">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
 
@@ -102,23 +213,30 @@
                 </div>
             </div>
 
-            <!-- Language Buttons -->
-            <div class="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
-                <button type="button" @click="setLang('en')"
-                        :class="lang === 'en' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
-                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
-                    <span>🇬🇧 English</span>
-                </button>
-                <button type="button" @click="setLang('hi')"
-                        :class="lang === 'hi' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
-                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
-                    <span>🇮🇳 हिंदी</span>
-                </button>
-                <button type="button" @click="setLang('hinglish')"
-                        :class="lang === 'hinglish' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
-                        class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
-                    <span>🏏 Hinglish</span>
-                </button>
+            <!-- Language Buttons & Translating Pulse -->
+            <div class="flex flex-wrap items-center gap-2">
+                <div x-show="translating" x-cloak class="flex items-center gap-1.5 text-xs font-bold text-amber-500 animate-pulse bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                    <span class="animate-spin">⚙️</span>
+                    <span>अनुवाद हो रहा है... (Translating)</span>
+                </div>
+
+                <div class="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
+                    <button type="button" @click="setLang('en')"
+                            :class="lang === 'en' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
+                            class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
+                        <span>🇬🇧 English</span>
+                    </button>
+                    <button type="button" @click="setLang('hi')"
+                            :class="lang === 'hi' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
+                            class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
+                        <span>🇮🇳 हिंदी</span>
+                    </button>
+                    <button type="button" @click="setLang('hinglish')"
+                            :class="lang === 'hinglish' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold'"
+                            class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
+                        <span>🏏 Hinglish</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -229,17 +347,17 @@
             <!-- Article Formatted Content in 3 Languages -->
             <div class="max-w-none text-slate-800 dark:text-slate-200 leading-relaxed space-y-5 pt-2">
                 <!-- English Content -->
-                <div x-show="lang === 'en'" class="space-y-5">
+                <div x-show="lang === 'en'" class="space-y-5" id="article-content-en">
                     {!! $renderMarkdown($translations['en']['content'] ?? $article->content) !!}
                 </div>
 
                 <!-- Hindi (हिंदी) Content -->
-                <div x-show="lang === 'hi'" x-cloak class="space-y-5 font-sans">
+                <div x-show="lang === 'hi'" x-cloak class="space-y-5 font-sans" id="article-content-hi">
                     {!! $renderMarkdown($translations['hi']['content'] ?? $article->content) !!}
                 </div>
 
                 <!-- Hinglish (Cricket Roman Hindi) Content -->
-                <div x-show="lang === 'hinglish'" x-cloak class="space-y-5 font-sans">
+                <div x-show="lang === 'hinglish'" x-cloak class="space-y-5 font-sans" id="article-content-hinglish">
                     {!! $renderMarkdown($translations['hinglish']['content'] ?? $article->content) !!}
                 </div>
             </div>

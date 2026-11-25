@@ -19,6 +19,7 @@ class AppServiceProvider extends ServiceProvider
         $this->commands([
             \App\Console\Commands\MigrateSqliteToPgsql::class,
             \App\Console\Commands\SyncLiveCommentaryCommand::class,
+            \App\Console\Commands\FixArticleTranslationsCommand::class,
         ]);
     }
 

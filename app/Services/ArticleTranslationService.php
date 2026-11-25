@@ -131,6 +131,14 @@ class ArticleTranslationService
     ];
 
     /**
+     * Check if a string contains authentic Hindi Devanagari characters.
+     */
+    public function isDevanagari(?string $text): bool
+    {
+        return !empty($text) && (bool) preg_match('/[\x{0900}-\x{097F}]/u', (string) $text);
+    }
+
+    /**
      * Get or build full 3-language translations for an article.
      * Guaranteed to return complete sets for 'en', 'hi', and 'hinglish'.
      */
@@ -145,9 +153,7 @@ class ArticleTranslationService
         ];
 
         // Check if Hindi & Hinglish are already cached or in the database with actual Devanagari
-        $hasHi = !empty($article->title_hi) 
-            && !empty($article->content_hi) 
-            && preg_match('/[\x{0900}-\x{097F}]/u', $article->title_hi);
+        $hasHi = $this->isDevanagari($article->title_hi) && $this->isDevanagari($article->content_hi);
         $hasHinglish = !empty($article->title_hinglish) 
             && !empty($article->content_hinglish)
             && ($article->title_hinglish !== $article->title);
@@ -174,38 +180,49 @@ class ArticleTranslationService
         $categoryHi = $this->categoryMap[$article->category]['hi'] ?? $article->category;
         $categoryHinglish = $this->categoryMap[$article->category]['hinglish'] ?? $article->category;
 
-        // Title translations
-        $titleHi = $article->title_hi ?: $this->translateToHindi($article->title);
-        $titleHinglish = $article->title_hinglish ?: $this->devanagariToHinglish($titleHi);
+        // Title translations (Ensure real Devanagari, never fall back to English)
+        $titleHi = $this->isDevanagari($article->title_hi) 
+            ? $article->title_hi 
+            : $this->translateToHindi($article->title);
+
+        $titleHinglish = (!empty($article->title_hinglish) && $article->title_hinglish !== $article->title)
+            ? $article->title_hinglish 
+            : $this->devanagariToHinglish($titleHi);
 
         // Excerpt translations
-        $excerptHi = $article->excerpt_hi;
-        if (empty($excerptHi) && !empty($article->excerpt)) {
-            $excerptHi = $this->translateToHindi($article->excerpt);
-        }
-        $excerptHinglish = $article->excerpt_hinglish;
-        if (empty($excerptHinglish) && !empty($excerptHi)) {
-            $excerptHinglish = $this->devanagariToHinglish($excerptHi);
-        }
+        $excerptHi = $this->isDevanagari($article->excerpt_hi) 
+            ? $article->excerpt_hi 
+            : (!empty($article->excerpt) ? $this->translateToHindi($article->excerpt) : '');
 
-        // Content translations (line by line to preserve markdown formatting)
-        $contentHi = $article->content_hi ?: $this->translateMarkdownContent($article->content, 'hi');
-        $contentHinglish = $article->content_hinglish ?: $this->devanagariToHinglishContent($contentHi);
+        $excerptHinglish = (!empty($article->excerpt_hinglish) && $article->excerpt_hinglish !== $article->excerpt)
+            ? $article->excerpt_hinglish 
+            : $this->devanagariToHinglish($excerptHi);
 
-        // Persist to database so subsequent loads are instant (no API overhead)
-        try {
-            $article->update([
-                'title_hi' => $titleHi,
-                'title_hinglish' => $titleHinglish,
-                'category_hi' => $categoryHi,
-                'category_hinglish' => $categoryHinglish,
-                'excerpt_hi' => $excerptHi,
-                'excerpt_hinglish' => $excerptHinglish,
-                'content_hi' => $contentHi,
-                'content_hinglish' => $contentHinglish,
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('Failed to persist article translations: ' . $e->getMessage());
+        // Content translations (Batched markdown translation)
+        $contentHi = $this->isDevanagari($article->content_hi) 
+            ? $article->content_hi 
+            : $this->translateMarkdownContent($article->content, 'hi');
+
+        $contentHinglish = (!empty($article->content_hinglish) && $article->content_hinglish !== $article->content)
+            ? $article->content_hinglish 
+            : $this->devanagariToHinglishContent($contentHi);
+
+        // Only persist to database if we have authentic Devanagari Hindi
+        if ($this->isDevanagari($titleHi) || $this->isDevanagari($contentHi)) {
+            try {
+                $article->update([
+                    'title_hi' => $titleHi,
+                    'title_hinglish' => $titleHinglish,
+                    'category_hi' => $categoryHi,
+                    'category_hinglish' => $categoryHinglish,
+                    'excerpt_hi' => $excerptHi,
+                    'excerpt_hinglish' => $excerptHinglish,
+                    'content_hi' => $contentHi,
+                    'content_hinglish' => $contentHinglish,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to persist article translations: ' . $e->getMessage());
+            }
         }
 
         return [
@@ -226,53 +243,38 @@ class ArticleTranslationService
     }
 
     /**
-     * Translate markdown formatted content while keeping headings, lists, and structure intact.
+     * Translate markdown formatted content using batching to avoid API bottlenecks.
      */
     public function translateMarkdownContent(string $content, string $target = 'hi'): string
     {
-        $lines = explode("\n", $content);
-        $translatedLines = [];
+        $paragraphs = explode("\n\n", $content);
+        $translatedParagraphs = [];
+        $batch = [];
+        $batchLen = 0;
 
-        foreach ($lines as $line) {
-            $trimmed = trim($line);
+        foreach ($paragraphs as $para) {
+            $trimmed = trim($para);
             if (empty($trimmed)) {
-                $translatedLines[] = '';
                 continue;
             }
 
-            // Markdown Heading 3
-            if (str_starts_with($trimmed, '### ')) {
-                $headingText = substr($trimmed, 4);
-                $translatedLines[] = '### ' . $this->translateToHindi($headingText);
-                continue;
+            if ($batchLen + mb_strlen($trimmed) > 400 && !empty($batch)) {
+                $joined = implode("\n\n", $batch);
+                $translatedParagraphs[] = $this->translateToHindi($joined);
+                $batch = [$trimmed];
+                $batchLen = mb_strlen($trimmed);
+            } else {
+                $batch[] = $trimmed;
+                $batchLen += mb_strlen($trimmed);
             }
-
-            // Markdown Heading 2
-            if (str_starts_with($trimmed, '## ')) {
-                $headingText = substr($trimmed, 3);
-                $translatedLines[] = '## ' . $this->translateToHindi($headingText);
-                continue;
-            }
-
-            // Markdown Heading 1
-            if (str_starts_with($trimmed, '# ')) {
-                $headingText = substr($trimmed, 2);
-                $translatedLines[] = '# ' . $this->translateToHindi($headingText);
-                continue;
-            }
-
-            // Bullet points
-            if (str_starts_with($trimmed, '- ')) {
-                $bulletText = substr($trimmed, 2);
-                $translatedLines[] = '- ' . $this->translateToHindi($bulletText);
-                continue;
-            }
-
-            // Standard Paragraph
-            $translatedLines[] = $this->translateToHindi($trimmed);
         }
 
-        return implode("\n", $translatedLines);
+        if (!empty($batch)) {
+            $joined = implode("\n\n", $batch);
+            $translatedParagraphs[] = $this->translateToHindi($joined);
+        }
+
+        return implode("\n\n", $translatedParagraphs);
     }
 
     /**
@@ -324,29 +326,39 @@ class ArticleTranslationService
         }
 
         // If already Devanagari Hindi, return as is
-        if (preg_match('/[\x{0900}-\x{097F}]/u', $text)) {
+        if ($this->isDevanagari($text)) {
             return $text;
         }
 
-        $cacheKey = 'art_trans_hi_v2_' . md5($text);
+        $cacheKey = 'art_trans_hi_v5_' . md5($text);
 
         try {
-            return Cache::remember($cacheKey, 86400 * 30, function () use ($text) {
-                // If text is long, chunk it by sentences to prevent API overflow
-                if (mb_strlen($text) > 250) {
-                    $sentences = preg_split('/(?<=[.!?\n])\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
-                    $translatedSentences = [];
-                    foreach ($sentences as $sentence) {
-                        $translatedSentences[] = $this->translateChunkToHindi($sentence);
-                    }
-                    return implode(' ', $translatedSentences);
-                }
+            $cached = Cache::get($cacheKey);
+            if (!empty($cached) && $this->isDevanagari($cached)) {
+                return $cached;
+            }
+        } catch (\Throwable $e) {}
 
-                return $this->translateChunkToHindi($text);
-            });
-        } catch (\Throwable $e) {
-            return $this->translateChunkToHindi($text);
+        $result = '';
+        if (mb_strlen($text) > 300) {
+            $sentences = preg_split('/(?<=[.!?\n])\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
+            $translatedSentences = [];
+            foreach ($sentences as $sentence) {
+                $translatedSentences[] = $this->translateChunkToHindi($sentence);
+            }
+            $result = implode(' ', $translatedSentences);
+        } else {
+            $result = $this->translateChunkToHindi($text);
         }
+
+        // ONLY CACHE IF IT ACTUALLY CONTAINS HINDI DEVANAGARI!
+        if ($this->isDevanagari($result)) {
+            try {
+                Cache::put($cacheKey, $result, 86400 * 30);
+            } catch (\Throwable $e) {}
+        }
+
+        return $result;
     }
 
     /**
