@@ -47,6 +47,7 @@ Route::get('/app-status', function () {
         'local_url' => config('services.cricket.local_url'),
         'score_engine' => $engineResp,
         'score_engine_error' => $engineError,
+        'score_engine_log' => $scoreEngineLog,
         'laravel_log' => $laravelLog,
     ]);
 });

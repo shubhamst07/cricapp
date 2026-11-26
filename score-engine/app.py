@@ -1954,14 +1954,14 @@ class TTSRequest(BaseModel):
     pitch: str = "+0Hz"
 
 
+import sys as _sys
+if os.path.dirname(os.path.abspath(__file__)) not in _sys.path:
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tts_cli import synthesize_best
+
+
 @app.post("/tts")
 async def generate_tts(payload: TTSRequest):
-    if edge_tts is None:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "error", "message": "edge-tts is not installed on this server."}
-        )
-
     clean_text = re.sub(r"\s+", " ", (payload.text or "")).strip()
     if not clean_text:
         return JSONResponse(
@@ -1974,58 +1974,13 @@ async def generate_tts(payload: TTSRequest):
             content={"status": "error", "message": "Narration text must be under 4000 characters."}
         )
 
-    voice = (payload.voice or "en-IN-PrabhatNeural").strip()
-    if voice not in ALLOWED_TTS_VOICES and not re.match(r"^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9]+Neural$", voice):
-        voice = "en-IN-PrabhatNeural"
-
-    rate = (payload.rate or "+5%").strip()
-    if not re.match(r"^[+-](?:[0-9]|[1-4][0-9]|50)%$", rate):
-        rate = "+5%"
-
-    pitch = (payload.pitch or "+0Hz").strip()
-    if not re.match(r"^[+-](?:[0-9]|[12][0-9]|30)Hz$", pitch):
-        pitch = "+0Hz"
-
     try:
-        try:
-            communicate = edge_tts.Communicate(
-                clean_text,
-                voice,
-                rate=rate,
-                pitch=pitch,
-                boundary="WordBoundary",
-            )
-        except TypeError:
-            communicate = edge_tts.Communicate(clean_text, voice, rate=rate, pitch=pitch)
-
-        audio_chunks: List[bytes] = []
-        boundaries: List[Dict[str, Any]] = []
-
-        async for chunk in communicate.stream():
-            ctype = chunk.get("type")
-            if ctype == "audio" and chunk.get("data"):
-                audio_chunks.append(chunk["data"])
-            elif ctype == "WordBoundary":
-                boundaries.append({
-                    "offset_ms": round(float(chunk.get("offset", 0)) / 10000.0),
-                    "duration_ms": max(80, round(float(chunk.get("duration", 0)) / 10000.0)),
-                    "text": str(chunk.get("text", "")),
-                })
-
-        audio_bytes = b"".join(audio_chunks)
-        if not audio_bytes:
-            return JSONResponse(
-                status_code=502,
-                content={"status": "error", "message": "Voice engine returned empty audio."}
-            )
-
-        return {
-            "status": "success",
-            "voice": voice,
-            "mime_type": "audio/mpeg",
-            "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
-            "boundaries": boundaries,
-        }
+        return await synthesize_best(
+            clean_text,
+            payload.voice or "en-IN-PrabhatNeural",
+            payload.rate or "+5%",
+            payload.pitch or "+0Hz",
+        )
     except Exception as e:
         return JSONResponse(
             status_code=502,
@@ -2046,7 +2001,7 @@ async def convert_mp4(
         )
 
     tmpdir = tempfile.mkdtemp(prefix="cricapp-reel-")
-    input_path = os.path.join(tmpdir, "input.webm")
+    input_path = os.path.join(tmpdir, "input.bin")
     output_path = os.path.join(tmpdir, "output.mp4")
 
     try:

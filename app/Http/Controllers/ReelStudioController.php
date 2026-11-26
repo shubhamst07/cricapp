@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\ExecutableFinder;
+use Symfony\Component\Process\Process;
 
 class ReelStudioController extends Controller
 {
@@ -68,7 +70,8 @@ class ReelStudioController extends Controller
     }
 
     /**
-     * Generate free Hindi / Indian-English voiceover MP3 + WordBoundary timings via score-engine.
+     * Generate free Hindi / Indian-English voiceover MP3.
+     * Fallback chain: score-engine HTTP -> in-container python tts_cli.py (edge-tts/gTTS) -> direct Google TTS HTTP.
      */
     public function generateTts(Request $request)
     {
@@ -81,37 +84,49 @@ class ReelStudioController extends Controller
             'pitch' => 'nullable|string|max:16',
         ]);
 
+        $cleanText = preg_replace('/\s+/u', ' ', trim($validated['text']));
+        $voice = trim($validated['voice']);
+        $rate = trim((string) ($validated['rate'] ?? '+5%'));
+        $pitch = trim((string) ($validated['pitch'] ?? '+0Hz'));
+
+        // 1. Fast path: score-engine HTTP daemon if running on port 6020
         $engineUrl = rtrim((string) config('services.cricket.local_url', 'http://127.0.0.1:6020'), '/');
-
         try {
-            $response = Http::timeout(25)->post($engineUrl . '/tts', [
-                'text' => $validated['text'],
-                'voice' => $validated['voice'],
-                'rate' => $validated['rate'] ?? '+5%',
-                'pitch' => $validated['pitch'] ?? '+0Hz',
+            $response = Http::connectTimeout(2)->timeout(12)->post($engineUrl . '/tts', [
+                'text' => $cleanText,
+                'voice' => $voice,
+                'rate' => $rate,
+                'pitch' => $pitch,
             ]);
-
             $payload = $response->json();
-            if ($response->failed() || !is_array($payload)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => is_array($payload) && isset($payload['message'])
-                        ? $payload['message']
-                        : 'Voice engine could not synthesize audio right now. You can record Mic or upload MP3 instead.',
-                ], $response->status() >= 400 ? $response->status() : 502);
+            if ($response->ok() && is_array($payload) && !empty($payload['audio_base64'])) {
+                return response()->json($payload);
             }
-
-            return response()->json($payload);
         } catch (\Throwable $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'AI voice service is offline in this environment. Use Record Mic, Upload Voice, or Background Music.',
-            ], 503);
+            // Fall through silently to in-container CLI & direct HTTP TTS
         }
+
+        // 2. Fallback A: Direct python3 tts_cli.py inside container (edge-tts + gTTS)
+        $cliPayload = $this->runPythonTtsCli($cleanText, $voice, $rate, $pitch);
+        if ($cliPayload !== null) {
+            return response()->json($cliPayload);
+        }
+
+        // 3. Fallback B: Pure-PHP Google Translate TTS MP3 (works even if Python daemon/packages unavailable)
+        $googlePayload = $this->fetchGoogleTranslateTts($cleanText, $voice);
+        if ($googlePayload !== null) {
+            return response()->json($googlePayload);
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Could not reach AI voice servers right now. Try Record Mic or Upload Voice MP3.',
+        ], 503);
     }
 
     /**
      * Transcode recorded WebM/MP4 canvas stream to Instagram/YouTube compatible H.264/AAC MP4.
+     * Falls back to direct in-container ffmpeg binary if score-engine port 6020 is down.
      */
     public function convertMp4(Request $request)
     {
@@ -127,46 +142,83 @@ class ReelStudioController extends Controller
         }
 
         $file = $request->file('video');
+        $maxDuration = min(max((int) ($validated['max_duration'] ?? 90), 5), 120);
         $engineUrl = rtrim((string) config('services.cricket.local_url', 'http://127.0.0.1:6020'), '/');
-        $stream = fopen($file->getRealPath(), 'rb');
 
-        if ($stream === false) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Unable to read uploaded video buffer.',
-            ], 500);
+        // 1. Try score-engine HTTP /convert-mp4 if reachable
+        $stream = fopen($file->getRealPath(), 'rb');
+        if ($stream !== false) {
+            try {
+                $response = Http::connectTimeout(2)
+                    ->timeout(60)
+                    ->attach('video', $stream, 'cricapp-reel.webm')
+                    ->post($engineUrl . '/convert-mp4', ['max_duration' => $maxDuration]);
+
+                if ($response->ok() && str_contains(strtolower((string) $response->header('Content-Type')), 'video/mp4')) {
+                    return response($response->body(), 200, [
+                        'Content-Type' => 'video/mp4',
+                        'Content-Disposition' => 'attachment; filename="cricapp-reel-' . now()->format('Ymd-His') . '.mp4"',
+                        'Cache-Control' => 'no-store',
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // Fall through to local ffmpeg binary
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
         }
 
-        try {
-            $response = Http::timeout(90)
-                ->attach('video', $stream, 'cricapp-reel.webm')
-                ->post($engineUrl . '/convert-mp4', [
-                    'max_duration' => (int) ($validated['max_duration'] ?? 90),
-                ]);
+        // 2. Fallback: Run local/container ffmpeg directly via Process
+        $finder = new ExecutableFinder();
+        $ffmpegBin = $finder->find('ffmpeg', null, ['/usr/bin', '/usr/local/bin']);
+        if (!$ffmpegBin) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'MP4 converter is unavailable in this environment; using native browser video instead.',
+            ], 501);
+        }
 
-            if ($response->failed()) {
-                $err = $response->json();
+        $outputPath = sys_get_temp_dir() . '/cricapp-reel-' . uniqid('', true) . '.mp4';
+        try {
+            $process = new Process([
+                $ffmpegBin,
+                '-y',
+                '-i', $file->getRealPath(),
+                '-t', (string) $maxDuration,
+                '-vf', 'scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=#050b16,setsar=1',
+                '-r', '30',
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-crf', '23',
+                '-pix_fmt', 'yuv420p',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-ar', '44100',
+                '-threads', '1',
+                '-movflags', '+faststart',
+                $outputPath,
+            ]);
+            $process->setTimeout(90);
+            $process->run();
+
+            if (!$process->isSuccessful() || !is_file($outputPath) || filesize($outputPath) === 0) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => is_array($err) && isset($err['message'])
-                        ? $err['message']
-                        : 'MP4 converter unavailable; downloading direct browser recording instead.',
-                ], $response->status() >= 400 ? $response->status() : 502);
+                    'message' => 'FFmpeg could not convert video: ' . Str::limit($process->getErrorOutput(), 160),
+                ], 500);
             }
 
-            return response($response->body(), 200, [
+            $mp4Bytes = file_get_contents($outputPath);
+            return response($mp4Bytes, 200, [
                 'Content-Type' => 'video/mp4',
                 'Content-Disposition' => 'attachment; filename="cricapp-reel-' . now()->format('Ymd-His') . '.mp4"',
                 'Cache-Control' => 'no-store',
             ]);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'MP4 converter is offline here; use direct browser download.',
-            ], 503);
         } finally {
-            if (is_resource($stream)) {
-                fclose($stream);
+            if (is_file($outputPath)) {
+                @unlink($outputPath);
             }
         }
     }
@@ -241,6 +293,114 @@ class ReelStudioController extends Controller
         return response()->json(['message' => 'Too many redirects while loading image.'], 422);
     }
 
+    private function runPythonTtsCli(string $text, string $voice, string $rate, string $pitch): ?array
+    {
+        $scriptPath = base_path('score-engine/tts_cli.py');
+        if (!is_file($scriptPath)) {
+            return null;
+        }
+
+        $finder = new ExecutableFinder();
+        $pythonBin = $finder->find('python3', null, ['/usr/bin', '/usr/local/bin']);
+        if (!$pythonBin) {
+            return null;
+        }
+
+        try {
+            $process = new Process([$pythonBin, $scriptPath]);
+            $process->setInput(json_encode([
+                'text' => $text,
+                'voice' => $voice,
+                'rate' => $rate,
+                'pitch' => $pitch,
+            ]));
+            $process->setTimeout(22);
+            $process->run();
+
+            if (!$process->isSuccessful()) {
+                return null;
+            }
+
+            $data = json_decode($process->getOutput(), true);
+            if (is_array($data) && ($data['status'] ?? '') === 'success' && !empty($data['audio_base64'])) {
+                return $data;
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return null;
+    }
+
+    private function fetchGoogleTranslateTts(string $text, string $voice): ?array
+    {
+        $isHindi = Str::startsWith($voice, 'hi-') || preg_match('/\p{Devanagari}/u', $text) === 1;
+        $lang = $isHindi ? 'hi' : (Str::startsWith($voice, 'en-GB') ? 'en-GB' : 'en-IN');
+
+        $chunks = $this->splitTextForTts($text, 185);
+        $mp3Binary = '';
+
+        try {
+            foreach ($chunks as $chunk) {
+                $resp = Http::timeout(10)
+                    ->withHeaders([
+                        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
+                        'Referer' => 'https://translate.google.com/',
+                    ])
+                    ->get('https://translate.google.com/translate_tts', [
+                        'ie' => 'UTF-8',
+                        'client' => 'tw-ob',
+                        'tl' => $lang,
+                        'q' => $chunk,
+                    ]);
+
+                if ($resp->failed() || empty($resp->body())) {
+                    return null;
+                }
+                $mp3Binary .= $resp->body();
+            }
+
+            if ($mp3Binary === '') {
+                return null;
+            }
+
+            return [
+                'status' => 'success',
+                'engine' => 'google-tts',
+                'voice' => $voice,
+                'mime_type' => 'audio/mpeg',
+                'audio_base64' => base64_encode($mp3Binary),
+                'boundaries' => [],
+            ];
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function splitTextForTts(string $text, int $maxLen = 185): array
+    {
+        $words = preg_split('/\s+/u', trim($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $chunks = [];
+        $current = '';
+
+        foreach ($words as $word) {
+            $candidate = $current === '' ? $word : $current . ' ' . $word;
+            if (mb_strlen($candidate) <= $maxLen) {
+                $current = $candidate;
+            } else {
+                if ($current !== '') {
+                    $chunks[] = $current;
+                }
+                $current = mb_substr($word, 0, $maxLen);
+            }
+        }
+        if ($current !== '') {
+            $chunks[] = $current;
+        }
+
+        return $chunks ?: [mb_substr($text, 0, $maxLen)];
+    }
+
     private function isSafeExternalUrl(string $url): bool
     {
         $parts = parse_url($url);
@@ -258,7 +418,6 @@ class ReelStudioController extends Controller
             return false;
         }
 
-        // If host is a literal IP, validate directly
         if (filter_var($host, FILTER_VALIDATE_IP)) {
             return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
         }

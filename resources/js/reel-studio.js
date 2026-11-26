@@ -233,6 +233,8 @@ export function initReelStudio(root) {
     const articlePicker = document.getElementById('reel-article-picker');
     const loadArticleBtn = document.getElementById('btn-load-article');
     const statusBox = document.getElementById('reel-status-box');
+    const voiceFeedbackBox = document.getElementById('reel-voice-feedback');
+    const autoVoiceToggle = document.getElementById('reel-auto-voice-toggle');
     const timeLabel = document.getElementById('reel-time-label');
     const progressRange = document.getElementById('reel-scrub-bar');
     const captionTextarea = document.getElementById('reel-social-caption');
@@ -250,6 +252,8 @@ export function initReelStudio(root) {
         rate: '+5%',
         beatStyle: 'pulse',
         musicVolume: 0.25,
+        autoVoice: true,
+        voiceMode: 'ai', // 'ai' | 'mic' | 'upload' | 'off'
         showCaptions: true,
         convertMp4: true,
         slides: Array.isArray(initialProject.slides) && initialProject.slides.length
@@ -263,7 +267,7 @@ export function initReelStudio(root) {
         audioCtx: null,
         activeAudioNodes: [],
         // Audio tracks: per-slide TTS OR single uploaded/recorded voice track
-        slideVoiceBuffers: [], // Array<{ buffer: AudioBuffer|null, boundaries: Array, text: string }>
+        slideVoiceBuffers: [], // Array<{ buffer: AudioBuffer|null, boundaries: Array, text: string, cacheKey: string }>
         masterVoiceBuffer: null,
         customMusicBuffer: null,
         micRecorder: null,
@@ -274,21 +278,25 @@ export function initReelStudio(root) {
 
     if (themeSelect) themeSelect.value = state.theme;
     if (voiceSelect) voiceSelect.value = state.voice;
+    if (autoVoiceToggle) autoVoiceToggle.checked = state.autoVoice;
     if (captionTextarea && initialProject.social_caption) {
         captionTextarea.value = initialProject.social_caption;
     }
 
     function setStatus(msg, tone = 'info') {
-        if (!statusBox) return;
         const colors = {
             info: 'bg-slate-800/80 border-white/10 text-slate-200',
             success: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
             warn: 'bg-amber-500/15 border-amber-500/30 text-amber-300',
             error: 'bg-rose-500/15 border-rose-500/30 text-rose-300',
         };
-        statusBox.className = `px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition ${colors[tone] || colors.info}`;
-        statusBox.textContent = msg;
-        statusBox.classList.remove('hidden');
+        const cls = `px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition ${colors[tone] || colors.info}`;
+        [statusBox, voiceFeedbackBox].forEach((box) => {
+            if (!box) return;
+            box.className = cls;
+            box.textContent = msg;
+            box.classList.remove('hidden');
+        });
     }
 
     function updateVoiceBadge(text, active = false) {
@@ -299,13 +307,17 @@ export function initReelStudio(root) {
             : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 border border-white/10';
     }
 
-    function ensureAudioContext() {
+    async function ensureAudioContext() {
         if (!state.audioCtx) {
             const Ctx = window.AudioContext || window.webkitAudioContext;
             state.audioCtx = new Ctx();
         }
         if (state.audioCtx.state === 'suspended') {
-            state.audioCtx.resume();
+            try {
+                await state.audioCtx.resume();
+            } catch (_) {
+                // Ignore if resumed cleanly on subsequent gesture
+            }
         }
         return state.audioCtx;
     }
@@ -647,6 +659,29 @@ export function initReelStudio(root) {
         }
     }
 
+    function preloadSlideImages(timeoutMs = 2500) {
+        const promises = state.slides.map((slide) => {
+            const resolved = resolveImageSrc(slide.image);
+            if (!resolved) return Promise.resolve();
+            const existing = state.imageCache.get(resolved);
+            if (existing && (existing.loaded || existing.error)) {
+                return Promise.resolve();
+            }
+            loadCanvasImage(slide.image);
+            const entry = state.imageCache.get(resolved);
+            if (!entry) return Promise.resolve();
+            return new Promise((resolve) => {
+                const onDone = () => resolve();
+                entry.img.addEventListener('load', onDone, { once: true });
+                entry.img.addEventListener('error', onDone, { once: true });
+            });
+        });
+        return Promise.race([
+            Promise.all(promises),
+            new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+        ]);
+    }
+
     function stopAudioPlayback() {
         state.activeAudioNodes.forEach((node) => {
             try {
@@ -654,42 +689,67 @@ export function initReelStudio(root) {
             } catch (_) {
                 // Already stopped
             }
+            try {
+                node.disconnect();
+            } catch (_) {
+                // Already disconnected
+            }
         });
         state.activeAudioNodes = [];
     }
 
-    async function scheduleAudioGraph(destinationNode, offsetSec = 0) {
-        const audioCtx = ensureAudioContext();
+    async function prepareMusicBuffer(audioCtx) {
+        if (state.beatStyle === 'off' && !state.customMusicBuffer) {
+            return null;
+        }
+        if (state.customMusicBuffer) {
+            return state.customMusicBuffer;
+        }
+        return buildProceduralBeatBuffer(audioCtx, state.beatStyle, 4.0);
+    }
+
+    function scheduleAudioGraph(audioCtx, destinationNode, offsetSec = 0, musicBuf = null, keepalive = false) {
         const timeline = getTimeline();
-        const startAt = audioCtx.currentTime + 0.04;
         const hasAnyVoice = Boolean(
             state.masterVoiceBuffer || state.slideVoiceBuffers.some((v) => v && v.buffer)
         );
 
+        // Compute startAt AFTER any async buffer work so start times are always in the future
+        const startAt = audioCtx.currentTime + 0.06;
+
+        if (keepalive && typeof audioCtx.createConstantSource === 'function') {
+            try {
+                const keeper = audioCtx.createConstantSource();
+                keeper.offset.value = 0;
+                const kGain = audioCtx.createGain();
+                kGain.gain.value = 0;
+                keeper.connect(kGain);
+                kGain.connect(destinationNode);
+                keeper.start(audioCtx.currentTime);
+                state.activeAudioNodes.push(keeper);
+            } catch (_) {
+                // Optional silent keepalive
+            }
+        }
+
         // Background music (custom file or procedural Web Audio beat)
-        if (state.beatStyle !== 'off' || state.customMusicBuffer) {
-            let musicBuf = state.customMusicBuffer;
-            if (!musicBuf) {
-                musicBuf = await buildProceduralBeatBuffer(audioCtx, state.beatStyle, 4.0);
-            }
-            if (musicBuf) {
-                const src = audioCtx.createBufferSource();
-                src.buffer = musicBuf;
-                src.loop = true;
+        if (musicBuf) {
+            const src = audioCtx.createBufferSource();
+            src.buffer = musicBuf;
+            src.loop = true;
 
-                const gainNode = audioCtx.createGain();
-                // Auto-duck background music when voiceover is present
-                const baseVol = clamp(state.musicVolume, 0, 1);
-                gainNode.gain.value = hasAnyVoice ? baseVol * 0.28 : baseVol * 0.65;
+            const gainNode = audioCtx.createGain();
+            // Auto-duck background music when voiceover is present
+            const baseVol = clamp(state.musicVolume, 0, 1);
+            gainNode.gain.value = hasAnyVoice ? baseVol * 0.25 : baseVol * 0.65;
 
-                src.connect(gainNode);
-                gainNode.connect(destinationNode);
+            src.connect(gainNode);
+            gainNode.connect(destinationNode);
 
-                const musicOffset = offsetSec % musicBuf.duration;
-                const remaining = Math.max(0.1, timeline.total - offsetSec);
-                src.start(startAt, musicOffset, remaining);
-                state.activeAudioNodes.push(src);
-            }
+            const musicOffset = offsetSec % musicBuf.duration;
+            const remaining = Math.max(0.1, timeline.total - offsetSec);
+            src.start(startAt, musicOffset, remaining);
+            state.activeAudioNodes.push(src);
         }
 
         // Master single voice track (Mic / Uploaded MP3)
@@ -698,13 +758,13 @@ export function initReelStudio(root) {
                 const vSrc = audioCtx.createBufferSource();
                 vSrc.buffer = state.masterVoiceBuffer;
                 const vGain = audioCtx.createGain();
-                vGain.gain.value = 1.0;
+                vGain.gain.value = 1.05;
                 vSrc.connect(vGain);
                 vGain.connect(destinationNode);
                 vSrc.start(startAt, offsetSec);
                 state.activeAudioNodes.push(vSrc);
             }
-            return;
+            return startAt;
         }
 
         // Per-slide synthesized TTS buffers
@@ -716,7 +776,7 @@ export function initReelStudio(root) {
             const vSrc = audioCtx.createBufferSource();
             vSrc.buffer = voiceItem.buffer;
             const vGain = audioCtx.createGain();
-            vGain.gain.value = 1.05;
+            vGain.gain.value = 1.1;
             vSrc.connect(vGain);
             vGain.connect(destinationNode);
 
@@ -730,65 +790,40 @@ export function initReelStudio(root) {
             }
             state.activeAudioNodes.push(vSrc);
         });
+
+        return startAt;
     }
 
-    async function togglePreviewPlayback() {
-        if (state.playing) {
-            state.playing = false;
-            stopAudioPlayback();
-            if (previewBtn) previewBtn.textContent = '▶ Play Preview';
-            return;
-        }
-
-        const timeline = getTimeline();
-        if (state.playhead >= timeline.total - 0.1) {
-            state.playhead = 0;
-        }
-
-        const audioCtx = ensureAudioContext();
-        await scheduleAudioGraph(audioCtx.destination, state.playhead);
-
-        state.playing = true;
-        if (previewBtn) previewBtn.textContent = '⏸ Pause';
-
-        const startPerf = performance.now();
-        const startPlayhead = state.playhead;
-
-        const tick = (now) => {
-            if (!state.playing || state.recording) return;
-            const elapsed = startPlayhead + (now - startPerf) / 1000;
-            state.playhead = elapsed;
-            renderAt(elapsed);
-
-            if (elapsed >= timeline.total) {
-                state.playing = false;
-                state.playhead = 0;
-                stopAudioPlayback();
-                renderAt(0);
-                if (previewBtn) previewBtn.textContent = '▶ Play Preview';
-                return;
-            }
-            requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-    }
-
-    async function generateAllSlidesTts() {
-        if (!state.slides.length) return;
-        const audioCtx = ensureAudioContext();
+    async function generateAllSlidesTts(forceAll = true) {
+        if (!state.slides.length) return false;
+        const audioCtx = await ensureAudioContext();
         const voice = voiceSelect?.value || 'en-IN-PrabhatNeural';
         const rate = voiceRateSelect?.value || '+5%';
 
-        generateTtsBtn.disabled = true;
-        const origLabel = generateTtsBtn.textContent;
+        if (generateTtsBtn) generateTtsBtn.disabled = true;
+        const origLabel = generateTtsBtn ? generateTtsBtn.textContent : '🎙️ Generate AI Voiceover';
         state.masterVoiceBuffer = null;
+        state.voiceMode = 'ai';
+
+        let lastEngine = '';
 
         try {
             const newBuffers = [];
             for (let i = 0; i < state.slides.length; i++) {
                 const slide = state.slides[i];
                 const speechText = String(slide.narration || slide.headline || '').trim();
-                generateTtsBtn.textContent = `🎙️ Generating ${i + 1}/${state.slides.length}...`;
+                const cacheKey = `${voice}|${rate}|${speechText}`;
+                const prev = state.slideVoiceBuffers[i];
+
+                if (!forceAll && prev && prev.buffer && prev.cacheKey === cacheKey) {
+                    newBuffers.push(prev);
+                    continue;
+                }
+
+                if (generateTtsBtn) {
+                    generateTtsBtn.textContent = `🎙️ Voice ${i + 1}/${state.slides.length}...`;
+                }
+                setStatus(`Generating AI voiceover (${i + 1}/${state.slides.length})...`, 'info');
 
                 if (!speechText) {
                     newBuffers.push(null);
@@ -815,6 +850,8 @@ export function initReelStudio(root) {
                     throw new Error(data.message || 'Voice synthesis failed.');
                 }
 
+                if (data.engine) lastEngine = data.engine;
+
                 const arrayBuf = base64ToArrayBuffer(data.audio_base64);
                 const decoded = await audioCtx.decodeAudioData(arrayBuf);
                 // Match slide duration tightly to natural speech + 0.45s breathing gap
@@ -823,19 +860,107 @@ export function initReelStudio(root) {
                     buffer: decoded,
                     boundaries: Array.isArray(data.boundaries) ? data.boundaries : [],
                     text: speechText,
+                    cacheKey,
                 });
             }
 
             state.slideVoiceBuffers = newBuffers;
             renderSlidesEditor();
             renderAt(state.playhead);
-            updateVoiceBadge(`AI Voice Ready (${voice.split('-')[2] || voice})`, true);
-            setStatus(`Voiceover synced across ${state.slides.length} slides! Click Play Preview or Export Reel.`, 'success');
+            const engineTag = lastEngine ? ` • ${lastEngine}` : '';
+            updateVoiceBadge(`AI Voice Ready (${voice.split('-')[2] || voice}${engineTag})`, true);
+            setStatus(`Voiceover synced across ${state.slides.length} slides!`, 'success');
+            return true;
         } catch (err) {
             setStatus(err.message || 'Could not generate AI voiceover.', 'warn');
+            return false;
         } finally {
-            generateTtsBtn.disabled = false;
-            generateTtsBtn.textContent = origLabel;
+            if (generateTtsBtn) {
+                generateTtsBtn.disabled = false;
+                generateTtsBtn.textContent = origLabel;
+            }
+        }
+    }
+
+    async function ensureVoiceoverReady() {
+        if (!state.autoVoice || state.voiceMode !== 'ai') {
+            return true;
+        }
+        if (state.masterVoiceBuffer) {
+            return true;
+        }
+        const voice = voiceSelect?.value || 'en-IN-PrabhatNeural';
+        const rate = voiceRateSelect?.value || '+5%';
+        const allReady = state.slides.length > 0 && state.slides.every((slide, idx) => {
+            const speechText = String(slide.narration || slide.headline || '').trim();
+            if (!speechText) return true;
+            const prev = state.slideVoiceBuffers[idx];
+            return prev && prev.buffer && prev.cacheKey === `${voice}|${rate}|${speechText}`;
+        });
+        if (allReady) {
+            return true;
+        }
+        return generateAllSlidesTts(false);
+    }
+
+    async function togglePreviewPlayback() {
+        if (state.playing) {
+            state.playing = false;
+            stopAudioPlayback();
+            if (previewBtn) previewBtn.textContent = '▶ Play Preview';
+            return;
+        }
+
+        const origLabel = previewBtn ? previewBtn.textContent : '▶ Play Preview';
+        if (previewBtn) {
+            previewBtn.disabled = true;
+            previewBtn.textContent = '⏳ Preparing Voice...';
+        }
+
+        try {
+            await ensureVoiceoverReady();
+            const timeline = getTimeline();
+            if (state.playhead >= timeline.total - 0.1) {
+                state.playhead = 0;
+            }
+
+            const audioCtx = await ensureAudioContext();
+            const musicBuf = await prepareMusicBuffer(audioCtx);
+            const startAt = scheduleAudioGraph(audioCtx, audioCtx.destination, state.playhead, musicBuf, false);
+
+            state.playing = true;
+            if (previewBtn) {
+                previewBtn.disabled = false;
+                previewBtn.textContent = '⏸ Pause';
+            }
+
+            const delayMs = Math.max(0, (startAt - audioCtx.currentTime) * 1000);
+            const startPerf = performance.now() + delayMs;
+            const startPlayhead = state.playhead;
+
+            const tick = (now) => {
+                if (!state.playing || state.recording) return;
+                const elapsed = startPlayhead + Math.max(0, (now - startPerf) / 1000);
+                state.playhead = elapsed;
+                renderAt(elapsed);
+
+                if (elapsed >= timeline.total) {
+                    state.playing = false;
+                    state.playhead = 0;
+                    stopAudioPlayback();
+                    renderAt(0);
+                    if (previewBtn) previewBtn.textContent = '▶ Play Preview';
+                    return;
+                }
+                requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+        } catch (err) {
+            if (previewBtn) {
+                previewBtn.disabled = false;
+                previewBtn.textContent = origLabel;
+            }
+            setStatus(`Preview error: ${err.message || 'Could not start audio'}`, 'error');
         }
     }
 
@@ -870,9 +995,10 @@ export function initReelStudio(root) {
 
                 const blob = new Blob(state.micChunks, { type: recorder.mimeType || 'audio/webm' });
                 const arr = await blob.arrayBuffer();
-                const audioCtx = ensureAudioContext();
+                const audioCtx = await ensureAudioContext();
                 state.masterVoiceBuffer = await audioCtx.decodeAudioData(arr);
                 state.slideVoiceBuffers = [];
+                state.voiceMode = 'mic';
                 updateVoiceBadge(`Mic Recording (${state.masterVoiceBuffer.duration.toFixed(1)}s)`, true);
                 setStatus('Mic voiceover loaded! Press Play Preview to listen with the visuals.', 'success');
             };
@@ -884,12 +1010,19 @@ export function initReelStudio(root) {
     }
 
     function pickBestRecorderMime() {
-        const candidates = [
-            'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-            'video/webm;codecs=vp9,opus',
-            'video/webm;codecs=vp8,opus',
-            'video/webm',
-        ];
+        const candidates = state.convertMp4
+            ? [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm',
+                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+            ]
+            : [
+                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm',
+            ];
         for (const m of candidates) {
             if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) {
                 return m;
@@ -911,27 +1044,32 @@ export function initReelStudio(root) {
             return;
         }
 
-        const timeline = getTimeline();
         state.recording = true;
         exportBtn.disabled = true;
         const origText = exportBtn.textContent;
-        setStatus('Rendering Reel frames & mixing audio in real time... Keep this tab open.', 'info');
 
         try {
+            exportBtn.textContent = '🎙️ Preparing Voice...';
+            await ensureVoiceoverReady();
+
+            const timeline = getTimeline();
+            setStatus('Loading images & syncing voiceover audio track...', 'info');
+            await preloadSlideImages(2500);
+
+            const audioCtx = await ensureAudioContext();
+            const musicBuf = await prepareMusicBuffer(audioCtx);
+            const hasVoice = Boolean(
+                state.masterVoiceBuffer || state.slideVoiceBuffers.some((v) => v && v.buffer)
+            );
+            const hasAudio = Boolean(musicBuf || hasVoice);
+
             renderAt(0);
             const canvasStream = canvas.captureStream(30);
             const tracks = [...canvasStream.getVideoTracks()];
 
-            const audioCtx = ensureAudioContext();
-            const hasAudio =
-                state.beatStyle !== 'off' ||
-                Boolean(state.customMusicBuffer) ||
-                Boolean(state.masterVoiceBuffer) ||
-                state.slideVoiceBuffers.some((v) => v && v.buffer);
-
+            let dest = null;
             if (hasAudio) {
-                const dest = audioCtx.createMediaStreamDestination();
-                await scheduleAudioGraph(dest, 0);
+                dest = audioCtx.createMediaStreamDestination();
                 dest.stream.getAudioTracks().forEach((tr) => tracks.push(tr));
             }
 
@@ -950,12 +1088,22 @@ export function initReelStudio(root) {
                 recorder.onstop = resolve;
             });
 
+            // Start MediaRecorder BEFORE scheduling WebAudio so frame 0 captures initial audio samples cleanly
             recorder.start(250);
+            await new Promise((r) => setTimeout(r, 60));
 
-            const renderStart = performance.now();
+            let startAt = audioCtx.currentTime;
+            if (hasAudio && dest) {
+                startAt = scheduleAudioGraph(audioCtx, dest, 0, musicBuf, true);
+            }
+
+            setStatus('Recording 9:16 Reel with voiceover + beat... Keep this tab open.', 'info');
+            const delayMs = Math.max(0, (startAt - audioCtx.currentTime) * 1000);
+            const renderStart = performance.now() + delayMs;
+
             await new Promise((resolve) => {
                 const step = (now) => {
-                    const elapsed = (now - renderStart) / 1000;
+                    const elapsed = Math.max(0, (now - renderStart) / 1000);
                     state.playhead = Math.min(elapsed, timeline.total);
                     renderAt(state.playhead);
 
@@ -971,6 +1119,7 @@ export function initReelStudio(root) {
                 requestAnimationFrame(step);
             });
 
+            await new Promise((r) => setTimeout(r, 150));
             recorder.stop();
             await stoppedPromise;
             stopAudioPlayback();
@@ -1219,6 +1368,17 @@ export function initReelStudio(root) {
         renderAt(state.playhead);
     });
 
+    autoVoiceToggle?.addEventListener('change', () => {
+        state.autoVoice = autoVoiceToggle.checked;
+        if (state.autoVoice && state.voiceMode === 'off') {
+            state.voiceMode = 'ai';
+            updateVoiceBadge('AI Voice Auto-Ready', false);
+        } else if (!state.autoVoice) {
+            state.voiceMode = 'off';
+            updateVoiceBadge('Voice Muted', false);
+        }
+    });
+
     convertMp4Toggle?.addEventListener('change', () => {
         state.convertMp4 = convertMp4Toggle.checked;
     });
@@ -1233,7 +1393,7 @@ export function initReelStudio(root) {
         renderAt(state.playhead);
     });
 
-    generateTtsBtn?.addEventListener('click', generateAllSlidesTts);
+    generateTtsBtn?.addEventListener('click', () => generateAllSlidesTts(true));
     recordMicBtn?.addEventListener('click', toggleMicRecording);
     previewBtn?.addEventListener('click', togglePreviewPlayback);
     exportBtn?.addEventListener('click', exportReelVideo);
@@ -1241,8 +1401,11 @@ export function initReelStudio(root) {
     clearVoiceBtn?.addEventListener('click', () => {
         state.slideVoiceBuffers = [];
         state.masterVoiceBuffer = null;
-        updateVoiceBadge('No Voiceover', false);
-        setStatus('Voiceover cleared. Background beat / silent captions active.', 'info');
+        state.voiceMode = 'off';
+        state.autoVoice = false;
+        if (autoVoiceToggle) autoVoiceToggle.checked = false;
+        updateVoiceBadge('Voice Muted', false);
+        setStatus('Voiceover muted. Background beat / silent captions active.', 'info');
     });
 
     uploadVoiceInput?.addEventListener('change', async () => {
@@ -1250,9 +1413,10 @@ export function initReelStudio(root) {
         if (!file) return;
         try {
             const arr = await file.arrayBuffer();
-            const audioCtx = ensureAudioContext();
+            const audioCtx = await ensureAudioContext();
             state.masterVoiceBuffer = await audioCtx.decodeAudioData(arr);
             state.slideVoiceBuffers = [];
+            state.voiceMode = 'upload';
             updateVoiceBadge(`Uploaded (${state.masterVoiceBuffer.duration.toFixed(1)}s)`, true);
             setStatus(`Loaded custom voice file "${file.name}".`, 'success');
         } catch (_) {
@@ -1265,7 +1429,7 @@ export function initReelStudio(root) {
         if (!file) return;
         try {
             const arr = await file.arrayBuffer();
-            const audioCtx = ensureAudioContext();
+            const audioCtx = await ensureAudioContext();
             state.customMusicBuffer = await audioCtx.decodeAudioData(arr);
             setStatus(`Custom music track "${file.name}" loaded!`, 'success');
         } catch (_) {

@@ -75,8 +75,8 @@
                             <p class="text-xs text-slate-400">Free Indian-English &amp; Hindi AI voices, live mic recording, or custom audio upload.</p>
                         </div>
                         <span id="reel-voice-status"
-                              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 border border-white/10">
-                            No Voiceover
+                              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            Auto AI Voiceover On
                         </span>
                     </div>
 
@@ -117,9 +117,11 @@
                         </label>
                         <button type="button" id="btn-clear-voice"
                                 class="px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-white/10 text-xs font-bold text-slate-400 transition cursor-pointer">
-                            Clear Voice
+                            Mute Voice
                         </button>
                     </div>
+
+                    <div id="reel-voice-feedback" class="hidden"></div>
 
                     <div class="pt-2 border-t border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                         <div>
@@ -197,12 +199,16 @@
 
                         <div class="flex flex-col gap-1.5 text-xs font-bold text-slate-300">
                             <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="reel-auto-voice-toggle" checked class="rounded text-emerald-500 bg-slate-950 border-white/20">
+                                <span>Auto AI Voiceover</span>
+                            </label>
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" id="reel-captions-toggle" checked class="rounded text-emerald-500 bg-slate-950 border-white/20">
-                                <span>Animated Word Captions</span>
+                                <span>Animated Captions</span>
                             </label>
                             <label class="inline-flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" id="reel-convert-mp4-toggle" checked class="rounded text-emerald-500 bg-slate-950 border-white/20">
-                                <span>Convert to IG/Shorts MP4</span>
+                                <span>Convert to IG MP4</span>
                             </label>
                         </div>
                     </div>
