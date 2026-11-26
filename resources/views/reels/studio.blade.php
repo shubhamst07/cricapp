@@ -86,7 +86,7 @@
                             <select id="reel-voice"
                                     class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-xs font-bold text-white">
                                 @foreach($voiceOptions as $voice)
-                                    <option value="{{ $voice['id'] }}">{{ $voice['label'] }}</option>
+                                    <option value="{{ $voice['id'] }}" @selected($voice['id'] === ($project['voice'] ?? 'hi-IN-MadhurNeural'))>{{ $voice['label'] }}</option>
                                 @endforeach
                             </select>
                         </div>

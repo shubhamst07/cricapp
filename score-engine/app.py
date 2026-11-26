@@ -1949,7 +1949,7 @@ ALLOWED_TTS_VOICES = {
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "en-IN-PrabhatNeural"
+    voice: str = "hi-IN-MadhurNeural"
     rate: str = "+5%"
     pitch: str = "+0Hz"
 
@@ -1977,7 +1977,7 @@ async def generate_tts(payload: TTSRequest):
     try:
         return await synthesize_best(
             clean_text,
-            payload.voice or "en-IN-PrabhatNeural",
+            payload.voice or "hi-IN-MadhurNeural",
             payload.rate or "+5%",
             payload.pitch or "+0Hz",
         )

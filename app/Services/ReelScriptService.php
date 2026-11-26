@@ -42,10 +42,10 @@ class ReelScriptService
     public function voiceOptions(): array
     {
         return [
+            ['id' => 'hi-IN-MadhurNeural', 'label' => 'Madhur — Hindi (Male, Commentary) [Default]'],
+            ['id' => 'hi-IN-SwaraNeural', 'label' => 'Swara — Hindi (Female, Clear)'],
             ['id' => 'en-IN-PrabhatNeural', 'label' => 'Prabhat — Indian English (Male, Energetic)'],
             ['id' => 'en-IN-NeerjaNeural', 'label' => 'Neerja — Indian English (Female, Crisp)'],
-            ['id' => 'hi-IN-MadhurNeural', 'label' => 'Madhur — Hindi (Male, Commentary)'],
-            ['id' => 'hi-IN-SwaraNeural', 'label' => 'Swara — Hindi (Female, Clear)'],
             ['id' => 'en-GB-RyanNeural', 'label' => 'Ryan — UK Commentary (Male)'],
         ];
     }
@@ -114,7 +114,7 @@ class ReelScriptService
             'source_article_id' => $article->id,
             'title' => $title,
             'theme' => 'stadium',
-            'voice' => 'en-IN-PrabhatNeural',
+            'voice' => 'hi-IN-MadhurNeural',
             'slides' => $slides,
             'social_caption' => $this->buildSocialCaption($article, $title, $excerpt),
             'article_url' => route('articles.show', $article->slug),
@@ -132,7 +132,7 @@ class ReelScriptService
             'source_article_id' => null,
             'title' => 'Breaking Cricket Reel',
             'theme' => 'stadium',
-            'voice' => 'en-IN-PrabhatNeural',
+            'voice' => 'hi-IN-MadhurNeural',
             'article_url' => url('/articles'),
             'social_caption' => "Latest Cricket Update! Live scores & full breakdown on CricApp.in\n\n#Cricket #CricApp #CricketReels #IPL #TeamIndia #CricketNews",
             'slides' => [

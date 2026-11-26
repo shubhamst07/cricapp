@@ -248,7 +248,7 @@ export function initReelStudio(root) {
     const state = {
         title: initialProject.title || 'CricApp Reel',
         theme: initialProject.theme || 'stadium',
-        voice: initialProject.voice || 'en-IN-PrabhatNeural',
+        voice: initialProject.voice || 'hi-IN-MadhurNeural',
         rate: '+5%',
         beatStyle: 'pulse',
         musicVolume: 0.25,
@@ -797,7 +797,7 @@ export function initReelStudio(root) {
     async function generateAllSlidesTts(forceAll = true) {
         if (!state.slides.length) return false;
         const audioCtx = await ensureAudioContext();
-        const voice = voiceSelect?.value || 'en-IN-PrabhatNeural';
+        const voice = voiceSelect?.value || 'hi-IN-MadhurNeural';
         const rate = voiceRateSelect?.value || '+5%';
 
         if (generateTtsBtn) generateTtsBtn.disabled = true;
@@ -889,7 +889,7 @@ export function initReelStudio(root) {
         if (state.masterVoiceBuffer) {
             return true;
         }
-        const voice = voiceSelect?.value || 'en-IN-PrabhatNeural';
+        const voice = voiceSelect?.value || 'hi-IN-MadhurNeural';
         const rate = voiceRateSelect?.value || '+5%';
         const allReady = state.slides.length > 0 && state.slides.every((slide, idx) => {
             const speechText = String(slide.narration || slide.headline || '').trim();

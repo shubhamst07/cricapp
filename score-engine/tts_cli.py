@@ -79,14 +79,14 @@ def synthesize_gtts(text: str, voice: str):
     return audio_bytes, [], "gtts"
 
 
-async def synthesize_best(text: str, voice: str = "en-IN-PrabhatNeural", rate: str = "+5%", pitch: str = "+0Hz"):
+async def synthesize_best(text: str, voice: str = "hi-IN-MadhurNeural", rate: str = "+5%", pitch: str = "+0Hz"):
     clean_text = re.sub(r"\s+", " ", (text or "")).strip()
     if not clean_text:
         raise ValueError("Narration text cannot be empty.")
 
-    safe_voice = (voice or "en-IN-PrabhatNeural").strip()
+    safe_voice = (voice or "hi-IN-MadhurNeural").strip()
     if safe_voice not in ALLOWED_VOICES and not re.match(r"^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9]+Neural$", safe_voice):
-        safe_voice = "en-IN-PrabhatNeural"
+        safe_voice = "hi-IN-MadhurNeural"
 
     safe_rate = (rate or "+5%").strip()
     if not re.match(r"^[+-](?:[0-9]|[1-4][0-9]|50)%$", safe_rate):
@@ -138,7 +138,7 @@ if __name__ == "__main__":
         result = asyncio.run(
             synthesize_best(
                 payload.get("text", ""),
-                payload.get("voice", "en-IN-PrabhatNeural"),
+                payload.get("voice", "hi-IN-MadhurNeural"),
                 payload.get("rate", "+5%"),
                 payload.get("pitch", "+0Hz"),
             )
