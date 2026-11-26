@@ -132,7 +132,11 @@
 
                 <!-- Admin Action Controls -->
                 @if($isAdmin)
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <a href="{{ route('articles.reel', $article) }}" 
+                           class="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-600 dark:text-amber-300 text-xs font-bold transition flex items-center gap-1.5">
+                            <span>🎬 Make Reel</span>
+                        </a>
                         <a href="{{ route('articles.edit', $article) }}" 
                            class="px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-300 text-xs font-bold transition flex items-center gap-1.5">
                             <span>✏️ Edit</span>

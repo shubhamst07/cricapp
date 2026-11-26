@@ -65,3 +65,15 @@ if (matchDetailRoot) {
         console.error('Error mounting MatchDetailApp:', e);
     });
 }
+
+// Lazy-load CricApp Reel Studio only on admin studio page (#reel-studio-root)
+const reelStudioRoot = document.getElementById('reel-studio-root');
+if (reelStudioRoot) {
+    import('./reel-studio')
+        .then(({ initReelStudio }) => {
+            initReelStudio(reelStudioRoot);
+        })
+        .catch((e) => {
+            console.error('Error loading Reel Studio:', e);
+        });
+}

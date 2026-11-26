@@ -1,22 +1,33 @@
+import os
 import re
 import html
 import time
 import json
+import base64
+import shutil
 import asyncio
+import tempfile
+import subprocess
 from typing import List, Optional, Dict, Any
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import (
     JSONResponse,
     PlainTextResponse,
     HTMLResponse,
+    Response,
 )
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+try:
+    import edge_tts
+except ImportError:
+    edge_tts = None
 
 
 NOT_FOUND = "score not found"
@@ -1920,6 +1931,205 @@ async def root(
     if text:
         return PlainTextResponse(ScoreService.format_tree(result))
     return result
+
+
+# ==============================================================================
+# CRICAPP REEL STUDIO: FREE NEURAL TTS & LIGHTWEIGHT MP4 TRANSCODER
+# ==============================================================================
+
+ALLOWED_TTS_VOICES = {
+    "en-IN-PrabhatNeural",
+    "en-IN-NeerjaNeural",
+    "hi-IN-MadhurNeural",
+    "hi-IN-SwaraNeural",
+    "en-GB-RyanNeural",
+    "en-AU-WilliamNeural",
+}
+
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "en-IN-PrabhatNeural"
+    rate: str = "+5%"
+    pitch: str = "+0Hz"
+
+
+@app.post("/tts")
+async def generate_tts(payload: TTSRequest):
+    if edge_tts is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "message": "edge-tts is not installed on this server."}
+        )
+
+    clean_text = re.sub(r"\s+", " ", (payload.text or "")).strip()
+    if not clean_text:
+        return JSONResponse(
+            status_code=422,
+            content={"status": "error", "message": "Narration text cannot be empty."}
+        )
+    if len(clean_text) > 4000:
+        return JSONResponse(
+            status_code=422,
+            content={"status": "error", "message": "Narration text must be under 4000 characters."}
+        )
+
+    voice = (payload.voice or "en-IN-PrabhatNeural").strip()
+    if voice not in ALLOWED_TTS_VOICES and not re.match(r"^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9]+Neural$", voice):
+        voice = "en-IN-PrabhatNeural"
+
+    rate = (payload.rate or "+5%").strip()
+    if not re.match(r"^[+-](?:[0-9]|[1-4][0-9]|50)%$", rate):
+        rate = "+5%"
+
+    pitch = (payload.pitch or "+0Hz").strip()
+    if not re.match(r"^[+-](?:[0-9]|[12][0-9]|30)Hz$", pitch):
+        pitch = "+0Hz"
+
+    try:
+        try:
+            communicate = edge_tts.Communicate(
+                clean_text,
+                voice,
+                rate=rate,
+                pitch=pitch,
+                boundary="WordBoundary",
+            )
+        except TypeError:
+            communicate = edge_tts.Communicate(clean_text, voice, rate=rate, pitch=pitch)
+
+        audio_chunks: List[bytes] = []
+        boundaries: List[Dict[str, Any]] = []
+
+        async for chunk in communicate.stream():
+            ctype = chunk.get("type")
+            if ctype == "audio" and chunk.get("data"):
+                audio_chunks.append(chunk["data"])
+            elif ctype == "WordBoundary":
+                boundaries.append({
+                    "offset_ms": round(float(chunk.get("offset", 0)) / 10000.0),
+                    "duration_ms": max(80, round(float(chunk.get("duration", 0)) / 10000.0)),
+                    "text": str(chunk.get("text", "")),
+                })
+
+        audio_bytes = b"".join(audio_chunks)
+        if not audio_bytes:
+            return JSONResponse(
+                status_code=502,
+                content={"status": "error", "message": "Voice engine returned empty audio."}
+            )
+
+        return {
+            "status": "success",
+            "voice": voice,
+            "mime_type": "audio/mpeg",
+            "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
+            "boundaries": boundaries,
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=502,
+            content={"status": "error", "message": f"TTS synthesis failed: {str(e)[:200]}"}
+        )
+
+
+@app.post("/convert-mp4")
+async def convert_mp4(
+    video: UploadFile = File(...),
+    max_duration: int = Form(90),
+):
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if not ffmpeg_bin:
+        return JSONResponse(
+            status_code=501,
+            content={"status": "error", "message": "FFmpeg is not installed on this server."}
+        )
+
+    tmpdir = tempfile.mkdtemp(prefix="cricapp-reel-")
+    input_path = os.path.join(tmpdir, "input.webm")
+    output_path = os.path.join(tmpdir, "output.mp4")
+
+    try:
+        max_bytes = 60 * 1024 * 1024
+        total_read = 0
+        with open(input_path, "wb") as out_f:
+            while True:
+                chunk = await video.read(524288)
+                if not chunk:
+                    break
+                total_read += len(chunk)
+                if total_read > max_bytes:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"status": "error", "message": "Uploaded reel exceeds 60 MB limit."}
+                    )
+                out_f.write(chunk)
+
+        if total_read == 0:
+            return JSONResponse(
+                status_code=422,
+                content={"status": "error", "message": "Uploaded video file is empty."}
+            )
+
+        safe_duration = min(max(int(max_duration or 90), 5), 120)
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            "-i", input_path,
+            "-t", str(safe_duration),
+            "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=#050b16,setsar=1",
+            "-r", "30",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-ar", "44100",
+            "-threads", "1",
+            "-movflags", "+faststart",
+            output_path,
+        ]
+
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=90,
+            check=False,
+        )
+
+        if proc.returncode != 0 or not os.path.exists(output_path):
+            err_tail = (proc.stderr or b"").decode("utf-8", errors="ignore")[-400:]
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": f"MP4 encoding failed: {err_tail}"}
+            )
+
+        with open(output_path, "rb") as mp4_f:
+            mp4_bytes = mp4_f.read()
+
+        return Response(
+            content=mp4_bytes,
+            media_type="video/mp4",
+            headers={
+                "Content-Disposition": 'attachment; filename="cricapp-reel.mp4"',
+                "Cache-Control": "no-store",
+            },
+        )
+    except subprocess.TimeoutExpired:
+        return JSONResponse(
+            status_code=504,
+            content={"status": "error", "message": "MP4 conversion timed out."}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"MP4 conversion error: {str(e)[:200]}"}
+        )
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @app.exception_handler(APIError)

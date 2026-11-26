@@ -19,7 +19,11 @@
         </div>
 
         @if($isAdmin)
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="{{ route('reels.index') }}" 
+                   class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-black text-xs uppercase tracking-wider transition transform active:scale-95">
+                    <span>🎬 Reel Studio</span>
+                </a>
                 <a href="{{ route('articles.create') }}" 
                    class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 transition transform active:scale-95">
                     <span>✍️ Write Article</span>

@@ -8,6 +8,7 @@ use App\Http\Controllers\PageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UmpireController;
 use App\Http\Controllers\ArticleController;
+use App\Http\Controllers\ReelStudioController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', fn () => response('pong', 200)->header('Content-Type', 'text/plain'));
@@ -299,7 +300,7 @@ Route::get('/ads.txt', function () {
     return response($content, 200)->header('Content-Type', 'text/plain; charset=utf-8');
 });
 
-// Admin Article Management
+// Admin Article Management & Cricket Reel Studio
 Route::middleware('auth')->group(function () {
     Route::get('/admin/articles/create', [ArticleController::class, 'create'])->name('articles.create');
     Route::post('/admin/articles', [ArticleController::class, 'store'])->name('articles.store');
@@ -307,6 +308,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/articles/{article}/edit', [ArticleController::class, 'edit'])->name('articles.edit');
     Route::put('/admin/articles/{article}', [ArticleController::class, 'update'])->name('articles.update');
     Route::delete('/admin/articles/{article}', [ArticleController::class, 'destroy'])->name('articles.destroy');
+
+    Route::get('/admin/reels', [ReelStudioController::class, 'index'])->name('reels.index');
+    Route::get('/admin/articles/{article}/reel', [ReelStudioController::class, 'forArticle'])->name('articles.reel');
+    Route::post('/admin/reels/tts', [ReelStudioController::class, 'generateTts'])->name('reels.tts');
+    Route::post('/admin/reels/convert-mp4', [ReelStudioController::class, 'convertMp4'])->name('reels.convert-mp4');
+    Route::get('/admin/reels/proxy-image', [ReelStudioController::class, 'proxyImage'])->name('reels.proxy-image');
 });
 
 require __DIR__.'/auth.php';

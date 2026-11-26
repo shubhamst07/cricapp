@@ -153,6 +153,9 @@
                                 <x-dropdown-link :href="route('articles.create')">
                                     <span class="text-amber-600 dark:text-amber-400 font-bold">{{ __('Write Article (Admin)') }}</span>
                                 </x-dropdown-link>
+                                <x-dropdown-link :href="route('reels.index')">
+                                    <span class="text-emerald-600 dark:text-emerald-400 font-bold">{{ __('🎬 Reel Studio (Admin)') }}</span>
+                                </x-dropdown-link>
                             @endif
                             <x-dropdown-link :href="route('profile.show')" :active="request()->routeIs('profile.show')">
                                 {{ __('My Profile') }}
@@ -289,6 +292,9 @@
                         @if(Auth::user()->is_admin)
                             <x-responsive-nav-link :href="route('articles.create')" :active="request()->routeIs('articles.create')">
                                 <span class="text-amber-600 dark:text-amber-400 font-bold">{{ __('Write Article (Admin)') }}</span>
+                            </x-responsive-nav-link>
+                            <x-responsive-nav-link :href="route('reels.index')" :active="request()->routeIs('reels.*') || request()->routeIs('articles.reel')">
+                                <span class="text-emerald-600 dark:text-emerald-400 font-bold">{{ __('🎬 Reel Studio (Admin)') }}</span>
                             </x-responsive-nav-link>
                         @endif
                         <x-responsive-nav-link :href="route('profile.show')" :active="request()->routeIs('profile.show')">

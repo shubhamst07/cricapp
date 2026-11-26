@@ -17,9 +17,9 @@ COPY --from=node-builder /app/public/build ./public/build
 RUN cp conf/nginx/nginx-site.conf /etc/nginx/sites-available/default.conf && \
     cp conf/nginx/nginx-site.conf /etc/nginx/sites-enabled/default.conf
 
-# Install Python & Cricbuzz Engine dependencies & Postgres drivers
-RUN apk add --no-cache bash python3 py3-pip py3-lxml py3-beautifulsoup4 py3-requests py3-pydantic php82-pdo_pgsql php82-pgsql && \
-    pip install --no-cache-dir --break-system-packages fastapi uvicorn httpx
+# Install Python, FFmpeg, Edge TTS & Cricbuzz Engine dependencies & Postgres drivers
+RUN apk add --no-cache bash ffmpeg python3 py3-pip py3-lxml py3-beautifulsoup4 py3-requests py3-pydantic php82-pdo_pgsql php82-pgsql && \
+    pip install --no-cache-dir --break-system-packages fastapi uvicorn httpx edge-tts
 
 # Image configuration variables
 ENV SKIP_COMPOSER 1
