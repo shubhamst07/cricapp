@@ -77,6 +77,8 @@
             <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ $adsenseClientId }}" crossorigin="anonymous"></script>
         @endif
 
+        <x-analytics-head />
+
         <!-- Theme Initialization to prevent FOUC -->
         <script>
             if (localStorage.theme === 'light') {

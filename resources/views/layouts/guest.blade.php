@@ -24,6 +24,8 @@
         <link rel="icon" type="image/x-icon" href="/favicon.ico">
         <meta name="theme-color" content="#080d1a">
 
+        <x-analytics-head />
+
         <!-- Non-blocking Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800,900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />

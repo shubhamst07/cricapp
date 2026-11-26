@@ -67,6 +67,7 @@ return [
 
     'google' => [
         'site_verification' => env('GOOGLE_SITE_VERIFICATION', 'CQog30azwDeG1wL2_sRtyCVnJ_SHqfFdeGK08GrnpZA'),
+        'analytics_id' => env('GA_MEASUREMENT_ID', 'G-RBGZ4Z285V'),
     ],
 
 ];
