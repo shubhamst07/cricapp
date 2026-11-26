@@ -30,6 +30,8 @@ ENV REAL_IP_HEADER 1
 ENV PHP_CATCHALL true
 
 # Laravel production flags
+ENV APP_NAME "CricApp.in"
+ENV APP_URL "https://www.cricapp.in"
 ENV APP_ENV production
 ENV APP_DEBUG false
 ENV LOG_CHANNEL stderr

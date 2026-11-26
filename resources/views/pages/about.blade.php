@@ -1,12 +1,16 @@
 @extends('layouts.app')
 
+@section('title', 'About CricApp.in - Cricket Live Scores, Turf Grounds & Umpires')
+@section('meta_description', 'Learn about CricApp.in, founded by Shubham Thakur, bringing live international and local cricket scoring, turf ground booking, and certified umpires across India.')
+@section('canonical', route('about'))
+
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 mb-1">
                 🏏 Grassroots to Global Cricket
             </div>
-            <h2 class="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white leading-tight">About LiveCricket</h2>
+            <h2 class="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white leading-tight">About CricApp.in</h2>
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Empowering every cricket player, team, and tournament with digital live scoring</p>
         </div>
 
@@ -14,7 +18,7 @@
             <a href="{{ route('contact') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold text-xs shadow-md shadow-indigo-600/30 hover:from-indigo-500 transition">
                 <span>📬 Contact Founder</span>
             </a>
-            <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20visited%20LiveCricket" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition">
+            <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20visited%20CricApp.in" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition">
                 <span>💬 WhatsApp</span>
             </a>
         </div>
@@ -29,13 +33,13 @@
         <div class="relative z-10 max-w-3xl space-y-4">
             <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
                 <span class="w-2 h-2 rounded-full bg-rose-400 animate-ping"></span>
-                The LiveCricket Mission
+                The CricApp.in Mission
             </span>
             <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight">
                 Bringing International-Grade Live Scoring to Grassroots Cricket.
             </h1>
             <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
-                LiveCricket was born from a simple belief: every local match deserves an international feel. Whether it's a gully face-off, a corporate trophy, a weekend turf championship, or a Ranji tournament, our platform provides real-time ball-by-ball updates, live scoreboards, certified umpire booking, and premier venue reservations.
+                CricApp.in was born from a simple belief: every local match deserves an international feel. Whether it's a gully face-off, a corporate trophy, a weekend turf championship, or a Ranji tournament, our platform provides real-time ball-by-ball updates, live scoreboards, certified umpire booking, and premier venue reservations.
             </p>
         </div>
     </div>
@@ -68,7 +72,7 @@
                 </div>
 
                 <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl">
-                    "Cricket is in our DNA. We designed LiveCricket to give grassroots players, umpires, and ground owners a complete home where every boundary, wicket, and maiden over is recorded in real-time, giving local athletes the visibility they truly deserve."
+                    "Cricket is in our DNA. We designed CricApp.in to give grassroots players, umpires, and ground owners a complete home where every boundary, wicket, and maiden over is recorded in real-time, giving local athletes the visibility they truly deserve."
                 </p>
 
                 <!-- Founder Contact Info Buttons -->
@@ -80,7 +84,7 @@
                         <span>+91 82197 95479</span>
                     </a>
 
-                    <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20enquiry%20regarding%20LiveCricket" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/25">
+                    <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20enquiry%20regarding%20CricApp.in" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/25">
                         <span>💬 Direct WhatsApp</span>
                     </a>
 

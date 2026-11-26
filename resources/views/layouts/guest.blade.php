@@ -1,3 +1,10 @@
+@php
+    $decodeSeo = static fn (string $val): string => html_entity_decode(trim($val), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $guestTitle = $decodeSeo($__env->yieldContent('title', 'Sign In | CricApp.in'));
+    $guestDesc = $decodeSeo($__env->yieldContent('meta_description', 'Sign in or create your CricApp.in account to manage live cricket matches, player stats, turf ground bookings, and verified umpires.'));
+    $guestRobots = $decodeSeo($__env->yieldContent('robots', 'noindex, follow'));
+    $googleSiteVerification = config('services.google.site_verification');
+@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
     <head>
@@ -5,7 +12,13 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>@yield('title', config('app.name', 'CricApp'))</title>
+        <title>{{ $guestTitle }}</title>
+        <meta name="description" content="{{ $guestDesc }}">
+        <meta name="robots" content="{{ $guestRobots }}">
+        <link rel="canonical" href="{{ url()->current() }}">
+        @if($googleSiteVerification)
+            <meta name="google-site-verification" content="{{ $googleSiteVerification }}">
+        @endif
 
         <!-- PWA & Favicon -->
         <link rel="icon" type="image/x-icon" href="/favicon.ico">

@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@section('title', 'Contact Us | CricApp.in')
+@section('meta_description', 'Contact Shubham Thakur and the CricApp.in team for tournament inquiries, ground partnerships, umpire onboarding, advertising, and platform support.')
+@section('canonical', route('contact'))
+
 @php
     $errors = $errors ?? new \Illuminate\Support\ViewErrorBag();
 @endphp
@@ -11,11 +15,11 @@
                 📬 24/7 Match & Booking Support
             </div>
             <h2 class="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white leading-tight">Contact Us</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Reach out to Shubham Thakur and the LiveCricket team for any assistance or inquiries</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Reach out to Shubham Thakur and the CricApp.in team for any assistance or inquiries</p>
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20inquiry%20about%20LiveCricket" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition">
+            <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20inquiry%20about%20CricApp.in" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition">
                 <span>💬 Quick WhatsApp</span>
             </a>
             <a href="tel:+918219795479" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-800 dark:text-white font-bold text-xs border border-slate-200 dark:border-white/10 transition">
@@ -63,7 +67,7 @@
                         </div>
                         <div>
                             <span class="block text-slate-400 text-[10px] uppercase font-bold">WhatsApp Direct</span>
-                            <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20inquiry%20regarding%20LiveCricket" target="_blank" rel="noopener noreferrer" class="font-extrabold text-emerald-600 dark:text-emerald-400 hover:underline">
+                            <a href="https://wa.me/918219795479?text=Hi%20Shubham,%20I%20have%20an%20inquiry%20regarding%20CricApp.in" target="_blank" rel="noopener noreferrer" class="font-extrabold text-emerald-600 dark:text-emerald-400 hover:underline">
                                 Chat on WhatsApp ⚡
                             </a>
                         </div>

@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@section('title', 'Terms of Service | CricApp.in')
+@section('meta_description', 'Read the CricApp.in Terms of Service covering live cricket scores, community guidelines, ground and umpire bookings, and advertising policies.')
+@section('canonical', route('terms'))
+
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -31,7 +35,7 @@
             </span>
             <h1 class="text-2xl sm:text-3xl font-black text-white">Platform Usage & Service Agreement</h1>
             <p class="text-slate-300 text-sm leading-relaxed">
-                By accessing or using <strong>LiveCricket</strong> (<a href="{{ url('/') }}" class="text-indigo-400 underline">{{ url('/') }}</a>), you agree to be bound by these Terms of Service. If you do not agree to all conditions outlined herein, please discontinue using the platform immediately.
+                By accessing or using <strong>CricApp.in</strong> (<a href="{{ url('/') }}" class="text-indigo-400 underline">{{ url('/') }}</a>), you agree to be bound by these Terms of Service. If you do not agree to all conditions outlined herein, please discontinue using the platform immediately.
             </p>
         </div>
     </div>
@@ -45,7 +49,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">1.</span> About the Service
             </h3>
             <p>
-                LiveCricket is a comprehensive sports technology platform providing live ball-by-ball cricket scoring, grassroots tournament administration, venue and cricket turf ground booking, and verified umpire discovery across India and worldwide.
+                CricApp.in is a comprehensive sports technology platform providing live ball-by-ball cricket scoring, grassroots tournament administration, venue and cricket turf ground booking, and verified umpire discovery across India and worldwide.
             </p>
         </section>
 
@@ -55,7 +59,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">2.</span> User Conduct & Fair Play
             </h3>
             <p>
-                When utilizing LiveCricket's community features, scoring consoles, or booking systems, you agree not to:
+                When utilizing CricApp.in's community features, scoring consoles, or booking systems, you agree not to:
             </p>
             <ul class="list-disc pl-5 space-y-1.5 text-xs sm:text-sm">
                 <li>Submit false, defamatory, fraudulent, or malicious match statistics or player identities.</li>
@@ -71,7 +75,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">3.</span> Advertisements & Sponsorships
             </h3>
             <p class="text-xs sm:text-sm">
-                LiveCricket displays non-obtrusive programmatic advertisements (including via Google AdSense) and direct sponsorship integrations for cricket equipment, local turf grounds, and sports gear. We do not endorse any third-party product or service promoted through advertising banners unless explicitly stated. Users clicking on third-party advertisements do so at their own discretion.
+                CricApp.in displays non-obtrusive programmatic advertisements (including via Google AdSense) and direct sponsorship integrations for cricket equipment, local turf grounds, and sports gear. We do not endorse any third-party product or service promoted through advertising banners unless explicitly stated. Users clicking on third-party advertisements do so at their own discretion.
             </p>
         </section>
 
@@ -81,7 +85,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">4.</span> Ground Bookings & Umpire Reservations
             </h3>
             <p class="text-xs sm:text-sm">
-                LiveCricket facilitates communication and booking inquiries between players, cricket grounds, and verified umpires. Venue availability, pitch conditions, equipment safety, and fair adjudication remain the direct responsibility of the respective venue managers and independent umpires.
+                CricApp.in facilitates communication and booking inquiries between players, cricket grounds, and verified umpires. Venue availability, pitch conditions, equipment safety, and fair adjudication remain the direct responsibility of the respective venue managers and independent umpires.
             </p>
         </section>
 
@@ -91,7 +95,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">5.</span> Intellectual Property & Fair Use
             </h3>
             <p class="text-xs sm:text-sm">
-                The LiveCricket branding, UI design, custom graphics, and software code are proprietary to Shubham Thakur. Cricket team names, logos, tournament insignias, and live scores are used under fair-use principles for sporting commentary, reporting, and fan appreciation.
+                The CricApp.in branding, UI design, custom graphics, and software code are proprietary to Shubham Thakur. Cricket team names, logos, tournament insignias, and live scores are used under fair-use principles for sporting commentary, reporting, and fan appreciation.
             </p>
         </section>
 
@@ -101,7 +105,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">6.</span> Disclaimer of Warranties & Limitation of Liability
             </h3>
             <p class="text-xs sm:text-sm">
-                LiveCricket is provided on an "AS IS" and "AS AVAILABLE" basis. While we strive for 100% accuracy and millisecond-level live score synchronization, we do not warrant that score feeds will be uninterrupted or error-free during severe network disruptions. LiveCricket shall not be held liable for any indirect or consequential damages arising from service interruption.
+                CricApp.in is provided on an "AS IS" and "AS AVAILABLE" basis. While we strive for 100% accuracy and millisecond-level live score synchronization, we do not warrant that score feeds will be uninterrupted or error-free during severe network disruptions. CricApp.in shall not be held liable for any indirect or consequential damages arising from service interruption.
             </p>
         </section>
 

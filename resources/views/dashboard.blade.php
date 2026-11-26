@@ -1,4 +1,7 @@
 <x-app-layout>
+    @section('title', 'Cricket Feed, Match Moments & Fan Buzz | CricApp.in')
+    @section('meta_description', 'Scroll live cricket buzz, match highlights, fan banter, memes, and trending cricket updates on CricApp.in.')
+    @section('canonical', route('feed'))
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">

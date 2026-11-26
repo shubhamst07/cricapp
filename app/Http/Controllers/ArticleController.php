@@ -426,6 +426,7 @@ class ArticleController extends Controller
     protected function clearArticleCache(): void
     {
         Cache::forget('home_top_articles');
+        Cache::forget('sitemap_xml_v1');
         for ($p = 1; $p <= 5; $p++) {
             Cache::forget("articles_index_page_{$p}");
         }

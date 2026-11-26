@@ -1,5 +1,13 @@
 @extends('layouts.app')
 
+@php
+    $gDesc = \Illuminate\Support\Str::limit(trim(($ground->name ?? 'Cricket Ground') . (!empty($ground->city) ? " in {$ground->city}" : '') . '. ' . ($ground->description ?: 'View pitch details, amenities, slot availability, and book this cricket venue online on CricApp.in.')), 158);
+@endphp
+
+@section('title', $ground->name . (!empty($ground->city) ? ' (' . $ground->city . ')' : '') . ' - Book Ground | CricApp.in')
+@section('meta_description', $gDesc)
+@section('canonical', route('grounds.show', $ground))
+
 @section('header')
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">

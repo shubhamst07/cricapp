@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
-@section('title', $meetup->title . ' | LiveCricket Match Meetup')
+@section('title', $meetup->title . ' - Cricket Match Meetup | CricApp.in')
+@section('meta_description', 'Join ' . $meetup->title . (!empty($meetup->city) ? ' in ' . $meetup->city : '') . ' on CricApp.in. View match time, squad slots, and connect with local players.')
+@section('canonical', route('meetups.show', $meetup))
 
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

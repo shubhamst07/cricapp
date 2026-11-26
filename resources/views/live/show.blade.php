@@ -46,17 +46,46 @@
 
     $teamsName = $match['name'] ?? trim(($match['team1_name'] ?? '') . ' vs ' . ($match['team2_name'] ?? ''));
     if ($scoreSnippet) {
-        $pageTitle = "{$scoreSnippet} - {$teamsName} | CricApp";
+        $pageTitle = "{$scoreSnippet} - {$teamsName} | CricApp.in";
     } elseif ($teamsName) {
-        $pageTitle = "{$teamsName} Live Score | CricApp";
+        $pageTitle = "{$teamsName} Live Score & Scorecard | CricApp.in";
     } else {
-        $pageTitle = "Live Cricket Score | CricApp";
+        $pageTitle = "Live Cricket Match Scorecard | CricApp.in";
     }
+
+    $pageDesc = trim(
+        ($teamsName ?: 'Cricket Match') . ' live score' .
+        ($scoreSnippet ? " ({$scoreSnippet})" : '') .
+        (!empty($match['status_text']) ? ' - ' . $match['status_text'] . '.' : '.') .
+        ' Full scorecard, ball-by-ball commentary, squad stats, and match updates on CricApp.in.'
+    );
 @endphp
 
 @extends('layouts.app')
 
 @section('title', $pageTitle)
+@section('meta_description', \Illuminate\Support\Str::limit($pageDesc, 160))
+@section('canonical', route('live-scores.show', $match['id'] ?? ''))
+@section('schema')
+    <script type="application/ld+json">{!! json_encode(array_filter([
+        '@context' => 'https://schema.org',
+        '@type' => 'SportsEvent',
+        'name' => $teamsName ?: 'Live Cricket Match',
+        'sport' => 'Cricket',
+        'description' => $pageDesc,
+        'url' => route('live-scores.show', $match['id'] ?? ''),
+        'startDate' => $match['dateTimeGMT'] ?? null,
+        'location' => !empty($match['venue']) ? [
+            '@type' => 'Place',
+            'name' => $match['venue'],
+        ] : null,
+        'organizer' => [
+            '@type' => 'Organization',
+            'name' => 'CricApp.in',
+            'url' => url('/'),
+        ],
+    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+@endsection
 
 @section('content')
     <div id="match-detail-root"

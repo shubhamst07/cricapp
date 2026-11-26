@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
-@section('title', 'Find Cricket Players & Match Meetups | LiveCricket')
+@section('title', 'Find Cricket Players & Local Match Meetups | CricApp.in')
+@section('meta_description', 'Find nearby cricket players, join weekend turf matches, connect with local cricket circles, or create a match meetup on CricApp.in.')
+@section('canonical', route('meetups.index'))
 
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

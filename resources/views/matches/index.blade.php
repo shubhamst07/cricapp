@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@section('title', 'Local Cricket Matches & Live Scoring Arena | CricApp.in')
+@section('meta_description', 'Browse local cricket matches, live grassroots tournament scorecards, ball-by-ball updates, and live streams on CricApp.in.')
+@section('canonical', route('matches.index'))
+
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

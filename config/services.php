@@ -61,4 +61,12 @@ return [
         'url_endpoint' => env('IMAGEKIT_URL_ENDPOINT', 'https://ik.imagekit.io/muuqkim6d'),
     ],
 
+    'adsense' => [
+        'client_id' => env('ADSENSE_CLIENT_ID'),
+    ],
+
+    'google' => [
+        'site_verification' => env('GOOGLE_SITE_VERIFICATION', 'CQog30azwDeG1wL2_sRtyCVnJ_SHqfFdeGK08GrnpZA'),
+    ],
+
 ];

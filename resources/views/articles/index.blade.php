@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
-@section('title', 'Cricket News, Articles & Stories | CricApp')
+@section('title', 'Cricket News, Coaching & Tactical Stories | CricApp.in')
+@section('meta_description', 'Read expert cricket match reports, tactical breakdowns, coaching drills, grassroots tournament coverage, and cricket news stories on CricApp.in.')
+@section('canonical', route('articles.index'))
 
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

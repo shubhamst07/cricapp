@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@section('title', $umpire->name . ' - Certified Cricket Umpire Profile | CricApp.in')
+@section('meta_description', 'Book certified cricket umpire ' . $umpire->name . ' for tournaments, leather ball or tennis ball matches, view ratings and experience on CricApp.in.')
+@section('canonical', route('umpires.show', $umpire))
+
 @section('header')
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">

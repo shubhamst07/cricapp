@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@section('title', 'Book Certified Cricket Umpires & Match Officials | CricApp.in')
+@section('meta_description', 'Hire verified state, district, and club-certified cricket umpires for local tournaments, corporate matches, and weekend games on CricApp.in.')
+@section('canonical', route('umpires.index'))
+
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

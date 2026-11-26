@@ -1,3 +1,14 @@
+@php
+    $decodeSeo = static fn (string $val): string => html_entity_decode(trim($val), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $seoTitle = $decodeSeo($__env->yieldContent('title', 'CricApp.in - Live Cricket Scores, News & Match Center'));
+    $seoDesc = $decodeSeo($__env->yieldContent('meta_description', 'Watch live international and local cricket scores, ball-by-ball commentary, detailed scorecards, cricket news stories, turf ground bookings, and verified umpires on CricApp.in.'));
+    $seoCanonical = $decodeSeo($__env->yieldContent('canonical', url()->current()));
+    $seoRobots = $decodeSeo($__env->yieldContent('robots', 'index, follow, max-image-preview:large'));
+    $seoOgType = $decodeSeo($__env->yieldContent('og_type', 'website'));
+    $seoImage = $decodeSeo($__env->yieldContent('og_image', url('/icons/icon-512x512.png')));
+    $adsenseClientId = config('services.adsense.client_id');
+    $googleSiteVerification = config('services.google.site_verification');
+@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
     <head>
@@ -5,7 +16,48 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>@yield('title', config('app.name', 'CricApp'))</title>
+        <title>{{ $seoTitle }}</title>
+        <meta name="description" content="{{ $seoDesc }}">
+        <meta name="robots" content="{{ $seoRobots }}">
+        <link rel="canonical" href="{{ $seoCanonical }}">
+        @if($googleSiteVerification)
+            <meta name="google-site-verification" content="{{ $googleSiteVerification }}">
+        @endif
+
+        <!-- Open Graph & Social SEO -->
+        <meta property="og:site_name" content="CricApp.in">
+        <meta property="og:type" content="{{ $seoOgType }}">
+        <meta property="og:title" content="{{ $seoTitle }}">
+        <meta property="og:description" content="{{ $seoDesc }}">
+        <meta property="og:url" content="{{ $seoCanonical }}">
+        <meta property="og:image" content="{{ $seoImage }}">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="{{ $seoTitle }}">
+        <meta name="twitter:description" content="{{ $seoDesc }}">
+        <meta name="twitter:image" content="{{ $seoImage }}">
+        @stack('meta')
+
+        <!-- Structured Data (JSON-LD) -->
+        @hasSection('schema')
+            @yield('schema')
+        @else
+            <script type="application/ld+json">{!! json_encode([
+                '@context' => 'https://schema.org',
+                '@type' => 'WebSite',
+                'name' => 'CricApp.in',
+                'url' => rtrim(config('app.url', 'https://www.cricapp.in'), '/'),
+                'description' => $seoDesc,
+                'publisher' => [
+                    '@type' => 'Organization',
+                    'name' => 'CricApp.in',
+                    'url' => rtrim(config('app.url', 'https://www.cricapp.in'), '/'),
+                    'logo' => [
+                        '@type' => 'ImageObject',
+                        'url' => url('/icons/icon-512x512.png'),
+                    ],
+                ],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+        @endif
 
         <!-- PWA & Mobile App Meta Tags -->
         <link rel="manifest" href="/manifest.json">
@@ -19,10 +71,10 @@
         <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
         <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png">
 
-        <!-- Google AdSense Ready Tag -->
-        @if(env('ADSENSE_CLIENT_ID'))
-            <meta name="adsense-client" content="{{ env('ADSENSE_CLIENT_ID') }}">
-            <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ env('ADSENSE_CLIENT_ID') }}" crossorigin="anonymous"></script>
+        <!-- Google AdSense Tag (cached safely via config/services.php) -->
+        @if($adsenseClientId)
+            <meta name="adsense-client" content="{{ $adsenseClientId }}">
+            <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ $adsenseClientId }}" crossorigin="anonymous"></script>
         @endif
 
         <!-- Theme Initialization to prevent FOUC -->
@@ -101,7 +153,7 @@
                                         <path d="M2 12h20" />
                                     </svg>
                                 </div>
-                                <span class="font-black text-lg text-slate-900 dark:text-white tracking-tight">Live<span class="text-indigo-600 dark:text-indigo-400">Cricket</span></span>
+                                <span class="font-black text-lg text-slate-900 dark:text-white tracking-tight">CricApp<span class="text-indigo-600 dark:text-indigo-400">.in</span></span>
                             </div>
                             <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                                 Real-time cricket scorecards, grassroots tournament management, verified umpire hiring, and venue booking for cricket lovers.

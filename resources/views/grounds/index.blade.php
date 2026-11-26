@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@section('title', 'Book Cricket Grounds, Turf Pitches & Stadiums | CricApp.in')
+@section('meta_description', 'Discover and book local cricket grounds, floodlit turf pitches, nets, and stadiums across India with transparent slot pricing on CricApp.in.')
+@section('canonical', route('grounds.index'))
+
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

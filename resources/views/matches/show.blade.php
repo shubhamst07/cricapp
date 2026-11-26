@@ -1,6 +1,33 @@
 @extends('layouts.app')
 
-@section('title', ($match->team1_name ?? 'Team 1') . ' vs ' . ($match->team2_name ?? 'Team 2') . ' - Live Score | ' . config('app.name', 'LiveCricket'))
+@php
+    $mTitle = ($match->team1_name ?? 'Team 1') . ' vs ' . ($match->team2_name ?? 'Team 2');
+    $mDesc = trim("{$mTitle} live cricket scorecard, ball-by-ball commentary, player stats, and match result" . ($match->tournament_name ? " ({$match->tournament_name})" : '') . ($match->venue ? " at {$match->venue}" : '') . ' on CricApp.in.');
+@endphp
+
+@section('title', $mTitle . ' - Live Score & Scorecard | CricApp.in')
+@section('meta_description', \Illuminate\Support\Str::limit($mDesc, 160))
+@section('canonical', route('matches.show', $match))
+@section('schema')
+    <script type="application/ld+json">{!! json_encode(array_filter([
+        '@context' => 'https://schema.org',
+        '@type' => 'SportsEvent',
+        'name' => $mTitle,
+        'sport' => 'Cricket',
+        'description' => $mDesc,
+        'url' => route('matches.show', $match),
+        'startDate' => optional($match->match_date)->toAtomString(),
+        'location' => !empty($match->venue) ? [
+            '@type' => 'Place',
+            'name' => $match->venue,
+        ] : null,
+        'organizer' => [
+            '@type' => 'Organization',
+            'name' => 'CricApp.in',
+            'url' => url('/'),
+        ],
+    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+@endsection
 
 @section('header')
     @php

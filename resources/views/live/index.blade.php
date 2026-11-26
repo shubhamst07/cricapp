@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
-@section('title', 'CricApp - Real-Time Cricket Scores, Ball-by-Ball & Updates')
+@section('title', 'CricApp.in - Live Cricket Scores, Ball-by-Ball & Local Match Center')
+@section('meta_description', 'Follow live international cricket scores, ball-by-ball commentary, local tournament scorecards, cricket news articles, turf ground bookings, and verified umpires on CricApp.in.')
+@section('canonical', ($section ?? 'international') === 'local' ? url('/live-scores?section=local') : url('/'))
 
 @section('content')
     <div id="live-scores-root"

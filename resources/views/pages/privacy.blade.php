@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@section('title', 'Privacy Policy | CricApp.in')
+@section('meta_description', 'Read CricApp.in Privacy Policy covering user privacy, Google AdSense advertising cookies, cricket data attribution, security, and grievance contact details.')
+@section('canonical', route('privacy'))
+
 @section('header')
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -27,11 +31,11 @@
     <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900/40 via-slate-900 to-[#0b1120] border border-white/10 p-6 sm:p-10 shadow-2xl text-white">
         <div class="space-y-3">
             <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                🛡️ LiveCricket Privacy Commitment
+                🛡️ CricApp.in Privacy Commitment
             </span>
             <h1 class="text-2xl sm:text-3xl font-black text-white">Your Privacy Matters to Us</h1>
             <p class="text-slate-300 text-sm leading-relaxed">
-                Welcome to <strong>LiveCricket</strong> (<a href="{{ url('/') }}" class="text-indigo-400 underline">{{ url('/') }}</a>), founded by <strong>Shubham Thakur</strong>. We are committed to protecting your personal information and your right to privacy. If you have any questions or concerns about this policy or our practices, please contact us at <a href="mailto:shubhamthakurst007@gmail.com" class="text-indigo-400 underline">shubhamthakurst007@gmail.com</a>.
+                Welcome to <strong>CricApp.in</strong> (<a href="{{ url('/') }}" class="text-indigo-400 underline">{{ url('/') }}</a>), founded by <strong>Shubham Thakur</strong>. We are committed to protecting your personal information and your right to privacy. If you have any questions or concerns about this policy or our practices, please contact us at <a href="mailto:shubhamthakurst007@gmail.com" class="text-indigo-400 underline">shubhamthakurst007@gmail.com</a>.
             </p>
         </div>
     </div>
@@ -45,7 +49,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">1.</span> Information We Collect
             </h3>
             <p>
-                When you visit or interact with LiveCricket, we may collect information about you in a few ways:
+                When you visit or interact with CricApp.in, we may collect information about you in a few ways:
             </p>
             <ul class="list-disc pl-5 space-y-2 text-xs sm:text-sm">
                 <li><strong>Personal Information You Provide:</strong> Name, email address, phone number, and inquiry details provided voluntarily via our Contact or Booking forms.</li>
@@ -70,7 +74,7 @@
                     <strong>Opting Out of Personalized Advertising:</strong> Users may opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" class="text-indigo-600 dark:text-indigo-400 font-bold underline">Google Ads Settings</a>. Alternatively, you can opt out of third-party vendor cookies for personalized advertising by visiting <a href="https://www.aboutads.info" target="_blank" rel="noopener noreferrer" class="text-indigo-600 dark:text-indigo-400 font-bold underline">aboutads.info</a> or the Network Advertising Initiative at <a href="https://optout.networkadvertising.org/" target="_blank" rel="noopener noreferrer" class="text-indigo-600 dark:text-indigo-400 font-bold underline">optout.networkadvertising.org</a>.
                 </li>
                 <li>
-                    <strong>Cookies & Web Beacons:</strong> LiveCricket uses first-party session cookies to keep you logged in and preserve dark/light theme preferences. Third-party ad networks may place and read cookies on your browser or use web beacons to collect information as a result of ad serving.
+                    <strong>Cookies & Web Beacons:</strong> CricApp.in uses first-party session cookies to keep you logged in and preserve dark/light theme preferences. Third-party ad networks may place and read cookies on your browser or use web beacons to collect information as a result of ad serving.
                 </li>
             </ul>
         </section>
@@ -96,7 +100,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">4.</span> Cricket Data & Third-Party Content
             </h3>
             <p class="text-xs sm:text-sm">
-                LiveCricket aggregates public cricket scores, fixtures, player statistics, and commentary feeds for informational and sporting enthusiasm purposes. Live match data is synchronized through publicly accessible live sports engines and verified community scorekeepers. All trademarks, player names, team crests, and tournament titles belong to their respective statutory cricket boards and rights holders.
+                CricApp.in aggregates public cricket scores, fixtures, player statistics, and commentary feeds for informational and sporting enthusiasm purposes. Live match data is synchronized through publicly accessible live sports engines and verified community scorekeepers. All trademarks, player names, team crests, and tournament titles belong to their respective statutory cricket boards and rights holders.
             </p>
         </section>
 
@@ -126,7 +130,7 @@
                 <span class="text-indigo-600 dark:text-indigo-400">7.</span> Grievance Officer & Contact Details
             </h3>
             <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 text-xs sm:text-sm space-y-1">
-                <p><strong>Platform:</strong> LiveCricket App</p>
+                <p><strong>Platform:</strong> CricApp.in</p>
                 <p><strong>Data Officer & Founder:</strong> Shubham Thakur</p>
                 <p><strong>Email:</strong> <a href="mailto:shubhamthakurst007@gmail.com" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">shubhamthakurst007@gmail.com</a></p>
                 <p><strong>Phone:</strong> <a href="tel:+918219795479" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">+91 82197 95479</a></p>

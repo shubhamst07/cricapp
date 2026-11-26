@@ -1,5 +1,22 @@
+User-agent: Googlebot
+Allow: /
+Allow: /ads.txt
+
+User-agent: Mediapartners-Google
+Allow: /
+
 User-agent: *
+Allow: /
 Disallow: /admin/
 Disallow: /profile/
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /matches/create
+Disallow: /grounds/create
+Disallow: /meetups/create
+Disallow: /umpires/register
+Disallow: /inquiries
 
-Sitemap: https://cricapp.in/sitemap.xml
+Sitemap: https://www.cricapp.in/sitemap.xml

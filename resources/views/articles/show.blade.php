@@ -1,6 +1,55 @@
 @extends('layouts.app')
 
-@section('title', $article->title . ' | CricApp News')
+@php
+    $articleDesc = \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/', ' ', strip_tags($article->excerpt ?: $article->content))), 158);
+    $articleUrl = route('articles.show', $article->slug);
+@endphp
+
+@section('title', $article->title . ' | CricApp.in')
+@section('meta_description', $articleDesc)
+@section('canonical', $articleUrl)
+@section('og_type', 'article')
+@section('og_image', $article->cover_image_url)
+
+@push('meta')
+    @if($article->published_at ?? $article->created_at)
+        <meta property="article:published_time" content="{{ ($article->published_at ?? $article->created_at)->toAtomString() }}">
+    @endif
+    @if($article->updated_at)
+        <meta property="article:modified_time" content="{{ $article->updated_at->toAtomString() }}">
+    @endif
+    <meta property="article:section" content="{{ $article->category }}">
+@endpush
+
+@section('schema')
+    <script type="application/ld+json">{!! json_encode(array_filter([
+        '@context' => 'https://schema.org',
+        '@type' => 'NewsArticle',
+        'headline' => $article->title,
+        'description' => $articleDesc,
+        'articleSection' => $article->category,
+        'image' => [$article->cover_image_url],
+        'datePublished' => ($article->published_at ?? $article->created_at)?->toAtomString(),
+        'dateModified' => ($article->updated_at ?? $article->published_at ?? $article->created_at)?->toAtomString(),
+        'author' => [
+            '@type' => 'Person',
+            'name' => $article->author_name ?: 'CricApp Editorial Team',
+        ],
+        'publisher' => [
+            '@type' => 'Organization',
+            'name' => 'CricApp.in',
+            'url' => url('/'),
+            'logo' => [
+                '@type' => 'ImageObject',
+                'url' => url('/icons/icon-512x512.png'),
+            ],
+        ],
+        'mainEntityOfPage' => [
+            '@type' => 'WebPage',
+            '@id' => $articleUrl,
+        ],
+    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+@endsection
 
 @section('header')
     <div class="flex items-center gap-3">
