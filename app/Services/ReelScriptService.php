@@ -65,7 +65,7 @@ class ReelScriptService
 
         $sections = $this->extractSections((string) ($article->content ?? ''));
         $middleSlides = array_slice($sections, 0, 3);
-        $sectionsHi = $this->isDevanagari((string) ($article->content_hi ?? ''))
+        $sectionsHi = $this->isMostlyHindi((string) ($article->content_hi ?? ''))
             ? $this->extractSections((string) $article->content_hi)
             : [];
 
@@ -84,10 +84,10 @@ class ReelScriptService
             ? Str::limit($excerpt, 105)
             : ($middleSlides[0]['headline'] ?? 'Full breakdown inside.');
 
-        $titleHi = $this->isDevanagari((string) ($article->title_hi ?? ''))
+        $titleHi = $this->isMostlyHindi((string) ($article->title_hi ?? ''))
             ? $this->cleanText((string) $article->title_hi)
             : '';
-        $excerptHi = $this->isDevanagari((string) ($article->excerpt_hi ?? ''))
+        $excerptHi = $this->isMostlyHindi((string) ($article->excerpt_hi ?? ''))
             ? $this->cleanText((string) $article->excerpt_hi)
             : '';
 
@@ -110,7 +110,7 @@ class ReelScriptService
         foreach ($middleSlides as $idx => $sec) {
             $bgImage = ($idx % 2 === 1 && isset($curated[$idx])) ? $curated[$idx] : $coverUrl;
             $enSpeech = $this->toSpeechSentence($sec['narration']);
-            $hiSpeech = isset($sectionsHi[$idx]['narration']) && $this->isDevanagari($sectionsHi[$idx]['narration'])
+            $hiSpeech = isset($sectionsHi[$idx]['narration']) && $this->isMostlyHindi($sectionsHi[$idx]['narration'])
                 ? $this->toSpeechSentence($sectionsHi[$idx]['narration'])
                 : $this->translateToHindiFast($enSpeech);
 
@@ -291,59 +291,135 @@ class ReelScriptService
     }
 
     /**
-     * Fast cached English -> Hindi translation for natural Hindi cricket voiceover.
+     * Check that the majority of script letters are Devanagari Hindi (not 1 symbol in English text).
+     */
+    public function isMostlyHindi(string $text): bool
+    {
+        $devCount = preg_match_all('/[\x{0900}-\x{0963}\x{0966}-\x{097F}]/u', $text) ?: 0;
+        $latinCount = preg_match_all('/[A-Za-z]/', $text) ?: 0;
+        return $devCount >= 6 && $devCount >= $latinCount;
+    }
+
+    /**
+     * Fast cached English -> Hindi translation with multi-provider fallback (Render-safe).
      */
     public function translateToHindiFast(string $text): string
     {
         $clean = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
-        if ($clean === '' || $this->isDevanagari($clean)) {
+        if ($clean === '' || $this->isMostlyHindi($clean)) {
             return $clean;
         }
 
-        // Temporarily protect brand pronunciation during translation
+        // Protect brand pronunciation during translation
         $prepared = preg_replace('/CricApp\.in/i', 'CricApp dot in', $clean) ?? $clean;
-        $cacheKey = 'reel_hi_script_v1_' . md5($prepared);
+        $cacheKey = 'reel_hi_script_v2_' . md5($prepared);
 
         try {
             $cached = Cache::get($cacheKey);
-            if (is_string($cached) && $this->isDevanagari($cached)) {
+            if (is_string($cached) && $this->isMostlyHindi($cached)) {
                 return $cached;
             }
         } catch (\Throwable $e) {
             // Ignore cache read error
         }
 
+        $translated = $this->translateChunkViaProviders($prepared);
+
+        if ($translated !== '' && $this->isMostlyHindi($translated)) {
+            try {
+                Cache::put($cacheKey, $translated, now()->addDays(14));
+            } catch (\Throwable $e) {
+                // Ignore cache write error
+            }
+            return $translated;
+        }
+
+        return $clean;
+    }
+
+    private function translateChunkViaProviders(string $text): string
+    {
+        // 1. Google clients5 endpoint (fast compact JSON)
         try {
-            $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=hi&dt=t&q=' . urlencode($prepared);
-            $response = Http::timeout(3)
+            $resp = Http::timeout(3)
                 ->withHeaders([
                     'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
                 ])
-                ->get($url);
+                ->get('https://clients5.google.com/translate_a/t', [
+                    'client' => 'dict-chrome-ex',
+                    'sl' => 'auto',
+                    'tl' => 'hi',
+                    'q' => $text,
+                ]);
+            if ($resp->successful()) {
+                $arr = $resp->json();
+                $candidate = '';
+                if (is_array($arr) && isset($arr[0])) {
+                    $candidate = is_string($arr[0]) ? $arr[0] : (string) ($arr[0][0] ?? '');
+                }
+                $candidate = trim($candidate);
+                if ($candidate !== '' && $this->isMostlyHindi($candidate)) {
+                    return $candidate;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Try next provider
+        }
 
-            if ($response->successful()) {
-                $arr = $response->json();
+        // 2. MyMemory API (reliable from cloud/Render AWS server IPs)
+        try {
+            $snippet = mb_substr($text, 0, 480);
+            $resp = Http::timeout(4)
+                ->withHeaders([
+                    'User-Agent' => 'CricAppNews/2.0 (Cricket Reel Studio)',
+                    'Accept' => 'application/json',
+                ])
+                ->get('https://api.mymemory.translated.net/get', [
+                    'q' => $snippet,
+                    'langpair' => 'en|hi',
+                ]);
+            if ($resp->successful()) {
+                $json = $resp->json();
+                $res = trim(html_entity_decode((string) ($json['responseData']['translatedText'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                if ($res !== '' && !str_contains(strtoupper($res), 'MYMEMORY WARNING') && $this->isMostlyHindi($res)) {
+                    return $res;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Try next provider
+        }
+
+        // 3. Google Translate GTX endpoint
+        try {
+            $resp = Http::timeout(3)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
+                ])
+                ->get('https://translate.googleapis.com/translate_a/single', [
+                    'client' => 'gtx',
+                    'sl' => 'auto',
+                    'tl' => 'hi',
+                    'dt' => 't',
+                    'q' => $text,
+                ]);
+            if ($resp->successful()) {
+                $arr = $resp->json();
                 if (is_array($arr) && isset($arr[0]) && is_array($arr[0])) {
-                    $translated = '';
+                    $candidate = '';
                     foreach ($arr[0] as $part) {
-                        $translated .= $part[0] ?? '';
+                        $candidate .= $part[0] ?? '';
                     }
-                    $translated = trim($translated);
-                    if ($translated !== '' && $this->isDevanagari($translated)) {
-                        try {
-                            Cache::put($cacheKey, $translated, now()->addDays(14));
-                        } catch (\Throwable $e) {
-                            // Ignore cache write error
-                        }
-                        return $translated;
+                    $candidate = trim($candidate);
+                    if ($candidate !== '' && $this->isMostlyHindi($candidate)) {
+                        return $candidate;
                     }
                 }
             }
         } catch (\Throwable $e) {
-            // Fall through safely
+            // Ignore
         }
 
-        return $clean;
+        return '';
     }
 
     private function buildSocialCaption(Article $article, string $title, string $excerpt): string

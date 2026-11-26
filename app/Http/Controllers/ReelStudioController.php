@@ -97,9 +97,9 @@ class ReelStudioController extends Controller
         $wasTranslated = false;
 
         // If user picked a Hindi voice (Madhur/Swara) with English text, auto-translate to Hindi script first
-        if ($autoHindi && Str::startsWith($voice, 'hi-') && !$scriptService->isDevanagari($cleanText)) {
+        if ($autoHindi && Str::startsWith($voice, 'hi-') && !$scriptService->isMostlyHindi($cleanText)) {
             $hindiText = $scriptService->translateToHindiFast($cleanText);
-            if ($scriptService->isDevanagari($hindiText)) {
+            if ($scriptService->isMostlyHindi($hindiText)) {
                 $spokenText = $hindiText;
                 $wasTranslated = true;
             }
@@ -116,8 +116,8 @@ class ReelStudioController extends Controller
             ]);
             $payload = $response->json();
             if ($response->ok() && is_array($payload) && !empty($payload['audio_base64'])) {
-                $payload['spoken_text'] = $spokenText;
-                $payload['translated'] = $wasTranslated;
+                $payload['spoken_text'] = $payload['spoken_text'] ?? $spokenText;
+                $payload['translated'] = $wasTranslated || !empty($payload['translated']);
                 return response()->json($payload);
             }
         } catch (\Throwable $e) {
@@ -127,8 +127,8 @@ class ReelStudioController extends Controller
         // 2. Fallback A: Direct python3 tts_cli.py inside container (edge-tts + gTTS)
         $cliPayload = $this->runPythonTtsCli($spokenText, $voice, $rate, $pitch);
         if ($cliPayload !== null) {
-            $cliPayload['spoken_text'] = $spokenText;
-            $cliPayload['translated'] = $wasTranslated;
+            $cliPayload['spoken_text'] = $cliPayload['spoken_text'] ?? $spokenText;
+            $cliPayload['translated'] = $wasTranslated || !empty($cliPayload['translated']);
             return response()->json($cliPayload);
         }
 

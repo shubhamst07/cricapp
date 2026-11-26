@@ -21,6 +21,29 @@ try:
 except ImportError:
     gTTS = None
 
+try:
+    from deep_translator import GoogleTranslator
+except ImportError:
+    GoogleTranslator = None
+
+
+def is_mostly_hindi(text: str) -> bool:
+    dev = len(re.findall(r"[\u0900-\u0963\u0966-\u097F]", text or ""))
+    latin = len(re.findall(r"[A-Za-z]", text or ""))
+    return dev >= 6 and dev >= latin
+
+
+def translate_hindi_python(text: str) -> str:
+    if is_mostly_hindi(text) or GoogleTranslator is None:
+        return text
+    try:
+        translated = GoogleTranslator(source="auto", target="hi").translate(text[:500])
+        if translated and is_mostly_hindi(translated):
+            return translated.strip()
+    except Exception:
+        pass
+    return text
+
 
 ALLOWED_VOICES = {
     "en-IN-PrabhatNeural",
@@ -96,17 +119,26 @@ async def synthesize_best(text: str, voice: str = "hi-IN-MadhurNeural", rate: st
     if not re.match(r"^[+-](?:[0-9]|[12][0-9]|30)Hz$", safe_pitch):
         safe_pitch = "+0Hz"
 
+    was_translated = False
+    if safe_voice.startswith("hi-") and not is_mostly_hindi(clean_text):
+        hi_text = await asyncio.to_thread(translate_hindi_python, clean_text)
+        if hi_text and is_mostly_hindi(hi_text):
+            clean_text = hi_text
+            was_translated = True
+
     errors = []
     if edge_tts is not None:
         try:
             audio_bytes, boundaries, engine = await asyncio.wait_for(
                 synthesize_edge(clean_text, safe_voice, safe_rate, safe_pitch),
-                timeout=12.0,
+                timeout=6.0,
             )
             return {
                 "status": "success",
                 "engine": engine,
                 "voice": safe_voice,
+                "spoken_text": clean_text,
+                "translated": was_translated,
                 "mime_type": "audio/mpeg",
                 "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
                 "boundaries": boundaries,
@@ -121,6 +153,8 @@ async def synthesize_best(text: str, voice: str = "hi-IN-MadhurNeural", rate: st
                 "status": "success",
                 "engine": engine,
                 "voice": safe_voice,
+                "spoken_text": clean_text,
+                "translated": was_translated,
                 "mime_type": "audio/mpeg",
                 "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
                 "boundaries": boundaries,
