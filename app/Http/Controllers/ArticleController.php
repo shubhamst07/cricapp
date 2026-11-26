@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Article;
 use App\Services\ArticleGeneratorService;
+use App\Services\ImageKitService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -201,7 +202,7 @@ class ArticleController extends Controller
     /**
      * Store a newly created article (Admin only).
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ImageKitService $imageKit): RedirectResponse
     {
         $this->authorizeAdmin();
         $this->ensureDatabaseReady();
@@ -211,7 +212,7 @@ class ArticleController extends Controller
             'category' => 'required|string|max:60',
             'excerpt' => 'nullable|string|max:500',
             'content' => 'required|string',
-            'featured_image_file' => 'nullable|image|max:5120',
+            'featured_image_file' => 'nullable|mimes:jpg,jpeg,png,webp,gif,avif|max:10240',
             'featured_image_url' => 'nullable|url|max:500',
             'author_name' => 'nullable|string|max:100',
             'tags' => 'nullable|string|max:255',
@@ -228,22 +229,8 @@ class ArticleController extends Controller
             $counter++;
         }
 
-        // Handle Image upload or URL
-        $featuredImage = $validated['featured_image_url'] ?? null;
-        if ($request->hasFile('featured_image_file')) {
-            $file = $request->file('featured_image_file');
-            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
-            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) {
-                $ext = 'jpg';
-            }
-            $filename = 'art_' . time() . '_' . Str::random(8) . '.' . $ext;
-            $destDir = public_path('uploads/articles');
-            if (!file_exists($destDir)) {
-                @mkdir($destDir, 0777, true);
-            }
-            $file->move($destDir, $filename);
-            $featuredImage = '/uploads/articles/' . $filename;
-        }
+        // Upload uploaded file or third-party URL to permanent ImageKit Cloud CDN
+        $featuredImage = $this->resolveFeaturedImage($request, $imageKit, $validated['featured_image_url'] ?? null);
 
         // Calculate reading time based on word count
         $wordCount = str_word_count(strip_tags($validated['content']));
@@ -294,7 +281,7 @@ class ArticleController extends Controller
     /**
      * Update the specified article (Admin only).
      */
-    public function update(Request $request, Article $article): RedirectResponse
+    public function update(Request $request, Article $article, ImageKitService $imageKit): RedirectResponse
     {
         $this->authorizeAdmin();
 
@@ -303,7 +290,7 @@ class ArticleController extends Controller
             'category' => 'required|string|max:60',
             'excerpt' => 'nullable|string|max:500',
             'content' => 'required|string',
-            'featured_image_file' => 'nullable|image|max:5120',
+            'featured_image_file' => 'nullable|mimes:jpg,jpeg,png,webp,gif,avif|max:10240',
             'featured_image_url' => 'nullable|url|max:500',
             'author_name' => 'nullable|string|max:100',
             'tags' => 'nullable|string|max:255',
@@ -311,25 +298,13 @@ class ArticleController extends Controller
             'is_featured' => 'nullable|boolean',
         ]);
 
-        // Keep or update image
-        $featuredImage = $article->featured_image;
-        if (!empty($validated['featured_image_url'])) {
-            $featuredImage = $validated['featured_image_url'];
-        }
-        if ($request->hasFile('featured_image_file')) {
-            $file = $request->file('featured_image_file');
-            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
-            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) {
-                $ext = 'jpg';
-            }
-            $filename = 'art_' . time() . '_' . Str::random(8) . '.' . $ext;
-            $destDir = public_path('uploads/articles');
-            if (!file_exists($destDir)) {
-                @mkdir($destDir, 0777, true);
-            }
-            $file->move($destDir, $filename);
-            $featuredImage = '/uploads/articles/' . $filename;
-        }
+        // Keep existing or upload new file/URL to permanent ImageKit Cloud CDN
+        $featuredImage = $this->resolveFeaturedImage(
+            $request,
+            $imageKit,
+            $validated['featured_image_url'] ?? null,
+            $article->featured_image
+        );
 
         $wordCount = str_word_count(strip_tags($validated['content']));
         $readingTime = max(1, (int) ceil($wordCount / 200));
@@ -418,6 +393,56 @@ class ArticleController extends Controller
 
         return redirect()->route('articles.index')
             ->with('success', 'Article deleted successfully.');
+    }
+
+    /**
+     * Resolve or upload the article featured image to permanent ImageKit Cloud CDN.
+     */
+    protected function resolveFeaturedImage(
+        Request $request,
+        ImageKitService $imageKit,
+        ?string $featuredImageUrl = null,
+        ?string $existingImage = null
+    ): ?string {
+        if ($request->hasFile('featured_image_file')) {
+            $file = $request->file('featured_image_file');
+            if ($file && $file->isValid()) {
+                $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+                if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'])) {
+                    $ext = 'jpg';
+                }
+                $filename = 'art_' . time() . '_' . Str::random(8) . '.' . $ext;
+                $cloudUrl = $imageKit->upload($file, '/cricapp/articles', $filename);
+                if ($cloudUrl) {
+                    return $cloudUrl;
+                }
+
+                Log::warning('ImageKit article upload failed, falling back to local storage.');
+                $destDir = public_path('uploads/articles');
+                if (!file_exists($destDir)) {
+                    @mkdir($destDir, 0777, true);
+                }
+                $file->move($destDir, $filename);
+                return '/uploads/articles/' . $filename;
+            }
+        }
+
+        if (!empty($featuredImageUrl)) {
+            $cleanUrl = trim($featuredImageUrl);
+            if (
+                $cleanUrl !== $existingImage &&
+                !str_contains($cleanUrl, 'ik.imagekit.io') &&
+                !str_contains($cleanUrl, 'images.unsplash.com')
+            ) {
+                $mirrored = $imageKit->upload($cleanUrl, '/cricapp/articles', 'art_url_' . time() . '_' . Str::random(6));
+                if ($mirrored) {
+                    return $mirrored;
+                }
+            }
+            return $cleanUrl;
+        }
+
+        return $existingImage;
     }
 
     /**
