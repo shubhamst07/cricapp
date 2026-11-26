@@ -89,6 +89,9 @@
                                     <option value="{{ $voice['id'] }}" @selected($voice['id'] === ($project['voice'] ?? 'hi-IN-MadhurNeural'))>{{ $voice['label'] }}</option>
                                 @endforeach
                             </select>
+                            <p class="mt-1 text-[10px] text-emerald-400/90 font-semibold">
+                                Hindi voice (Madhur / Swara) par script automatically Hindi mein generate &amp; translate hokar boli jaati hai.
+                            </p>
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Speaking Speed</label>

@@ -842,6 +842,7 @@ export function initReelStudio(root) {
                         voice,
                         rate,
                         pitch: '+0Hz',
+                        auto_translate_hindi: true,
                     }),
                 });
 
@@ -851,7 +852,11 @@ export function initReelStudio(root) {
                 }
 
                 if (data.engine) lastEngine = data.engine;
+                if (data.translated && data.spoken_text) {
+                    slide.narration = data.spoken_text;
+                }
 
+                const finalKey = `${voice}|${rate}|${String(slide.narration || speechText).trim()}`;
                 const arrayBuf = base64ToArrayBuffer(data.audio_base64);
                 const decoded = await audioCtx.decodeAudioData(arrayBuf);
                 // Match slide duration tightly to natural speech + 0.45s breathing gap
@@ -859,8 +864,8 @@ export function initReelStudio(root) {
                 newBuffers.push({
                     buffer: decoded,
                     boundaries: Array.isArray(data.boundaries) ? data.boundaries : [],
-                    text: speechText,
-                    cacheKey,
+                    text: slide.narration || speechText,
+                    cacheKey: finalKey,
                 });
             }
 

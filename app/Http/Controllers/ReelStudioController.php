@@ -73,7 +73,7 @@ class ReelStudioController extends Controller
      * Generate free Hindi / Indian-English voiceover MP3.
      * Fallback chain: score-engine HTTP -> in-container python tts_cli.py (edge-tts/gTTS) -> direct Google TTS HTTP.
      */
-    public function generateTts(Request $request)
+    public function generateTts(Request $request, ReelScriptService $scriptService)
     {
         $this->authorizeAdmin();
 
@@ -82,24 +82,42 @@ class ReelStudioController extends Controller
             'voice' => 'required|string|max:64',
             'rate' => 'nullable|string|max:16',
             'pitch' => 'nullable|string|max:16',
+            'auto_translate_hindi' => 'nullable|boolean',
         ]);
 
         $cleanText = preg_replace('/\s+/u', ' ', trim($validated['text']));
         $voice = trim($validated['voice']);
         $rate = trim((string) ($validated['rate'] ?? '+5%'));
         $pitch = trim((string) ($validated['pitch'] ?? '+0Hz'));
+        $autoHindi = $request->has('auto_translate_hindi')
+            ? $request->boolean('auto_translate_hindi')
+            : true;
+
+        $spokenText = $cleanText;
+        $wasTranslated = false;
+
+        // If user picked a Hindi voice (Madhur/Swara) with English text, auto-translate to Hindi script first
+        if ($autoHindi && Str::startsWith($voice, 'hi-') && !$scriptService->isDevanagari($cleanText)) {
+            $hindiText = $scriptService->translateToHindiFast($cleanText);
+            if ($scriptService->isDevanagari($hindiText)) {
+                $spokenText = $hindiText;
+                $wasTranslated = true;
+            }
+        }
 
         // 1. Fast path: score-engine HTTP daemon if running on port 6020
         $engineUrl = rtrim((string) config('services.cricket.local_url', 'http://127.0.0.1:6020'), '/');
         try {
             $response = Http::connectTimeout(2)->timeout(12)->post($engineUrl . '/tts', [
-                'text' => $cleanText,
+                'text' => $spokenText,
                 'voice' => $voice,
                 'rate' => $rate,
                 'pitch' => $pitch,
             ]);
             $payload = $response->json();
             if ($response->ok() && is_array($payload) && !empty($payload['audio_base64'])) {
+                $payload['spoken_text'] = $spokenText;
+                $payload['translated'] = $wasTranslated;
                 return response()->json($payload);
             }
         } catch (\Throwable $e) {
@@ -107,14 +125,18 @@ class ReelStudioController extends Controller
         }
 
         // 2. Fallback A: Direct python3 tts_cli.py inside container (edge-tts + gTTS)
-        $cliPayload = $this->runPythonTtsCli($cleanText, $voice, $rate, $pitch);
+        $cliPayload = $this->runPythonTtsCli($spokenText, $voice, $rate, $pitch);
         if ($cliPayload !== null) {
+            $cliPayload['spoken_text'] = $spokenText;
+            $cliPayload['translated'] = $wasTranslated;
             return response()->json($cliPayload);
         }
 
         // 3. Fallback B: Pure-PHP Google Translate TTS MP3 (works even if Python daemon/packages unavailable)
-        $googlePayload = $this->fetchGoogleTranslateTts($cleanText, $voice);
+        $googlePayload = $this->fetchGoogleTranslateTts($spokenText, $voice);
         if ($googlePayload !== null) {
+            $googlePayload['spoken_text'] = $spokenText;
+            $googlePayload['translated'] = $wasTranslated;
             return response()->json($googlePayload);
         }
 

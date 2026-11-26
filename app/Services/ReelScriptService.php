@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Article;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class ReelScriptService
@@ -63,6 +65,9 @@ class ReelScriptService
 
         $sections = $this->extractSections((string) ($article->content ?? ''));
         $middleSlides = array_slice($sections, 0, 3);
+        $sectionsHi = $this->isDevanagari((string) ($article->content_hi ?? ''))
+            ? $this->extractSections((string) $article->content_hi)
+            : [];
 
         // Ensure at least 2 content slides even for very short articles
         if (empty($middleSlides)) {
@@ -79,23 +84,42 @@ class ReelScriptService
             ? Str::limit($excerpt, 105)
             : ($middleSlides[0]['headline'] ?? 'Full breakdown inside.');
 
+        $titleHi = $this->isDevanagari((string) ($article->title_hi ?? ''))
+            ? $this->cleanText((string) $article->title_hi)
+            : '';
+        $excerptHi = $this->isDevanagari((string) ($article->excerpt_hi ?? ''))
+            ? $this->cleanText((string) $article->excerpt_hi)
+            : '';
+
+        $slide1En = $this->toSpeechSentence($title . '. ' . $hookSub);
+        $slide1Hi = $titleHi !== ''
+            ? $this->toSpeechSentence($titleHi . ($excerptHi !== '' ? '। ' . $excerptHi : ''))
+            : $this->translateToHindiFast($slide1En);
+
         $slides = [];
         $slides[] = [
             'badge' => Str::limit($category, 26, ''),
             'headline' => Str::limit($title, 82),
             'subtext' => $hookSub,
-            'narration' => $this->toSpeechSentence($title . '. ' . $hookSub),
+            'narration' => $slide1Hi !== '' ? $slide1Hi : $slide1En,
+            'narration_en' => $slide1En,
             'image' => $coverUrl,
-            'duration' => 5.0,
+            'duration' => 5.5,
         ];
 
         foreach ($middleSlides as $idx => $sec) {
             $bgImage = ($idx % 2 === 1 && isset($curated[$idx])) ? $curated[$idx] : $coverUrl;
+            $enSpeech = $this->toSpeechSentence($sec['narration']);
+            $hiSpeech = isset($sectionsHi[$idx]['narration']) && $this->isDevanagari($sectionsHi[$idx]['narration'])
+                ? $this->toSpeechSentence($sectionsHi[$idx]['narration'])
+                : $this->translateToHindiFast($enSpeech);
+
             $slides[] = [
                 'badge' => Str::limit(strtoupper($sec['badge'] ?: 'KEY POINT ' . ($idx + 1)), 26, ''),
                 'headline' => Str::limit($sec['headline'], 78),
                 'subtext' => Str::limit($sec['subtext'], 110),
-                'narration' => $this->toSpeechSentence($sec['narration']),
+                'narration' => $hiSpeech !== '' ? $hiSpeech : $enSpeech,
+                'narration_en' => $enSpeech,
                 'image' => $bgImage,
                 'duration' => 5.5,
             ];
@@ -105,9 +129,10 @@ class ReelScriptService
             'badge' => 'FOLLOW @CRICAPP.IN',
             'headline' => 'Full Story & Live Scores',
             'subtext' => 'Search CricApp.in on Google for ball-by-ball commentary & squad analysis.',
-            'narration' => 'Read the full story and ball by ball live updates now on CricApp dot in.',
+            'narration' => 'पूरी स्टोरी और बॉल-बाय-बॉल लाइव अपडेट्स अभी पढ़ें, CricApp dot in पर।',
+            'narration_en' => 'Read the full story and ball by ball live updates now on CricApp dot in.',
             'image' => $curated[0] ?? $coverUrl,
-            'duration' => 4.0,
+            'duration' => 4.5,
         ];
 
         return [
@@ -140,7 +165,7 @@ class ReelScriptService
                     'badge' => 'BREAKING CRICKET',
                     'headline' => 'Massive Turning Point In Today\'s Thriller!',
                     'subtext' => 'Watch the top 3 moments that changed the match completely.',
-                    'narration' => 'Big cricket update! Here are the moments that completely turned today\'s match around.',
+                    'narration' => 'बड़ा क्रिकेट अपडेट! जानिए आज के रोमांचक मैच के उन तीन पलों के बारे में जिन्होंने पूरा खेल पलट दिया।',
                     'image' => $curated[0],
                     'duration' => 5.0,
                 ],
@@ -148,7 +173,7 @@ class ReelScriptService
                     'badge' => 'MOMENT 1',
                     'headline' => 'Powerplay Assault Stuns The Opposition',
                     'subtext' => 'Clean hitting right from over one put instant scoreboard pressure.',
-                    'narration' => 'First, an explosive powerplay start put the bowling side under immediate pressure.',
+                    'narration' => 'सबसे पहले पावरप्ले में तूफानी शुरुआत ने विपक्षी टीम पर तुरंत बड़ा दबाव बना दिया।',
                     'image' => $curated[1],
                     'duration' => 5.0,
                 ],
@@ -156,7 +181,7 @@ class ReelScriptService
                     'badge' => 'MOMENT 2',
                     'headline' => 'Death-Overs Spell Seals The Contest',
                     'subtext' => 'Pinpoint yorkers and clever slower balls defended the target.',
-                    'narration' => 'Then came clutch death bowling that sealed the game in the final overs.',
+                    'narration' => 'इसके बाद डेथ ओवर्स की सटीक यॉर्कर गेंदबाजी ने आखिरी पलों में जीत पक्की कर दी।',
                     'image' => $curated[2],
                     'duration' => 5.0,
                 ],
@@ -164,9 +189,9 @@ class ReelScriptService
                     'badge' => 'LIVE ON CRICAPP.IN',
                     'headline' => 'Ball-by-Ball Scores & Reports',
                     'subtext' => 'Search CricApp.in on Google for full scorecards & match news.',
-                    'narration' => 'Follow CricApp dot in for fastest live cricket scores and daily match stories.',
+                    'narration' => 'सबसे तेज़ लाइव क्रिकेट स्कोर और मैच रिपोर्ट्स के लिए अभी जुड़ें, CricApp dot in पर।',
                     'image' => $curated[3],
-                    'duration' => 4.0,
+                    'duration' => 4.5,
                 ],
             ],
         ];
@@ -258,6 +283,67 @@ class ReelScriptService
         $clean = preg_replace('/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]/u', '', (string) $clean);
         $clean = preg_replace('/\s+/', ' ', (string) $clean);
         return Str::limit(trim((string) $clean), 210, '.');
+    }
+
+    public function isDevanagari(string $text): bool
+    {
+        return preg_match('/[\x{0900}-\x{097F}]/u', $text) === 1;
+    }
+
+    /**
+     * Fast cached English -> Hindi translation for natural Hindi cricket voiceover.
+     */
+    public function translateToHindiFast(string $text): string
+    {
+        $clean = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+        if ($clean === '' || $this->isDevanagari($clean)) {
+            return $clean;
+        }
+
+        // Temporarily protect brand pronunciation during translation
+        $prepared = preg_replace('/CricApp\.in/i', 'CricApp dot in', $clean) ?? $clean;
+        $cacheKey = 'reel_hi_script_v1_' . md5($prepared);
+
+        try {
+            $cached = Cache::get($cacheKey);
+            if (is_string($cached) && $this->isDevanagari($cached)) {
+                return $cached;
+            }
+        } catch (\Throwable $e) {
+            // Ignore cache read error
+        }
+
+        try {
+            $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=hi&dt=t&q=' . urlencode($prepared);
+            $response = Http::timeout(3)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
+                ])
+                ->get($url);
+
+            if ($response->successful()) {
+                $arr = $response->json();
+                if (is_array($arr) && isset($arr[0]) && is_array($arr[0])) {
+                    $translated = '';
+                    foreach ($arr[0] as $part) {
+                        $translated .= $part[0] ?? '';
+                    }
+                    $translated = trim($translated);
+                    if ($translated !== '' && $this->isDevanagari($translated)) {
+                        try {
+                            Cache::put($cacheKey, $translated, now()->addDays(14));
+                        } catch (\Throwable $e) {
+                            // Ignore cache write error
+                        }
+                        return $translated;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Fall through safely
+        }
+
+        return $clean;
     }
 
     private function buildSocialCaption(Article $article, string $title, string $excerpt): string
