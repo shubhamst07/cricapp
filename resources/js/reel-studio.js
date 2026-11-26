@@ -257,7 +257,11 @@ export function initReelStudio(root) {
         showCaptions: true,
         convertMp4: true,
         slides: Array.isArray(initialProject.slides) && initialProject.slides.length
-            ? initialProject.slides.map((s) => ({ ...s, duration: Number(s.duration) || 5.0 }))
+            ? initialProject.slides.map((s) => ({
+                ...s,
+                _hinglishBase: String(s.narration || '').trim(),
+                duration: Number(s.duration) || 5.0,
+            }))
             : [],
         selectedSlideIndex: 0,
         playing: false,
@@ -384,37 +388,15 @@ export function initReelStudio(root) {
         const narration = String(seg.slide.narration || '').trim();
         if (!narration) return null;
 
-        // Use exact Edge TTS WordBoundary timings when present
-        if (slideVoice && Array.isArray(slideVoice.boundaries) && slideVoice.boundaries.length > 0) {
-            const boundaries = slideVoice.boundaries;
-            const localMs = localSec * 1000;
-            let activeIdx = -1;
-            for (let i = 0; i < boundaries.length; i++) {
-                const b = boundaries[i];
-                const nextStart = i + 1 < boundaries.length ? boundaries[i + 1].offset_ms : (b.offset_ms + b.duration_ms + 300);
-                if (localMs >= b.offset_ms && localMs < nextStart) {
-                    activeIdx = i;
-                    break;
-                }
-            }
-            if (activeIdx === -1 && localMs >= boundaries[boundaries.length - 1].offset_ms) {
-                activeIdx = boundaries.length - 1;
-            }
-            const chunkSize = 5;
-            const idx = Math.max(0, activeIdx);
-            const windowStart = Math.floor(idx / chunkSize) * chunkSize;
-            const slice = boundaries.slice(windowStart, windowStart + chunkSize);
-            return {
-                words: slice.map((b) => b.text),
-                activeOffset: idx - windowStart,
-            };
-        }
-
-        // Fallback proportional caption pacing across words
+        // Always display words from slide.narration (Hinglish) timed proportionally or synced to duration
         const words = narration.split(/\s+/).filter(Boolean);
         if (!words.length) return null;
-        const speakWindow = Math.max(seg.duration - 0.4, 1.0);
-        const progress = clamp(localSec / speakWindow, 0, 0.999);
+
+        let totalWindow = Math.max(seg.duration - 0.4, 1.0);
+        if (slideVoice && slideVoice.buffer && slideVoice.buffer.duration > 0.5) {
+            totalWindow = slideVoice.buffer.duration;
+        }
+        const progress = clamp(localSec / totalWindow, 0, 0.999);
         const activeIdx = Math.floor(progress * words.length);
         const chunkSize = 5;
         const windowStart = Math.floor(activeIdx / chunkSize) * chunkSize;
@@ -535,10 +517,10 @@ export function initReelStudio(root) {
         ctx.fillText(counterText, CANVAS_W - 81, 82);
         ctx.restore();
 
-        // 6. Slide Content Card (Animated Entrance)
-        const slideOffsetY = (1 - enterEase) * 34;
+        // 6. Slide Content Card (Animated Entrance — stays crisp at t=0 too)
+        const slideOffsetY = (1 - enterEase) * 20;
         ctx.save();
-        ctx.globalAlpha = enterEase;
+        ctx.globalAlpha = 0.25 + 0.75 * enterEase;
         ctx.translate(0, slideOffsetY);
 
         const contentX = 44;
@@ -811,8 +793,13 @@ export function initReelStudio(root) {
             const newBuffers = [];
             for (let i = 0; i < state.slides.length; i++) {
                 const slide = state.slides[i];
-                const speechText = String(slide.narration || slide.headline || '').trim();
-                const cacheKey = `${voice}|${rate}|${speechText}`;
+                const captionScript = String(slide.narration || slide.headline || '').trim();
+                const isEditedHinglish = Boolean(slide._hinglishBase && captionScript !== slide._hinglishBase);
+                // When user kept the auto-generated Hinglish caption & chose a Hindi voice, speak matched Devanagari Hindi for crisp natural pronunciation
+                const speechToSend = (voice.startsWith('hi-') && slide.narration_hi && !isEditedHinglish)
+                    ? String(slide.narration_hi).trim()
+                    : captionScript;
+                const cacheKey = `${voice}|${rate}|${captionScript}|${speechToSend}`;
                 const prev = state.slideVoiceBuffers[i];
 
                 if (!forceAll && prev && prev.buffer && prev.cacheKey === cacheKey) {
@@ -825,7 +812,7 @@ export function initReelStudio(root) {
                 }
                 setStatus(`Generating AI voiceover (${i + 1}/${state.slides.length})...`, 'info');
 
-                if (!speechText) {
+                if (!speechToSend) {
                     newBuffers.push(null);
                     continue;
                 }
@@ -838,7 +825,7 @@ export function initReelStudio(root) {
                         'X-CSRF-TOKEN': csrfToken,
                     },
                     body: JSON.stringify({
-                        text: speechText,
+                        text: speechToSend,
                         voice,
                         rate,
                         pitch: '+0Hz',
@@ -852,11 +839,12 @@ export function initReelStudio(root) {
                 }
 
                 if (data.engine) lastEngine = data.engine;
-                if (data.translated && data.spoken_text) {
-                    slide.narration = data.spoken_text;
+                // Preserve clean Hinglish in caption box; only store matched Hindi silently for audio pronunciation
+                if (data.spoken_text && data.spoken_text !== captionScript && voice.startsWith('hi-')) {
+                    slide.narration_hi = data.spoken_text;
                 }
 
-                const finalKey = `${voice}|${rate}|${String(slide.narration || speechText).trim()}`;
+                const finalKey = `${voice}|${rate}|${captionScript}|${slide.narration_hi || speechToSend}`;
                 const arrayBuf = base64ToArrayBuffer(data.audio_base64);
                 const decoded = await audioCtx.decodeAudioData(arrayBuf);
                 // Match slide duration tightly to natural speech + 0.45s breathing gap
@@ -864,7 +852,7 @@ export function initReelStudio(root) {
                 newBuffers.push({
                     buffer: decoded,
                     boundaries: Array.isArray(data.boundaries) ? data.boundaries : [],
-                    text: slide.narration || speechText,
+                    text: captionScript,
                     cacheKey: finalKey,
                 });
             }
@@ -897,10 +885,14 @@ export function initReelStudio(root) {
         const voice = voiceSelect?.value || 'hi-IN-MadhurNeural';
         const rate = voiceRateSelect?.value || '+5%';
         const allReady = state.slides.length > 0 && state.slides.every((slide, idx) => {
-            const speechText = String(slide.narration || slide.headline || '').trim();
-            if (!speechText) return true;
+            const captionScript = String(slide.narration || slide.headline || '').trim();
+            const isEditedHinglish = Boolean(slide._hinglishBase && captionScript !== slide._hinglishBase);
+            const speechToSend = (voice.startsWith('hi-') && slide.narration_hi && !isEditedHinglish)
+                ? String(slide.narration_hi).trim()
+                : captionScript;
+            if (!speechToSend) return true;
             const prev = state.slideVoiceBuffers[idx];
-            return prev && prev.buffer && prev.cacheKey === `${voice}|${rate}|${speechText}`;
+            return prev && prev.buffer && prev.cacheKey === `${voice}|${rate}|${captionScript}|${speechToSend}`;
         });
         if (allReady) {
             return true;
@@ -1080,7 +1072,7 @@ export function initReelStudio(root) {
 
             const combinedStream = new MediaStream(tracks);
             const mimeType = pickBestRecorderMime();
-            const recorderOptions = { videoBitsPerSecond: 4500000 };
+            const recorderOptions = { videoBitsPerSecond: 2500000 };
             if (mimeType) recorderOptions.mimeType = mimeType;
 
             const recorder = new MediaRecorder(combinedStream, recorderOptions);
@@ -1193,8 +1185,8 @@ export function initReelStudio(root) {
             setStatus(`Export failed: ${err.message || 'Unknown error'}`, 'error');
         } finally {
             state.recording = false;
-            state.playhead = 0;
-            renderAt(0);
+            state.playhead = 0.4;
+            renderAt(0.4);
             exportBtn.disabled = false;
             exportBtn.textContent = origText;
         }

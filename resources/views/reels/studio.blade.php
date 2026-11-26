@@ -90,7 +90,7 @@
                                 @endforeach
                             </select>
                             <p class="mt-1 text-[10px] text-emerald-400/90 font-semibold">
-                                Hindi voice (Madhur / Swara) par script automatically Hindi mein generate &amp; translate hokar boli jaati hai.
+                                Spoken Voiceover &amp; Captions clean Hinglish mein dikhte hain, aur Madhur/Swara natural Hindi accent mein bolte hain.
                             </p>
                         </div>
                         <div>

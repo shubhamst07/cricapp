@@ -95,13 +95,17 @@ class ReelScriptService
         $slide1Hi = $titleHi !== ''
             ? $this->toSpeechSentence($titleHi . ($excerptHi !== '' ? '। ' . $excerptHi : ''))
             : $this->translateToHindiFast($slide1En);
+        $slide1Hinglish = $this->isMostlyHindi($slide1Hi)
+            ? $this->hindiToHinglish($slide1Hi, $slide1En)
+            : $slide1En;
 
         $slides = [];
         $slides[] = [
             'badge' => Str::limit($category, 26, ''),
             'headline' => Str::limit($title, 82),
             'subtext' => $hookSub,
-            'narration' => $slide1Hi !== '' ? $slide1Hi : $slide1En,
+            'narration' => $slide1Hinglish !== '' ? $slide1Hinglish : $slide1En,
+            'narration_hi' => $this->isMostlyHindi($slide1Hi) ? $slide1Hi : '',
             'narration_en' => $slide1En,
             'image' => $coverUrl,
             'duration' => 5.5,
@@ -113,12 +117,16 @@ class ReelScriptService
             $hiSpeech = isset($sectionsHi[$idx]['narration']) && $this->isMostlyHindi($sectionsHi[$idx]['narration'])
                 ? $this->toSpeechSentence($sectionsHi[$idx]['narration'])
                 : $this->translateToHindiFast($enSpeech);
+            $hinglishSpeech = $this->isMostlyHindi($hiSpeech)
+                ? $this->hindiToHinglish($hiSpeech, $enSpeech)
+                : $enSpeech;
 
             $slides[] = [
                 'badge' => Str::limit(strtoupper($sec['badge'] ?: 'KEY POINT ' . ($idx + 1)), 26, ''),
                 'headline' => Str::limit($sec['headline'], 78),
                 'subtext' => Str::limit($sec['subtext'], 110),
-                'narration' => $hiSpeech !== '' ? $hiSpeech : $enSpeech,
+                'narration' => $hinglishSpeech !== '' ? $hinglishSpeech : $enSpeech,
+                'narration_hi' => $this->isMostlyHindi($hiSpeech) ? $hiSpeech : '',
                 'narration_en' => $enSpeech,
                 'image' => $bgImage,
                 'duration' => 5.5,
@@ -129,7 +137,8 @@ class ReelScriptService
             'badge' => 'FOLLOW @CRICAPP.IN',
             'headline' => 'Full Story & Live Scores',
             'subtext' => 'Search CricApp.in on Google for ball-by-ball commentary & squad analysis.',
-            'narration' => 'पूरी स्टोरी और बॉल-बाय-बॉल लाइव अपडेट्स अभी पढ़ें, CricApp dot in पर।',
+            'narration' => 'Poori story aur ball-by-ball live updates abhi padhein, CricApp.in par!',
+            'narration_hi' => 'पूरी स्टोरी और बॉल-बाय-बॉल लाइव अपडेट्स अभी पढ़ें, CricApp dot in पर।',
             'narration_en' => 'Read the full story and ball by ball live updates now on CricApp dot in.',
             'image' => $curated[0] ?? $coverUrl,
             'duration' => 4.5,
@@ -165,7 +174,8 @@ class ReelScriptService
                     'badge' => 'BREAKING CRICKET',
                     'headline' => 'Massive Turning Point In Today\'s Thriller!',
                     'subtext' => 'Watch the top 3 moments that changed the match completely.',
-                    'narration' => 'बड़ा क्रिकेट अपडेट! जानिए आज के रोमांचक मैच के उन तीन पलों के बारे में जिन्होंने पूरा खेल पलट दिया।',
+                    'narration' => 'Bada cricket update! Janiye aaj ke thrilling match ke un 3 moments ke baare mein jinhone poora khel palat diya.',
+                    'narration_hi' => 'बड़ा क्रिकेट अपडेट! जानिए आज के रोमांचक मैच के उन तीन पलों के बारे में जिन्होंने पूरा खेल पलट दिया।',
                     'image' => $curated[0],
                     'duration' => 5.0,
                 ],
@@ -173,7 +183,8 @@ class ReelScriptService
                     'badge' => 'MOMENT 1',
                     'headline' => 'Powerplay Assault Stuns The Opposition',
                     'subtext' => 'Clean hitting right from over one put instant scoreboard pressure.',
-                    'narration' => 'सबसे पहले पावरप्ले में तूफानी शुरुआत ने विपक्षी टीम पर तुरंत बड़ा दबाव बना दिया।',
+                    'narration' => 'Sabse pehle powerplay mein toofani batting ne vipakshi team par turant bada dabav bana diya.',
+                    'narration_hi' => 'सबसे पहले पावरप्ले में तूफानी बल्लेबाजी ने विपक्षी टीम पर तुरंत बड़ा दबाव बना दिया।',
                     'image' => $curated[1],
                     'duration' => 5.0,
                 ],
@@ -181,7 +192,8 @@ class ReelScriptService
                     'badge' => 'MOMENT 2',
                     'headline' => 'Death-Overs Spell Seals The Contest',
                     'subtext' => 'Pinpoint yorkers and clever slower balls defended the target.',
-                    'narration' => 'इसके बाद डेथ ओवर्स की सटीक यॉर्कर गेंदबाजी ने आखिरी पलों में जीत पक्की कर दी।',
+                    'narration' => 'Iske baad death overs ki sateek yorker bowling ne aakhiri palon mein jeet pakki kar di.',
+                    'narration_hi' => 'इसके बाद डेथ ओवर्स की सटीक यॉर्कर गेंदबाजी ने आखिरी पलों में जीत पक्की कर दी।',
                     'image' => $curated[2],
                     'duration' => 5.0,
                 ],
@@ -189,7 +201,8 @@ class ReelScriptService
                     'badge' => 'LIVE ON CRICAPP.IN',
                     'headline' => 'Ball-by-Ball Scores & Reports',
                     'subtext' => 'Search CricApp.in on Google for full scorecards & match news.',
-                    'narration' => 'सबसे तेज़ लाइव क्रिकेट स्कोर और मैच रिपोर्ट्स के लिए अभी जुड़ें, CricApp dot in पर।',
+                    'narration' => 'Sabse tez live cricket scores aur match reports ke liye abhi judein, CricApp.in par!',
+                    'narration_hi' => 'सबसे तेज़ लाइव क्रिकेट स्कोर और मैच रिपोर्ट्स के लिए अभी जुड़ें, CricApp dot in पर।',
                     'image' => $curated[3],
                     'duration' => 4.5,
                 ],
@@ -222,7 +235,13 @@ class ReelScriptService
 
             $headline = $headText !== '' ? $headText : Str::limit($firstSentence, 72);
             $subtext = $headText !== '' ? $firstSentence : ($secondSentence !== '' ? $secondSentence : $bodyText);
-            $narration = trim(($headText !== '' ? $headText . '. ' : '') . $firstSentence . ' ' . $secondSentence);
+            $headNorm = mb_strtolower(rtrim($headText, '.!?: '), 'UTF-8');
+            $firstNorm = mb_strtolower(rtrim($firstSentence, '.!?: '), 'UTF-8');
+            if ($headNorm !== '' && ($headNorm === $firstNorm || str_starts_with($firstNorm, $headNorm))) {
+                $narration = trim($firstSentence . ' ' . $secondSentence);
+            } else {
+                $narration = trim(($headText !== '' ? $headText . '. ' : '') . $firstSentence . ' ' . $secondSentence);
+            }
 
             if (mb_strlen($headline) >= 6) {
                 $sections[] = [
@@ -420,6 +439,349 @@ class ReelScriptService
         }
 
         return '';
+    }
+
+    /**
+     * Convert Devanagari Hindi narration into crisp, natural Indian Cricket Hinglish.
+     */
+    public function hindiToHinglish(string $hindi, string $englishRef = ''): string
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', $hindi) ?? '');
+        if ($text === '') {
+            return '';
+        }
+
+        // Normalize brand & Hindi danda punctuation cleanly
+        $text = preg_replace('/CricApp\s*(?:dot|\.)\s*in/iu', 'CricApp.in', $text) ?? $text;
+        $text = str_replace(['।', '॥'], '.', $text);
+
+        // 1. Common cricket, English-loanword & Hindi phrasing dictionary (ordered longest-first cleanly)
+        $phraseMap = [
+            'बॉल-बाय-बॉल' => 'ball-by-ball',
+            'व्हाइट-बॉल' => 'white-ball',
+            'रेड-बॉल' => 'red-ball',
+            'लाइव अपडेट्स' => 'live updates',
+            'लाइव स्कोर' => 'live score',
+            'मिनी-नीलामी' => 'mini-auction',
+            'मिनी नीलामी' => 'mini-auction',
+            'मिनी-ऑक्शन' => 'mini-auction',
+            'मिनी ऑक्शन' => 'mini-auction',
+            'स्ट्राइक रेट' => 'strike rate',
+            'डेथ ओवर्स' => 'death overs',
+            'सुपर ओवर' => 'super over',
+            'रन चेज़' => 'run chase',
+            'रन-चेज़' => 'run chase',
+            'वर्ल्ड कप' => 'World Cup',
+            'विश्व कप' => 'World Cup',
+            'टी20' => 'T20',
+            'टी-20' => 'T20',
+            'वनडे' => 'ODI',
+            'टेस्ट मैच' => 'Test match',
+            'टेस्ट क्रिकेट' => 'Test cricket',
+            'पावरप्ले' => 'powerplay',
+            'ब्लूप्रिंट' => 'blueprint',
+            'बीसीसीआई' => 'BCCI',
+            'आईपीएल' => 'IPL',
+            'आईसीसी' => 'ICC',
+            'रोहित शर्मा' => 'Rohit Sharma',
+            'विराट कोहली' => 'Virat Kohli',
+            'बेन स्टोक्स' => 'Ben Stokes',
+            'जसप्रीत बुमराह' => 'Jasprit Bumrah',
+            'हार्दिक पंड्या' => 'Hardik Pandya',
+            'शुभमन गिल' => 'Shubman Gill',
+            'सूर्यकुमार यादव' => 'Suryakumar Yadav',
+            'महेंद्र सिंह धोनी' => 'MS Dhoni',
+            'रिषभ पंत' => 'Rishabh Pant',
+            'केएल राहुल' => 'KL Rahul',
+            'नीलामी' => 'auction',
+            'ऑक्शन' => 'auction',
+            'फ्रेंचाइजियों' => 'franchises',
+            'फ्रेंचाइजी' => 'franchise',
+            'रोमांचक' => 'thrilling',
+            'आक्रामक' => 'aggressive',
+            'वास्तव में' => 'vastav mein',
+            'बल्लेबाजी' => 'batting',
+            'गेंदबाजी' => 'bowling',
+            'बल्लेबाजों' => 'batsmen',
+            'बल्लेबाज़' => 'batsman',
+            'बल्लेबाज' => 'batsman',
+            'गेंदबाजों' => 'bowlers',
+            'गेंदबाज़' => 'bowler',
+            'गेंदबाज' => 'bowler',
+            'क्षेत्ररक्षण' => 'fielding',
+            'फील्डिंग' => 'fielding',
+            'खिलाड़ियों' => 'players',
+            'खिलाड़ी' => 'player',
+            'कप्तानी' => 'captaincy',
+            'कप्तान' => 'captain',
+            'विकेटों' => 'wickets',
+            'विकेट' => 'wicket',
+            'ओवरों' => 'overs',
+            'ओवर्स' => 'overs',
+            'ओवर' => 'over',
+            'यॉर्कर' => 'yorker',
+            'बाउंड्री' => 'boundary',
+            'स्टेडियम' => 'stadium',
+            'टूर्नामेंट' => 'tournament',
+            'मुकाबले' => 'match',
+            'मुकाबला' => 'match',
+            'प्रदर्शन' => 'performance',
+            'रणनीति' => 'strategy',
+            'विश्लेषण' => 'analysis',
+            'रिपोर्ट्स' => 'reports',
+            'रिपोर्ट' => 'report',
+            'अपडेट्स' => 'updates',
+            'अपडेट' => 'update',
+            'कहानी' => 'kahani',
+            'स्टोरी' => 'story',
+            'क्रिकेट' => 'cricket',
+            'भारतीय' => 'Indian',
+            'भारत' => 'India',
+            'इंग्लैंड' => 'England',
+            'ऑस्ट्रेलिया' => 'Australia',
+            'न्यूजीलैंड' => 'New Zealand',
+            'दक्षिण अफ्रीका' => 'South Africa',
+            'पाकिस्तान' => 'Pakistan',
+            'श्रीलंका' => 'Sri Lanka',
+            'बांग्लादेश' => 'Bangladesh',
+            'अफगानिस्तान' => 'Afghanistan',
+            'वेस्टइंडीज' => 'West Indies',
+            'गोवा' => 'Goa',
+            'मुंबई' => 'Mumbai',
+            'चेन्नई' => 'Chennai',
+            'बेंगलुरु' => 'Bengaluru',
+            'कोलकाता' => 'Kolkata',
+            'दिल्ली' => 'Delhi',
+            'स्मार्ट' => 'smart',
+            'सुरक्षित' => 'safe',
+            'मजबूत' => 'strong',
+            'शानदार' => 'shandar',
+            'तूफानी' => 'toofani',
+            'सटीक' => 'sateek',
+            'लाइव' => 'live',
+            'स्कोर' => 'score',
+            'टारगेट' => 'target',
+            'रिकॉर्ड' => 'record',
+            'नियम' => 'rule',
+            'नियमों' => 'rules',
+            'रूल' => 'rule',
+            'बैन' => 'ban',
+            'एंट्री' => 'entry',
+            'वापसी' => 'wapsi',
+            'टीमों' => 'teams',
+            'टीम' => 'team',
+            'मैच' => 'match',
+            'बॉल' => 'ball',
+            'रनों' => 'runs',
+            'रन' => 'runs',
+            'छह' => '6',
+            'तीन' => '3',
+            'सालों' => 'saalon',
+            'पहले' => 'pehle',
+            'बावजूद' => 'baavjood',
+            'क्योंकि' => 'kyunki',
+            'इसलिए' => 'isliye',
+            'लेकिन' => 'lekin',
+            'जबकि' => 'jabki',
+            'जानिए' => 'janiye',
+            'समझिए' => 'samjhiye',
+            'देखिए' => 'dekhiye',
+            'पढ़ें' => 'padhein',
+            'जुड़ें' => 'judein',
+            'अभी' => 'abhi',
+            'पूरी' => 'poori',
+            'पूरा' => 'poora',
+            'बहुत' => 'bahut',
+            'सबसे' => 'sabse',
+            'अधिक' => 'zyada',
+            'बड़ा' => 'bada',
+            'बड़ी' => 'badi',
+            'क्यों' => 'kyun',
+            'कैसे' => 'kaise',
+            'क्या' => 'kya',
+            'कौन' => 'kaun',
+            'कब' => 'kab',
+            'कहाँ' => 'kahan',
+            'जहाँ' => 'jahan',
+            'यहाँ' => 'yahan',
+            'वहाँ' => 'wahan',
+            'उनकी' => 'unki',
+            'उनके' => 'unke',
+            'उनका' => 'unka',
+            'उसकी' => 'uski',
+            'उसके' => 'uske',
+            'उसका' => 'uska',
+            'इसकी' => 'iski',
+            'इसके' => 'iske',
+            'इसका' => 'iska',
+            'अपने' => 'apne',
+            'अपनी' => 'apni',
+            'अपना' => 'apna',
+            'सभी' => 'sabhi',
+            'आखिरी' => 'aakhiri',
+            'पहली' => 'pehli',
+            'पहले' => 'pehle',
+            'दूसरे' => 'doosre',
+            'तीसरे' => 'teesre',
+            'खिलाफ' => 'khilaf',
+            'दौरान' => 'dauran',
+            'तुरंत' => 'turant',
+            'हमेशा' => 'hamesha',
+            'आज' => 'aaj',
+            'कल' => 'kal',
+            'सिर्फ' => 'sirf',
+            'बल्कि' => 'balki',
+            'साथ' => 'saath',
+            'बाद' => 'baad',
+            'तक' => 'tak',
+            'लिए' => 'liye',
+            'और' => 'aur',
+            'या' => 'ya',
+            'में' => 'mein',
+            'पर' => 'par',
+            'से' => 'se',
+            'को' => 'ko',
+            'का' => 'ka',
+            'की' => 'ki',
+            'के' => 'ke',
+            'ने' => 'ne',
+            'है' => 'hai',
+            'हैं' => 'hain',
+            'था' => 'tha',
+            'थे' => 'the',
+            'थी' => 'thi',
+            'हो' => 'ho',
+            'ही' => 'hi',
+            'भी' => 'bhi',
+            'नहीं' => 'nahi',
+            'ना' => 'na',
+            'तो' => 'toh',
+            'इस' => 'is',
+            'उस' => 'us',
+            'ये' => 'ye',
+            'यह' => 'yeh',
+            'वे' => 've',
+            'वह' => 'woh',
+            'एक' => 'ek',
+            'दो' => 'do',
+            'जो' => 'jo',
+            'जब' => 'jab',
+            'तब' => 'tab',
+            'अब' => 'ab',
+        ];
+
+        // Longest keys first so multi-word phrases replace cleanly before single tokens
+        uksort($phraseMap, static fn (string $a, string $b) => mb_strlen($b) <=> mb_strlen($a));
+        foreach ($phraseMap as $hi => $hn) {
+            $text = preg_replace('/(?<![\p{Devanagari}])' . preg_quote($hi, '/') . '(?![\p{Devanagari}])/u', $hn, $text) ?? $text;
+        }
+
+        // Collect proper/capitalized English tokens from original English reference if provided
+        $englishProper = [];
+        if ($englishRef !== '') {
+            preg_match_all('/\b[A-Z][A-Za-z0-9\-\/]{1,24}\b/', $englishRef, $matches);
+            foreach ($matches[0] ?? [] as $tok) {
+                $englishProper[strtolower($tok)] = $tok;
+            }
+        }
+
+        $tokens = preg_split('/\s+/u', trim($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $outTokens = [];
+
+        foreach ($tokens as $tok) {
+            // Separate punctuation cleanly (include \p{M} so trailing Devanagari matras stay inside $core)
+            if (!preg_match('/^([^\p{L}\p{M}\p{N}]*)(.*?)([^\p{L}\p{M}\p{N}]*)$/u', $tok, $m)) {
+                $outTokens[] = $tok;
+                continue;
+            }
+            $lead = $m[1];
+            $core = $m[2];
+            $trail = $m[3];
+
+            if ($core === '') {
+                $outTokens[] = $tok;
+                continue;
+            }
+
+            if ($this->isDevanagari($core)) {
+                $roman = preg_replace_callback(
+                    '/[\x{0900}-\x{097F}]+/u',
+                    fn ($dm) => $this->transliterateDevanagariCore($dm[0]),
+                    $core
+                ) ?? $core;
+            } else {
+                $roman = $core;
+            }
+
+            // Restore exact proper noun casing/spelling from English reference when very close
+            $lower = strtolower($roman);
+            if (isset($englishProper[$lower])) {
+                $roman = $englishProper[$lower];
+            } elseif (strlen($lower) >= 4 && !empty($englishProper)) {
+                foreach ($englishProper as $engLower => $engOrig) {
+                    if (abs(strlen($engLower) - strlen($lower)) <= 2 && levenshtein($lower, $engLower) <= 1) {
+                        $roman = $engOrig;
+                        break;
+                    }
+                }
+            }
+
+            $outTokens[] = $lead . $roman . $trail;
+        }
+
+        $result = trim(preg_replace('/\s+/u', ' ', implode(' ', $outTokens)) ?? '');
+        // Clean repeated spaces before punctuation & capitalize sentence starts
+        $result = preg_replace('/\s+([,\.\!\?\:])/', '$1', $result) ?? $result;
+        $result = preg_replace_callback('/(?:^|[.!?]\s+)([a-z])/', static fn ($m) => strtoupper($m[0]), $result) ?? $result;
+
+        return trim($result);
+    }
+
+    private function transliterateDevanagariCore(string $word): string
+    {
+        $word = str_replace(['क्ष', 'त्र', 'ज्ञ', 'श्र'], ['ksh', 'tr', 'gy', 'shr'], $word);
+
+        $map = [
+            'अ' => 'a', 'आ' => 'aa', 'इ' => 'i', 'ई' => 'i', 'उ' => 'u', 'ऊ' => 'oo',
+            'ए' => 'e', 'ऐ' => 'ai', 'ओ' => 'o', 'औ' => 'au', 'ऋ' => 'ri', 'ऑ' => 'o', 'ऍ' => 'e',
+            'क' => 'k', 'ख' => 'kh', 'ग' => 'g', 'घ' => 'gh', 'ङ' => 'ng',
+            'च' => 'ch', 'छ' => 'chh', 'ज' => 'j', 'झ' => 'jh', 'ञ' => 'ny',
+            'ट' => 't', 'ठ' => 'th', 'ड' => 'd', 'ढ' => 'dh', 'ण' => 'n',
+            'त' => 't', 'थ' => 'th', 'द' => 'd', 'ध' => 'dh', 'न' => 'n',
+            'प' => 'p', 'फ' => 'ph', 'ब' => 'b', 'भ' => 'bh', 'म' => 'm',
+            'य' => 'y', 'र' => 'r', 'ल' => 'l', 'व' => 'v', 'श' => 'sh',
+            'ष' => 'sh', 'स' => 's', 'ह' => 'h',
+            'क़' => 'q', 'ख़' => 'kh', 'ग़' => 'gh', 'ज़' => 'z', 'ड़' => 'd', 'ढ़' => 'dh', 'फ़' => 'f',
+            'ा' => 'a', 'ि' => 'i', 'ी' => 'i', 'ु' => 'u', 'ू' => 'oo',
+            'े' => 'e', 'ै' => 'ai', 'ो' => 'o', 'ौ' => 'au', 'ृ' => 'ri', 'ॉ' => 'o', 'ॅ' => 'e',
+            'ं' => 'n', 'ँ' => 'n', 'ः' => 'h', '्' => '', '़' => '',
+        ];
+
+        $consonants = ['क','ख','ग','घ','ङ','च','छ','ज','झ','ञ','ट','ठ','ड','ढ','ण','त','थ','द','ध','न','प','फ','ब','भ','म','य','र','ल','व','श','ष','स','ह','क़','ख़','ग़','ज़','ड़','ढ़','फ़'];
+        $vowelsOrMatras = ['ा','ि','ी','ु','ू','े','ै','ो','ौ','ृ','ॉ','ॅ','्','़'];
+
+        $chars = mb_str_split($word);
+        $len = count($chars);
+        $res = '';
+
+        for ($i = 0; $i < $len; $i++) {
+            $c = $chars[$i];
+            $next = ($i + 1 < $len) ? $chars[$i + 1] : '';
+            $isCons = in_array($c, $consonants, true);
+            $nextIsVowelMark = in_array($next, $vowelsOrMatras, true);
+
+            if (isset($map[$c])) {
+                $res .= $map[$c];
+                // Add inherent 'a' inside word before next consonant or anusvara (e.g. santulan, mana)
+                if ($isCons && !$nextIsVowelMark && $i < $len - 1) {
+                    $res .= 'a';
+                }
+            } else {
+                $res .= $c;
+            }
+        }
+
+        return $res;
     }
 
     private function buildSocialCaption(Article $article, string $title, string $excerpt): string

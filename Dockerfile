@@ -41,7 +41,7 @@ ENV COMPOSER_ALLOW_SUPERUSER 1
 ENV DB_CONNECTION pgsql
 ENV DATABASE_URL postgresql://neondb_owner:npg_CkRzSU1qGZ4m@ep-orange-night-bexqhg2o.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
 
-# Enable tuned PHP OPcache in production (zero per-request disk stat overhead)
+# Enable tuned PHP OPcache and upload limits for Reel Studio MP4 conversion
 RUN for d in /etc/php82/conf.d /etc/php83/conf.d /usr/local/etc/php/conf.d; do \
       if [ -d "$d" ]; then \
         { \
@@ -51,6 +51,10 @@ RUN for d in /etc/php82/conf.d /etc/php83/conf.d /usr/local/etc/php/conf.d; do \
           echo 'opcache.max_accelerated_files=20000'; \
           echo 'opcache.validate_timestamps=0'; \
           echo 'opcache.save_comments=1'; \
+          echo 'upload_max_filesize=100M'; \
+          echo 'post_max_size=100M'; \
+          echo 'max_execution_time=120'; \
+          echo 'memory_limit=256M'; \
         } > "$d/99-opcache-prod.ini"; \
       fi; \
     done
