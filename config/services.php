@@ -62,7 +62,7 @@ return [
     ],
 
     'adsense' => [
-        'client_id' => env('ADSENSE_CLIENT_ID'),
+        'client_id' => env('ADSENSE_CLIENT_ID', 'ca-pub-7211778841091994'),
     ],
 
     'google' => [
