@@ -169,6 +169,7 @@ class ReelStudioController extends Controller
 
         $target = $validated['target'];
         $results = [];
+        $translatedCount = 0;
 
         foreach ($validated['slides'] as $slide) {
             $rawText = trim((string) ($slide['text'] ?? ''));
@@ -186,18 +187,27 @@ class ReelStudioController extends Controller
                     $hiText = $scriptService->translateToHindiFast($sourceForHi);
                 }
 
-                if ($hinglishStored !== '' && !$scriptService->isDevanagari($hinglishStored) && $scriptService->isMostlyHindi($hiText)) {
+                $hasGenuineHi = $scriptService->isMostlyHindi($hiText);
+                $hasDistinctHinglish = $hinglishStored !== ''
+                    && $hinglishStored !== $enRef
+                    && !$scriptService->isDevanagari($hinglishStored);
+
+                if ($hasGenuineHi && $hasDistinctHinglish && $scriptService->isMostlyHindi($hiStored)) {
                     $hinglishText = $hinglishStored;
-                } elseif ($scriptService->isMostlyHindi($hiText)) {
+                } elseif ($hasGenuineHi) {
                     $hinglishText = $scriptService->hindiToHinglish($hiText, $sourceForHi);
                 } else {
                     $hinglishText = $rawText !== '' ? $rawText : $enRef;
                 }
 
+                if ($hasGenuineHi) {
+                    $translatedCount++;
+                }
+
                 $results[] = [
                     'narration' => $hinglishText,
-                    'narration_hinglish' => $hinglishText,
-                    'narration_hi' => $scriptService->isMostlyHindi($hiText) ? $hiText : $hiStored,
+                    'narration_hinglish' => $hasGenuineHi ? $hinglishText : '',
+                    'narration_hi' => $hasGenuineHi ? $hiText : '',
                     'narration_en' => $enRef !== '' ? $enRef : (!$scriptService->isDevanagari($rawText) ? $rawText : ''),
                 ];
             } else {
@@ -209,6 +219,10 @@ class ReelStudioController extends Controller
                     $enText = $scriptService->translateToEnglishFast($hiStored);
                 } else {
                     $enText = $rawText;
+                }
+
+                if (!$scriptService->isDevanagari($enText) && $enText !== '') {
+                    $translatedCount++;
                 }
 
                 $results[] = [
@@ -223,6 +237,7 @@ class ReelStudioController extends Controller
         return response()->json([
             'status' => 'success',
             'target' => $target,
+            'translated_count' => $translatedCount,
             'slides' => $results,
         ]);
     }

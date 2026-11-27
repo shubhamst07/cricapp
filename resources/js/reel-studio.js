@@ -343,12 +343,20 @@ export function initReelStudio(root) {
         return clean;
     }
 
-    function loadCanvasImage(rawUrl) {
+    function loadCanvasImage(rawUrl, slideIndex = 0) {
         const resolved = resolveImageSrc(rawUrl);
         if (!resolved) return null;
 
         const cached = state.imageCache.get(resolved);
-        if (cached) return cached.loaded ? cached.img : null;
+        if (cached) {
+            if (cached.error && curatedImages.length > 0) {
+                const fallbackUrl = curatedImages[slideIndex % curatedImages.length]?.url || '';
+                if (fallbackUrl && fallbackUrl !== rawUrl) {
+                    return loadCanvasImage(fallbackUrl, slideIndex);
+                }
+            }
+            return cached.loaded ? cached.img : null;
+        }
 
         const entry = { img: new Image(), loaded: false, error: false };
         entry.img.crossOrigin = 'anonymous';
@@ -360,6 +368,19 @@ export function initReelStudio(root) {
         };
         entry.img.onerror = () => {
             entry.error = true;
+            if (curatedImages.length > 0) {
+                const fallbackUrl = curatedImages[slideIndex % curatedImages.length]?.url || '';
+                if (fallbackUrl && fallbackUrl !== rawUrl) {
+                    if (state.slides[slideIndex] && state.slides[slideIndex].image === rawUrl) {
+                        state.slides[slideIndex].image = fallbackUrl;
+                        renderSlidesEditor();
+                    }
+                    loadCanvasImage(fallbackUrl, slideIndex);
+                    if (!state.playing && !state.recording) {
+                        renderAt(state.playhead);
+                    }
+                }
+            }
         };
         entry.img.src = resolved;
         state.imageCache.set(resolved, entry);
@@ -424,7 +445,7 @@ export function initReelStudio(root) {
         ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
         // 2. Background Image with Ken Burns smooth zoom & pan
-        const img = loadCanvasImage(seg.slide.image);
+        const img = loadCanvasImage(seg.slide.image, seg.index);
         if (img && img.naturalWidth > 0) {
             const zoom = 1.05 + slideProgress * 0.11;
             const panDir = seg.index % 2 === 0 ? 1 : -1;
@@ -643,14 +664,14 @@ export function initReelStudio(root) {
     }
 
     function preloadSlideImages(timeoutMs = 2500) {
-        const promises = state.slides.map((slide) => {
+        const promises = state.slides.map((slide, idx) => {
             const resolved = resolveImageSrc(slide.image);
             if (!resolved) return Promise.resolve();
             const existing = state.imageCache.get(resolved);
             if (existing && (existing.loaded || existing.error)) {
                 return Promise.resolve();
             }
-            loadCanvasImage(slide.image);
+            loadCanvasImage(slide.image, idx);
             const entry = state.imageCache.get(resolved);
             if (!entry) return Promise.resolve();
             return new Promise((resolve) => {
@@ -1339,13 +1360,55 @@ export function initReelStudio(root) {
         }
     });
 
+    async function browserTranslateToHindi(text) {
+        const clean = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!clean) return '';
+        try {
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=hi&dt=t&q=${encodeURIComponent(clean)}`;
+            const resp = await fetch(url);
+            if (!resp.ok) return '';
+            const arr = await resp.json();
+            if (Array.isArray(arr) && Array.isArray(arr[0])) {
+                const out = arr[0].map((part) => (part && part[0] ? part[0] : '')).join('').trim();
+                if (/[\u0900-\u097F]/.test(out)) return out;
+            }
+        } catch (_) {
+            // Browser blocked or offline
+        }
+        return '';
+    }
+
+    async function callTranslateEndpoint(target) {
+        const resp = await fetch(translateEndpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify({
+                target,
+                slides: state.slides.map((s) => ({
+                    text: s.narration || s.headline || '',
+                    narration_en: s.narration_en || '',
+                    narration_hi: s.narration_hi || '',
+                    narration_hinglish: s.narration_hinglish || '',
+                })),
+            }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        return { ok: resp.ok, data };
+    }
+
     async function syncScriptsToSelectedVoice(voice) {
         const wantsHinglish = String(voice || 'hi-IN-MadhurNeural').startsWith('hi-');
         const target = wantsHinglish ? 'hinglish' : 'en';
 
-        // Quick local switch if every slide already has the target variant stored
+        // Quick local switch if every slide genuinely has cached target text
         const allCachedLocally = state.slides.every((s) =>
-            wantsHinglish ? Boolean(s.narration_hinglish && s.narration_hi) : Boolean(s.narration_en)
+            wantsHinglish
+                ? Boolean(s.narration_hinglish && s.narration_hi && s.narration_hinglish !== s.narration_en)
+                : Boolean(s.narration_en)
         );
 
         if (allCachedLocally) {
@@ -1365,44 +1428,67 @@ export function initReelStudio(root) {
         );
 
         try {
-            const resp = await fetch(translateEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                },
-                body: JSON.stringify({
-                    target,
-                    slides: state.slides.map((s) => ({
-                        text: s.narration || s.headline || '',
-                        narration_en: s.narration_en || '',
-                        narration_hi: s.narration_hi || '',
-                        narration_hinglish: s.narration_hinglish || '',
-                    })),
-                }),
-            });
-            const data = await resp.json().catch(() => ({}));
-            if (resp.ok && Array.isArray(data.slides)) {
+            let { ok, data } = await callTranslateEndpoint(target);
+            if (ok && Array.isArray(data.slides)) {
                 data.slides.forEach((res, idx) => {
                     if (!state.slides[idx]) return;
                     state.slides[idx].narration = res.narration || state.slides[idx].narration;
-                    if (res.narration_hinglish) {
+                    if (res.narration_hinglish !== undefined) {
                         state.slides[idx].narration_hinglish = res.narration_hinglish;
-                        if (wantsHinglish) state.slides[idx]._hinglishBase = res.narration_hinglish;
+                        if (wantsHinglish && res.narration_hinglish) state.slides[idx]._hinglishBase = res.narration_hinglish;
                     }
-                    if (res.narration_hi) state.slides[idx].narration_hi = res.narration_hi;
+                    if (res.narration_hi !== undefined) state.slides[idx].narration_hi = res.narration_hi;
                     if (res.narration_en) state.slides[idx].narration_en = res.narration_en;
                 });
-                renderSlidesEditor();
-                renderAt(state.playhead);
-                updateVoiceBadge(wantsHinglish ? 'Hinglish Script Ready (Hindi Voice)' : 'English Script Ready', false);
-                setStatus(
-                    wantsHinglish
-                        ? 'Spoken Voiceover & Captions Hinglish mein ready hain!'
-                        : 'Spoken Voiceover & Captions English mein switch ho gaye.',
-                    'success'
+            }
+
+            // If Render server IP was rate-limited on some slides, translate via browser Google CORS -> PHP Hinglish
+            if (wantsHinglish && state.slides.some((s) => !s.narration_hi)) {
+                let filledAny = false;
+                await Promise.all(
+                    state.slides.map(async (s) => {
+                        if (s.narration_hi) return;
+                        const src = s.narration_en || s.narration || s.headline || '';
+                        const hiText = await browserTranslateToHindi(src);
+                        if (hiText) {
+                            s.narration_hi = hiText;
+                            if (!s.narration_en) s.narration_en = src;
+                            filledAny = true;
+                        }
+                    })
                 );
+
+                if (filledAny) {
+                    const second = await callTranslateEndpoint('hinglish');
+                    if (second.ok && Array.isArray(second.data.slides)) {
+                        second.data.slides.forEach((res, idx) => {
+                            if (!state.slides[idx]) return;
+                            state.slides[idx].narration = res.narration || state.slides[idx].narration;
+                            if (res.narration_hinglish) {
+                                state.slides[idx].narration_hinglish = res.narration_hinglish;
+                                state.slides[idx]._hinglishBase = res.narration_hinglish;
+                            }
+                            if (res.narration_hi) state.slides[idx].narration_hi = res.narration_hi;
+                        });
+                    }
+                }
+            }
+
+            renderSlidesEditor();
+            renderAt(state.playhead);
+
+            const allHinglishReady = state.slides.every((s) => Boolean(s.narration_hi && s.narration_hinglish));
+            if (wantsHinglish) {
+                if (allHinglishReady) {
+                    updateVoiceBadge('Hinglish Script Ready (Hindi Voice)', false);
+                    setStatus('Spoken Voiceover & Captions Hinglish mein ready hain!', 'success');
+                } else {
+                    updateVoiceBadge('Translation Partial', false);
+                    setStatus('Kuch slides auto-translate nahi ho saki — aap Generate AI Voiceover ya manual edit use kar sakte hain.', 'warn');
+                }
+            } else {
+                updateVoiceBadge('English Script Ready', false);
+                setStatus('Spoken Voiceover & Captions English mein switch ho gaye.', 'success');
             }
         } catch (_) {
             // Keep existing slides gracefully if offline

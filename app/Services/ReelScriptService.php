@@ -62,6 +62,10 @@ class ReelScriptService
         $category = strtoupper($this->cleanText($article->category ?: 'CRICKET UPDATE'));
         $coverUrl = $article->cover_image_url;
         $curated = array_column($this->curatedImages(), 'url');
+        // Ephemeral local uploads from older deploys may not exist on container rebuilds — fall back to crisp cricket photo
+        if (Str::startsWith($coverUrl, '/') && !is_file(public_path(ltrim($coverUrl, '/')))) {
+            $coverUrl = $curated[0] ?? $coverUrl;
+        }
 
         $sections = $this->extractSections((string) ($article->content ?? ''));
         $middleSlides = array_slice($sections, 0, 3);
@@ -95,9 +99,10 @@ class ReelScriptService
         $slide1Hi = $titleHi !== ''
             ? $this->toSpeechSentence($titleHi . ($excerptHi !== '' ? '। ' . $excerptHi : ''))
             : $this->translateToHindiFast($slide1En);
-        $slide1Hinglish = $this->isMostlyHindi($slide1Hi)
+        $slide1HasHi = $this->isMostlyHindi($slide1Hi);
+        $slide1Hinglish = $slide1HasHi
             ? $this->hindiToHinglish($slide1Hi, $slide1En)
-            : $slide1En;
+            : '';
 
         $slides = [];
         $slides[] = [
@@ -105,8 +110,8 @@ class ReelScriptService
             'headline' => Str::limit($title, 82),
             'subtext' => $hookSub,
             'narration' => $slide1Hinglish !== '' ? $slide1Hinglish : $slide1En,
-            'narration_hinglish' => $slide1Hinglish !== '' ? $slide1Hinglish : $slide1En,
-            'narration_hi' => $this->isMostlyHindi($slide1Hi) ? $slide1Hi : '',
+            'narration_hinglish' => $slide1Hinglish,
+            'narration_hi' => $slide1HasHi ? $slide1Hi : '',
             'narration_en' => $slide1En,
             'image' => $coverUrl,
             'duration' => 5.5,
@@ -118,17 +123,18 @@ class ReelScriptService
             $hiSpeech = isset($sectionsHi[$idx]['narration']) && $this->isMostlyHindi($sectionsHi[$idx]['narration'])
                 ? $this->toSpeechSentence($sectionsHi[$idx]['narration'])
                 : $this->translateToHindiFast($enSpeech);
-            $hinglishSpeech = $this->isMostlyHindi($hiSpeech)
+            $hasHi = $this->isMostlyHindi($hiSpeech);
+            $hinglishSpeech = $hasHi
                 ? $this->hindiToHinglish($hiSpeech, $enSpeech)
-                : $enSpeech;
+                : '';
 
             $slides[] = [
                 'badge' => Str::limit(strtoupper($sec['badge'] ?: 'KEY POINT ' . ($idx + 1)), 26, ''),
                 'headline' => Str::limit($sec['headline'], 78),
                 'subtext' => Str::limit($sec['subtext'], 110),
                 'narration' => $hinglishSpeech !== '' ? $hinglishSpeech : $enSpeech,
-                'narration_hinglish' => $hinglishSpeech !== '' ? $hinglishSpeech : $enSpeech,
-                'narration_hi' => $this->isMostlyHindi($hiSpeech) ? $hiSpeech : '',
+                'narration_hinglish' => $hinglishSpeech,
+                'narration_hi' => $hasHi ? $hiSpeech : '',
                 'narration_en' => $enSpeech,
                 'image' => $bgImage,
                 'duration' => 5.5,
