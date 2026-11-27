@@ -135,8 +135,9 @@
                     <label for="content" class="block text-xs font-black uppercase tracking-wider text-slate-300">
                         Article Content <span class="text-rose-400">*</span>
                     </label>
-                    <span class="text-[11px] text-slate-500 font-mono">Use ### for headings, - for bullets</span>
+                    <span class="text-[11px] text-slate-500 font-mono">Use ### headings, **bold**, - bullets, [text](url)</span>
                 </div>
+                @include('articles.partials.internal-link-helper', ['linkableArticles' => $linkableArticles ?? collect()])
                 <textarea id="content" name="content" rows="14" required
                           class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-white text-sm leading-relaxed focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition font-mono">{{ old('content', $article->content) }}</textarea>
             </div>

@@ -74,21 +74,49 @@
 
 @section('content')
 @php
-    $renderMarkdown = function($contentStr) {
+    $formatInline = function (string $raw): string {
+        $escaped = e($raw);
+        $placeholders = [];
+
+        // Replace Markdown links [text](url) first using placeholders so **bold** never touches URLs
+        $escaped = preg_replace_callback('/\[([^\]]+)\]\(([^)\s]+)\)/', function ($m) use (&$placeholders) {
+            $label = $m[1];
+            $decodedUrl = html_entity_decode($m[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            if (!preg_match('#^(https?://|/)#i', $decodedUrl)) {
+                return $m[0];
+            }
+            $safeUrl = e($decodedUrl);
+            $isExternal = preg_match('#^https?://#i', $decodedUrl) && !preg_match('#^https?://(www\.)?cricapp\.in(/|$)#i', $decodedUrl);
+            $extra = $isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+            $key = '%%CRIC_LINK_' . count($placeholders) . '%%';
+            $placeholders[$key] = '<a href="' . $safeUrl . '"' . $extra . ' class="text-amber-600 dark:text-amber-400 font-bold underline decoration-amber-500/40 hover:decoration-amber-400 transition">' . $label . '</a>';
+            return $key;
+        }, $escaped) ?? $escaped;
+
+        $escaped = preg_replace('/\*\*([^*]+)\*\*/', '<strong class="font-bold text-slate-900 dark:text-white">$1</strong>', $escaped) ?? $escaped;
+
+        if (!empty($placeholders)) {
+            $escaped = strtr($escaped, $placeholders);
+        }
+
+        return $escaped;
+    };
+
+    $renderMarkdown = function($contentStr) use ($formatInline) {
         $lines = explode("\n", (string) $contentStr);
         $html = '';
         foreach ($lines as $line) {
             $trimmed = trim($line);
             if (str_starts_with($trimmed, '### ')) {
-                $html .= '<h3 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white pt-5 pb-1.5 border-b border-slate-200 dark:border-white/10 flex items-center gap-2"><span>🏏</span><span>' . e(substr($trimmed, 4)) . '</span></h3>';
+                $html .= '<h3 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white pt-5 pb-1.5 border-b border-slate-200 dark:border-white/10 flex items-center gap-2"><span>🏏</span><span>' . $formatInline(substr($trimmed, 4)) . '</span></h3>';
             } elseif (str_starts_with($trimmed, '## ')) {
-                $html .= '<h2 class="text-2xl sm:text-3xl font-black text-amber-500 dark:text-amber-400 pt-6 pb-2">' . e(substr($trimmed, 3)) . '</h2>';
+                $html .= '<h2 class="text-2xl sm:text-3xl font-black text-amber-500 dark:text-amber-400 pt-6 pb-2">' . $formatInline(substr($trimmed, 3)) . '</h2>';
             } elseif (str_starts_with($trimmed, '# ')) {
-                $html .= '<h1 class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white pt-7 pb-3">' . e(substr($trimmed, 2)) . '</h1>';
+                $html .= '<h1 class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white pt-7 pb-3">' . $formatInline(substr($trimmed, 2)) . '</h1>';
             } elseif (str_starts_with($trimmed, '- ')) {
-                $html .= '<li class="ml-5 list-disc text-slate-700 dark:text-slate-300 leading-relaxed">' . e(substr($trimmed, 2)) . '</li>';
+                $html .= '<li class="ml-5 list-disc text-slate-700 dark:text-slate-300 leading-relaxed">' . $formatInline(substr($trimmed, 2)) . '</li>';
             } elseif (!empty($trimmed)) {
-                $html .= '<p class="text-slate-700 dark:text-slate-300 leading-relaxed text-sm sm:text-base">' . nl2br(e($trimmed)) . '</p>';
+                $html .= '<p class="text-slate-700 dark:text-slate-300 leading-relaxed text-sm sm:text-base">' . nl2br($formatInline($trimmed)) . '</p>';
             }
         }
         return $html;

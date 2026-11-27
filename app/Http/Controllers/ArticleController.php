@@ -161,7 +161,22 @@ class ArticleController extends Controller
             'General',
         ];
 
-        return view('articles.create', compact('categories'));
+        $linkableArticles = $this->getLinkableArticles();
+
+        return view('articles.create', compact('categories', 'linkableArticles'));
+    }
+
+    private function getLinkableArticles(?int $excludeId = null)
+    {
+        try {
+            $q = Article::published()->select(['id', 'title', 'slug'])->latest('published_at');
+            if ($excludeId !== null) {
+                $q->where('id', '!=', $excludeId);
+            }
+            return $q->take(25)->get();
+        } catch (\Throwable $e) {
+            return collect();
+        }
     }
 
     /**
@@ -275,7 +290,9 @@ class ArticleController extends Controller
             'General',
         ];
 
-        return view('articles.edit', compact('article', 'categories'));
+        $linkableArticles = $this->getLinkableArticles($article->id);
+
+        return view('articles.edit', compact('article', 'categories', 'linkableArticles'));
     }
 
     /**
