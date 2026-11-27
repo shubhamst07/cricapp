@@ -1959,6 +1959,35 @@ if os.path.dirname(os.path.abspath(__file__)) not in _sys.path:
     _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tts_cli import synthesize_best
 
+try:
+    from deep_translator import GoogleTranslator
+except ImportError:
+    GoogleTranslator = None
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    target: str = "hi"
+
+
+@app.post("/translate")
+async def translate_text(payload: TranslateRequest):
+    clean = re.sub(r"\s+", " ", (payload.text or "")).strip()
+    if not clean:
+        return JSONResponse(status_code=422, content={"status": "error", "message": "Text cannot be empty."})
+    if GoogleTranslator is None:
+        return JSONResponse(status_code=503, content={"status": "error", "message": "deep-translator unavailable."})
+
+    target = "en" if (payload.target or "hi").lower().startswith("en") else "hi"
+    try:
+        translated = await asyncio.wait_for(
+            asyncio.to_thread(lambda: GoogleTranslator(source="auto", target=target).translate(clean[:1500])),
+            timeout=5.0,
+        )
+        return {"status": "success", "translated_text": (translated or clean).strip(), "target": target}
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"status": "error", "message": f"Translate failed: {str(e)[:150]}"})
+
 
 @app.post("/tts")
 async def generate_tts(payload: TTSRequest):

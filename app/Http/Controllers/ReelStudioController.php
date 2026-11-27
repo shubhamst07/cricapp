@@ -105,6 +105,17 @@ class ReelStudioController extends Controller
             }
         }
 
+        $finalizePayload = static function (array $payload) use ($scriptService, $voice, $cleanText, $spokenText, $wasTranslated): array {
+            $actualSpoken = (string) ($payload['spoken_text'] ?? $spokenText);
+            $actualTranslated = $wasTranslated || !empty($payload['translated']);
+            $payload['spoken_text'] = $actualSpoken;
+            $payload['translated'] = $actualTranslated;
+            if ($actualTranslated && Str::startsWith($voice, 'hi-') && $scriptService->isMostlyHindi($actualSpoken)) {
+                $payload['hinglish_text'] = $scriptService->hindiToHinglish($actualSpoken, $cleanText);
+            }
+            return $payload;
+        };
+
         // 1. Fast path: score-engine HTTP daemon if running on port 6020
         $engineUrl = rtrim((string) config('services.cricket.local_url', 'http://127.0.0.1:6020'), '/');
         try {
@@ -116,9 +127,7 @@ class ReelStudioController extends Controller
             ]);
             $payload = $response->json();
             if ($response->ok() && is_array($payload) && !empty($payload['audio_base64'])) {
-                $payload['spoken_text'] = $payload['spoken_text'] ?? $spokenText;
-                $payload['translated'] = $wasTranslated || !empty($payload['translated']);
-                return response()->json($payload);
+                return response()->json($finalizePayload($payload));
             }
         } catch (\Throwable $e) {
             // Fall through silently to in-container CLI & direct HTTP TTS
@@ -127,23 +136,95 @@ class ReelStudioController extends Controller
         // 2. Fallback A: Direct python3 tts_cli.py inside container (edge-tts + gTTS)
         $cliPayload = $this->runPythonTtsCli($spokenText, $voice, $rate, $pitch);
         if ($cliPayload !== null) {
-            $cliPayload['spoken_text'] = $cliPayload['spoken_text'] ?? $spokenText;
-            $cliPayload['translated'] = $wasTranslated || !empty($cliPayload['translated']);
-            return response()->json($cliPayload);
+            return response()->json($finalizePayload($cliPayload));
         }
 
         // 3. Fallback B: Pure-PHP Google Translate TTS MP3 (works even if Python daemon/packages unavailable)
         $googlePayload = $this->fetchGoogleTranslateTts($spokenText, $voice);
         if ($googlePayload !== null) {
-            $googlePayload['spoken_text'] = $spokenText;
-            $googlePayload['translated'] = $wasTranslated;
-            return response()->json($googlePayload);
+            return response()->json($finalizePayload($googlePayload));
         }
 
         return response()->json([
             'status' => 'error',
             'message' => 'Could not reach AI voice servers right now. Try Record Mic or Upload Voice MP3.',
         ], 503);
+    }
+
+    /**
+     * Switch slide Spoken Voiceover & Caption scripts dynamically between Hinglish (for Hindi voices) and English.
+     */
+    public function translateScript(Request $request, ReelScriptService $scriptService)
+    {
+        $this->authorizeAdmin();
+
+        $validated = $request->validate([
+            'target' => 'required|in:hinglish,en',
+            'slides' => 'required|array|min:1|max:20',
+            'slides.*.text' => 'nullable|string|max:1000',
+            'slides.*.narration_en' => 'nullable|string|max:1000',
+            'slides.*.narration_hi' => 'nullable|string|max:1000',
+            'slides.*.narration_hinglish' => 'nullable|string|max:1000',
+        ]);
+
+        $target = $validated['target'];
+        $results = [];
+
+        foreach ($validated['slides'] as $slide) {
+            $rawText = trim((string) ($slide['text'] ?? ''));
+            $enRef = trim((string) ($slide['narration_en'] ?? ''));
+            $hiStored = trim((string) ($slide['narration_hi'] ?? ''));
+            $hinglishStored = trim((string) ($slide['narration_hinglish'] ?? ''));
+
+            if ($target === 'hinglish') {
+                $sourceForHi = $enRef !== '' ? $enRef : $rawText;
+                if ($scriptService->isMostlyHindi($hiStored)) {
+                    $hiText = $hiStored;
+                } elseif ($scriptService->isMostlyHindi($rawText)) {
+                    $hiText = $rawText;
+                } else {
+                    $hiText = $scriptService->translateToHindiFast($sourceForHi);
+                }
+
+                if ($hinglishStored !== '' && !$scriptService->isDevanagari($hinglishStored) && $scriptService->isMostlyHindi($hiText)) {
+                    $hinglishText = $hinglishStored;
+                } elseif ($scriptService->isMostlyHindi($hiText)) {
+                    $hinglishText = $scriptService->hindiToHinglish($hiText, $sourceForHi);
+                } else {
+                    $hinglishText = $rawText !== '' ? $rawText : $enRef;
+                }
+
+                $results[] = [
+                    'narration' => $hinglishText,
+                    'narration_hinglish' => $hinglishText,
+                    'narration_hi' => $scriptService->isMostlyHindi($hiText) ? $hiText : $hiStored,
+                    'narration_en' => $enRef !== '' ? $enRef : (!$scriptService->isDevanagari($rawText) ? $rawText : ''),
+                ];
+            } else {
+                if ($enRef !== '' && !$scriptService->isDevanagari($enRef)) {
+                    $enText = $enRef;
+                } elseif ($scriptService->isDevanagari($rawText)) {
+                    $enText = $scriptService->translateToEnglishFast($rawText);
+                } elseif ($scriptService->isMostlyHindi($hiStored)) {
+                    $enText = $scriptService->translateToEnglishFast($hiStored);
+                } else {
+                    $enText = $rawText;
+                }
+
+                $results[] = [
+                    'narration' => $enText,
+                    'narration_en' => $enText,
+                    'narration_hi' => $hiStored,
+                    'narration_hinglish' => $hinglishStored,
+                ];
+            }
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'target' => $target,
+            'slides' => $results,
+        ]);
     }
 
     /**
@@ -362,9 +443,15 @@ class ReelStudioController extends Controller
         $chunks = $this->splitTextForTts($text, 185);
         $mp3Binary = '';
 
+        $ipv4Curl = defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')
+            ? ['curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4]]
+            : [];
+
         try {
             foreach ($chunks as $chunk) {
-                $resp = Http::timeout(10)
+                $resp = Http::withOptions($ipv4Curl)
+                    ->connectTimeout(2)
+                    ->timeout(10)
                     ->withHeaders([
                         'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
                         'Referer' => 'https://translate.google.com/',

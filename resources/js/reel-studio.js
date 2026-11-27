@@ -207,6 +207,7 @@ export function initReelStudio(root) {
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const ttsEndpoint = root.getAttribute('data-tts-url') || '/admin/reels/tts';
+    const translateEndpoint = root.getAttribute('data-translate-url') || '/admin/reels/translate-script';
     const convertEndpoint = root.getAttribute('data-convert-url') || '/admin/reels/convert-mp4';
     const proxyEndpoint = root.getAttribute('data-proxy-url') || '/admin/reels/proxy-image';
     const studioBaseUrl = root.getAttribute('data-studio-url') || '/admin/reels';
@@ -839,12 +840,20 @@ export function initReelStudio(root) {
                 }
 
                 if (data.engine) lastEngine = data.engine;
-                // Preserve clean Hinglish in caption box; only store matched Hindi silently for audio pronunciation
-                if (data.spoken_text && data.spoken_text !== captionScript && voice.startsWith('hi-')) {
+                if (!voice.startsWith('hi-') && !slide.narration_en) {
+                    slide.narration_en = captionScript;
+                }
+                if (data.spoken_text && voice.startsWith('hi-')) {
                     slide.narration_hi = data.spoken_text;
                 }
+                if (data.hinglish_text && voice.startsWith('hi-')) {
+                    slide.narration = data.hinglish_text;
+                    slide.narration_hinglish = data.hinglish_text;
+                    slide._hinglishBase = data.hinglish_text;
+                }
 
-                const finalKey = `${voice}|${rate}|${captionScript}|${slide.narration_hi || speechToSend}`;
+                const finalCaption = String(slide.narration || captionScript).trim();
+                const finalKey = `${voice}|${rate}|${finalCaption}|${slide.narration_hi || speechToSend}`;
                 const arrayBuf = base64ToArrayBuffer(data.audio_base64);
                 const decoded = await audioCtx.decodeAudioData(arrayBuf);
                 // Match slide duration tightly to natural speech + 0.45s breathing gap
@@ -852,7 +861,7 @@ export function initReelStudio(root) {
                 newBuffers.push({
                     buffer: decoded,
                     boundaries: Array.isArray(data.boundaries) ? data.boundaries : [],
-                    text: captionScript,
+                    text: finalCaption,
                     cacheKey: finalKey,
                 });
             }
@@ -1330,13 +1339,91 @@ export function initReelStudio(root) {
         }
     });
 
+    async function syncScriptsToSelectedVoice(voice) {
+        const wantsHinglish = String(voice || 'hi-IN-MadhurNeural').startsWith('hi-');
+        const target = wantsHinglish ? 'hinglish' : 'en';
+
+        // Quick local switch if every slide already has the target variant stored
+        const allCachedLocally = state.slides.every((s) =>
+            wantsHinglish ? Boolean(s.narration_hinglish && s.narration_hi) : Boolean(s.narration_en)
+        );
+
+        if (allCachedLocally) {
+            state.slides.forEach((s) => {
+                s.narration = wantsHinglish ? s.narration_hinglish : s.narration_en;
+                if (wantsHinglish) s._hinglishBase = s.narration_hinglish;
+            });
+            renderSlidesEditor();
+            renderAt(state.playhead);
+            updateVoiceBadge(wantsHinglish ? 'Hinglish Script Ready (Hindi Voice)' : 'English Script Ready', false);
+            return;
+        }
+
+        setStatus(
+            wantsHinglish ? 'Converting Spoken Voiceover & Captions to Hinglish...' : 'Switching Spoken Voiceover & Captions to English...',
+            'info'
+        );
+
+        try {
+            const resp = await fetch(translateEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({
+                    target,
+                    slides: state.slides.map((s) => ({
+                        text: s.narration || s.headline || '',
+                        narration_en: s.narration_en || '',
+                        narration_hi: s.narration_hi || '',
+                        narration_hinglish: s.narration_hinglish || '',
+                    })),
+                }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (resp.ok && Array.isArray(data.slides)) {
+                data.slides.forEach((res, idx) => {
+                    if (!state.slides[idx]) return;
+                    state.slides[idx].narration = res.narration || state.slides[idx].narration;
+                    if (res.narration_hinglish) {
+                        state.slides[idx].narration_hinglish = res.narration_hinglish;
+                        if (wantsHinglish) state.slides[idx]._hinglishBase = res.narration_hinglish;
+                    }
+                    if (res.narration_hi) state.slides[idx].narration_hi = res.narration_hi;
+                    if (res.narration_en) state.slides[idx].narration_en = res.narration_en;
+                });
+                renderSlidesEditor();
+                renderAt(state.playhead);
+                updateVoiceBadge(wantsHinglish ? 'Hinglish Script Ready (Hindi Voice)' : 'English Script Ready', false);
+                setStatus(
+                    wantsHinglish
+                        ? 'Spoken Voiceover & Captions Hinglish mein ready hain!'
+                        : 'Spoken Voiceover & Captions English mein switch ho gaye.',
+                    'success'
+                );
+            }
+        } catch (_) {
+            // Keep existing slides gracefully if offline
+        }
+    }
+
     addSlideBtn?.addEventListener('click', () => {
         const fallbackImg = curatedImages[state.slides.length % Math.max(1, curatedImages.length)]?.url || '';
+        const isHindi = (voiceSelect?.value || state.voice || 'hi-IN-MadhurNeural').startsWith('hi-');
+        const enLine = 'Here is another key highlight from today\'s cricket action.';
+        const hiLine = 'आज के क्रिकेट मुकाबले की एक और बड़ी खास बात जानिए।';
+        const hinglishLine = 'Aaj ke cricket match ki ek aur badi highlight janiye.';
         state.slides.push({
             badge: `SLIDE ${state.slides.length + 1}`,
             headline: 'Add Key Cricket Moment Headline',
             subtext: 'Short match insight or batting/bowling stat line.',
-            narration: 'Here is another key highlight from today\'s cricket action.',
+            narration: isHindi ? hinglishLine : enLine,
+            narration_hinglish: hinglishLine,
+            narration_hi: hiLine,
+            narration_en: enLine,
+            _hinglishBase: hinglishLine,
             image: fallbackImg,
             duration: 5.0,
         });
@@ -1345,6 +1432,14 @@ export function initReelStudio(root) {
         const timeline = getTimeline();
         state.playhead = (timeline.segments[state.selectedSlideIndex]?.start || 0) + 0.4;
         renderAt(state.playhead);
+    });
+
+    voiceSelect?.addEventListener('change', async () => {
+        const nextVoice = voiceSelect.value || 'hi-IN-MadhurNeural';
+        state.voice = nextVoice;
+        state.voiceMode = 'ai';
+        state.slideVoiceBuffers = [];
+        await syncScriptsToSelectedVoice(nextVoice);
     });
 
     themeSelect?.addEventListener('change', () => {
@@ -1456,4 +1551,8 @@ export function initReelStudio(root) {
     // Initial render
     renderSlidesEditor();
     renderAt(0.4);
+
+    if (String(state.voice || '').startsWith('hi-') && state.slides.some((s) => !s.narration_hi)) {
+        syncScriptsToSelectedVoice(state.voice);
+    }
 }

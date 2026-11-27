@@ -313,6 +313,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/reels', [ReelStudioController::class, 'index'])->name('reels.index');
     Route::get('/admin/articles/{article}/reel', [ReelStudioController::class, 'forArticle'])->name('articles.reel');
     Route::post('/admin/reels/tts', [ReelStudioController::class, 'generateTts'])->name('reels.tts');
+    Route::post('/admin/reels/translate-script', [ReelStudioController::class, 'translateScript'])->name('reels.translate-script');
     Route::post('/admin/reels/convert-mp4', [ReelStudioController::class, 'convertMp4'])->name('reels.convert-mp4');
     Route::get('/admin/reels/proxy-image', [ReelStudioController::class, 'proxyImage'])->name('reels.proxy-image');
 });

@@ -54,6 +54,7 @@
      data-project="{{ json_encode($project, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}"
      data-curated-images="{{ json_encode($curatedImages, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}"
      data-tts-url="{{ route('reels.tts') }}"
+     data-translate-url="{{ route('reels.translate-script') }}"
      data-convert-url="{{ route('reels.convert-mp4') }}"
      data-proxy-url="{{ route('reels.proxy-image') }}"
      data-studio-url="{{ route('reels.index') }}"
@@ -90,7 +91,7 @@
                                 @endforeach
                             </select>
                             <p class="mt-1 text-[10px] text-emerald-400/90 font-semibold">
-                                Spoken Voiceover &amp; Captions clean Hinglish mein dikhte hain, aur Madhur/Swara natural Hindi accent mein bolte hain.
+                                Voice change karne par neeche Spoken Voiceover &amp; Captions automatically Hinglish (Hindi voice) ya English (English voice) mein switch ho jaate hain.
                             </p>
                         </div>
                         <div>

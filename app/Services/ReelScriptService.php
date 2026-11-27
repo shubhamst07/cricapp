@@ -105,6 +105,7 @@ class ReelScriptService
             'headline' => Str::limit($title, 82),
             'subtext' => $hookSub,
             'narration' => $slide1Hinglish !== '' ? $slide1Hinglish : $slide1En,
+            'narration_hinglish' => $slide1Hinglish !== '' ? $slide1Hinglish : $slide1En,
             'narration_hi' => $this->isMostlyHindi($slide1Hi) ? $slide1Hi : '',
             'narration_en' => $slide1En,
             'image' => $coverUrl,
@@ -126,6 +127,7 @@ class ReelScriptService
                 'headline' => Str::limit($sec['headline'], 78),
                 'subtext' => Str::limit($sec['subtext'], 110),
                 'narration' => $hinglishSpeech !== '' ? $hinglishSpeech : $enSpeech,
+                'narration_hinglish' => $hinglishSpeech !== '' ? $hinglishSpeech : $enSpeech,
                 'narration_hi' => $this->isMostlyHindi($hiSpeech) ? $hiSpeech : '',
                 'narration_en' => $enSpeech,
                 'image' => $bgImage,
@@ -138,6 +140,7 @@ class ReelScriptService
             'headline' => 'Full Story & Live Scores',
             'subtext' => 'Search CricApp.in on Google for ball-by-ball commentary & squad analysis.',
             'narration' => 'Poori story aur ball-by-ball live updates abhi padhein, CricApp.in par!',
+            'narration_hinglish' => 'Poori story aur ball-by-ball live updates abhi padhein, CricApp.in par!',
             'narration_hi' => 'पूरी स्टोरी और बॉल-बाय-बॉल लाइव अपडेट्स अभी पढ़ें, CricApp dot in पर।',
             'narration_en' => 'Read the full story and ball by ball live updates now on CricApp dot in.',
             'image' => $curated[0] ?? $coverUrl,
@@ -175,7 +178,9 @@ class ReelScriptService
                     'headline' => 'Massive Turning Point In Today\'s Thriller!',
                     'subtext' => 'Watch the top 3 moments that changed the match completely.',
                     'narration' => 'Bada cricket update! Janiye aaj ke thrilling match ke un 3 moments ke baare mein jinhone poora khel palat diya.',
+                    'narration_hinglish' => 'Bada cricket update! Janiye aaj ke thrilling match ke un 3 moments ke baare mein jinhone poora khel palat diya.',
                     'narration_hi' => 'बड़ा क्रिकेट अपडेट! जानिए आज के रोमांचक मैच के उन तीन पलों के बारे में जिन्होंने पूरा खेल पलट दिया।',
+                    'narration_en' => 'Big cricket update! Here are the 3 moments that completely turned today\'s thriller around.',
                     'image' => $curated[0],
                     'duration' => 5.0,
                 ],
@@ -184,7 +189,9 @@ class ReelScriptService
                     'headline' => 'Powerplay Assault Stuns The Opposition',
                     'subtext' => 'Clean hitting right from over one put instant scoreboard pressure.',
                     'narration' => 'Sabse pehle powerplay mein toofani batting ne vipakshi team par turant bada dabav bana diya.',
+                    'narration_hinglish' => 'Sabse pehle powerplay mein toofani batting ne vipakshi team par turant bada dabav bana diya.',
                     'narration_hi' => 'सबसे पहले पावरप्ले में तूफानी बल्लेबाजी ने विपक्षी टीम पर तुरंत बड़ा दबाव बना दिया।',
+                    'narration_en' => 'First, an explosive powerplay start put the opposition under immediate scoreboard pressure.',
                     'image' => $curated[1],
                     'duration' => 5.0,
                 ],
@@ -193,7 +200,9 @@ class ReelScriptService
                     'headline' => 'Death-Overs Spell Seals The Contest',
                     'subtext' => 'Pinpoint yorkers and clever slower balls defended the target.',
                     'narration' => 'Iske baad death overs ki sateek yorker bowling ne aakhiri palon mein jeet pakki kar di.',
+                    'narration_hinglish' => 'Iske baad death overs ki sateek yorker bowling ne aakhiri palon mein jeet pakki kar di.',
                     'narration_hi' => 'इसके बाद डेथ ओवर्स की सटीक यॉर्कर गेंदबाजी ने आखिरी पलों में जीत पक्की कर दी।',
+                    'narration_en' => 'Then came pinpoint death-over yorkers that sealed the contest in the final overs.',
                     'image' => $curated[2],
                     'duration' => 5.0,
                 ],
@@ -202,7 +211,9 @@ class ReelScriptService
                     'headline' => 'Ball-by-Ball Scores & Reports',
                     'subtext' => 'Search CricApp.in on Google for full scorecards & match news.',
                     'narration' => 'Sabse tez live cricket scores aur match reports ke liye abhi judein, CricApp.in par!',
+                    'narration_hinglish' => 'Sabse tez live cricket scores aur match reports ke liye abhi judein, CricApp.in par!',
                     'narration_hi' => 'सबसे तेज़ लाइव क्रिकेट स्कोर और मैच रिपोर्ट्स के लिए अभी जुड़ें, CricApp dot in पर।',
+                    'narration_en' => 'Follow CricApp dot in for fastest live cricket scores and daily match stories.',
                     'image' => $curated[3],
                     'duration' => 4.5,
                 ],
@@ -358,9 +369,32 @@ class ReelScriptService
 
     private function translateChunkViaProviders(string $text): string
     {
-        // 1. Google clients5 endpoint (fast compact JSON)
+        $ipv4Curl = defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')
+            ? ['curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4]]
+            : [];
+
+        // 0. Score-engine local Python /translate endpoint (deep-translator, fast when daemon is running)
         try {
-            $resp = Http::timeout(3)
+            $engineUrl = rtrim((string) config('services.cricket.local_url', 'http://127.0.0.1:6020'), '/');
+            $resp = Http::connectTimeout(1)->timeout(5)->post($engineUrl . '/translate', [
+                'text' => $text,
+                'target' => 'hi',
+            ]);
+            if ($resp->ok()) {
+                $candidate = trim((string) ($resp->json('translated_text') ?? ''));
+                if ($candidate !== '' && $this->isMostlyHindi($candidate)) {
+                    return $candidate;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Fall through to external HTTP translators
+        }
+
+        // 1. Google clients5 endpoint (IPv4 forced to avoid 60s IPv6 hang)
+        try {
+            $resp = Http::withOptions($ipv4Curl)
+                ->connectTimeout(2)
+                ->timeout(3)
                 ->withHeaders([
                     'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
                 ])
@@ -385,32 +419,11 @@ class ReelScriptService
             // Try next provider
         }
 
-        // 2. MyMemory API (reliable from cloud/Render AWS server IPs)
+        // 2. Google Translate GTX endpoint (IPv4 forced)
         try {
-            $snippet = mb_substr($text, 0, 480);
-            $resp = Http::timeout(4)
-                ->withHeaders([
-                    'User-Agent' => 'CricAppNews/2.0 (Cricket Reel Studio)',
-                    'Accept' => 'application/json',
-                ])
-                ->get('https://api.mymemory.translated.net/get', [
-                    'q' => $snippet,
-                    'langpair' => 'en|hi',
-                ]);
-            if ($resp->successful()) {
-                $json = $resp->json();
-                $res = trim(html_entity_decode((string) ($json['responseData']['translatedText'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-                if ($res !== '' && !str_contains(strtoupper($res), 'MYMEMORY WARNING') && $this->isMostlyHindi($res)) {
-                    return $res;
-                }
-            }
-        } catch (\Throwable $e) {
-            // Try next provider
-        }
-
-        // 3. Google Translate GTX endpoint
-        try {
-            $resp = Http::timeout(3)
+            $resp = Http::withOptions($ipv4Curl)
+                ->connectTimeout(2)
+                ->timeout(3)
                 ->withHeaders([
                     'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
                 ])
@@ -435,10 +448,96 @@ class ReelScriptService
                 }
             }
         } catch (\Throwable $e) {
+            // Try next provider
+        }
+
+        // 3. MyMemory API fallback (IPv4 forced)
+        try {
+            $snippet = mb_substr($text, 0, 480);
+            $resp = Http::withOptions($ipv4Curl)
+                ->connectTimeout(2)
+                ->timeout(4)
+                ->withHeaders([
+                    'User-Agent' => 'CricAppNews/2.0 (Cricket Reel Studio)',
+                    'Accept' => 'application/json',
+                ])
+                ->get('https://api.mymemory.translated.net/get', [
+                    'q' => $snippet,
+                    'langpair' => 'en|hi',
+                ]);
+            if ($resp->successful()) {
+                $json = $resp->json();
+                $res = trim(html_entity_decode((string) ($json['responseData']['translatedText'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                if ($res !== '' && !str_contains(strtoupper($res), 'MYMEMORY WARNING') && $this->isMostlyHindi($res)) {
+                    return $res;
+                }
+            }
+        } catch (\Throwable $e) {
             // Ignore
         }
 
         return '';
+    }
+
+    /**
+     * Translate Hindi script back to clean English when admin switches to an English narrator voice.
+     */
+    public function translateToEnglishFast(string $text): string
+    {
+        $clean = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+        if ($clean === '' || !$this->isDevanagari($clean)) {
+            return $clean;
+        }
+
+        $ipv4Curl = defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')
+            ? ['curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4]]
+            : [];
+
+        try {
+            $engineUrl = rtrim((string) config('services.cricket.local_url', 'http://127.0.0.1:6020'), '/');
+            $resp = Http::connectTimeout(1)->timeout(5)->post($engineUrl . '/translate', [
+                'text' => $clean,
+                'target' => 'en',
+            ]);
+            if ($resp->ok()) {
+                $candidate = trim((string) ($resp->json('translated_text') ?? ''));
+                if ($candidate !== '' && !$this->isDevanagari($candidate)) {
+                    return $candidate;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Fall through
+        }
+
+        try {
+            $resp = Http::withOptions($ipv4Curl)
+                ->connectTimeout(2)
+                ->timeout(3)
+                ->get('https://translate.googleapis.com/translate_a/single', [
+                    'client' => 'gtx',
+                    'sl' => 'auto',
+                    'tl' => 'en',
+                    'dt' => 't',
+                    'q' => $clean,
+                ]);
+            if ($resp->successful()) {
+                $arr = $resp->json();
+                if (is_array($arr) && isset($arr[0]) && is_array($arr[0])) {
+                    $out = '';
+                    foreach ($arr[0] as $part) {
+                        $out .= $part[0] ?? '';
+                    }
+                    $out = trim($out);
+                    if ($out !== '' && !$this->isDevanagari($out)) {
+                        return $out;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore
+        }
+
+        return $clean;
     }
 
     /**
@@ -510,6 +609,16 @@ class ReelScriptService
             'गेंदबाज' => 'bowler',
             'क्षेत्ररक्षण' => 'fielding',
             'फील्डिंग' => 'fielding',
+            'व्हाइटबोर्ड' => 'whiteboard',
+            'माइक्रोसेकंड' => 'microsecond',
+            'बुक' => 'book',
+            'विलो' => 'willow',
+            'बच्चे' => 'bachche',
+            'होता' => 'hota',
+            'शायद' => 'shayad',
+            'जीता' => 'jeeta',
+            'लिखा' => 'likha',
+            'बनाया' => 'banaya',
             'खिलाड़ियों' => 'players',
             'खिलाड़ी' => 'player',
             'कप्तानी' => 'captaincy',
@@ -676,12 +785,17 @@ class ReelScriptService
             $text = preg_replace('/(?<![\p{Devanagari}])' . preg_quote($hi, '/') . '(?![\p{Devanagari}])/u', $hn, $text) ?? $text;
         }
 
-        // Collect proper/capitalized English tokens from original English reference if provided
+        // Collect ALL English reference tokens >= 3 chars so transliterated loanwords & proper nouns stay crisp
         $englishProper = [];
+        $englishLoanwords = [];
         if ($englishRef !== '') {
             preg_match_all('/\b[A-Z][A-Za-z0-9\-\/]{1,24}\b/', $englishRef, $matches);
             foreach ($matches[0] ?? [] as $tok) {
                 $englishProper[strtolower($tok)] = $tok;
+            }
+            preg_match_all('/\b[A-Za-z][A-Za-z0-9\-]{3,24}\b/', $englishRef, $allMatches);
+            foreach ($allMatches[0] ?? [] as $tok) {
+                $englishLoanwords[strtolower($tok)] = $tok;
             }
         }
 
@@ -703,7 +817,8 @@ class ReelScriptService
                 continue;
             }
 
-            if ($this->isDevanagari($core)) {
+            $wasDevanagari = $this->isDevanagari($core);
+            if ($wasDevanagari) {
                 $roman = preg_replace_callback(
                     '/[\x{0900}-\x{097F}]+/u',
                     fn ($dm) => $this->transliterateDevanagariCore($dm[0]),
@@ -713,14 +828,22 @@ class ReelScriptService
                 $roman = $core;
             }
 
-            // Restore exact proper noun casing/spelling from English reference when very close
+            // Restore exact proper noun & loanword spelling from English reference via strict phonetic matching
             $lower = strtolower($roman);
             if (isset($englishProper[$lower])) {
                 $roman = $englishProper[$lower];
-            } elseif (strlen($lower) >= 4 && !empty($englishProper)) {
-                foreach ($englishProper as $engLower => $engOrig) {
-                    if (abs(strlen($engLower) - strlen($lower)) <= 2 && levenshtein($lower, $engLower) <= 1) {
-                        $roman = $engOrig;
+            } elseif ($wasDevanagari && strlen($lower) >= 4 && !empty($englishLoanwords)) {
+                $romanSkel = $this->consonantSkeleton($lower);
+                foreach ($englishLoanwords as $engLower => $engOrig) {
+                    $engClean = rtrim($engLower, 's');
+                    $engSkel = $this->consonantSkeleton($engLower);
+                    $engCleanSkel = $this->consonantSkeleton($engClean);
+                    similar_text($lower, $engLower, $pct);
+                    if (
+                        (strlen($romanSkel) >= 5 && ($romanSkel === $engSkel || $romanSkel === $engCleanSkel)) ||
+                        ($pct >= 72.0 && abs(strlen($engLower) - strlen($lower)) <= 2)
+                    ) {
+                        $roman = isset($englishProper[$engLower]) ? $engOrig : strtolower($engOrig);
                         break;
                     }
                 }
@@ -735,6 +858,19 @@ class ReelScriptService
         $result = preg_replace_callback('/(?:^|[.!?]\s+)([a-z])/', static fn ($m) => strtoupper($m[0]), $result) ?? $result;
 
         return trim($result);
+    }
+
+    private function consonantSkeleton(string $word): string
+    {
+        $w = strtolower(preg_replace('/[^a-z]/', '', $word) ?? '');
+        $w = str_replace(['chh', 'ch', 'sh', 'ph', 'ck', 'qu', 'oo', 'ee'], ['X', 'X', 'S', 'f', 'k', 'k', 'u', 'i'], $w);
+        $w = strtr($w, ['v' => 'w', 'c' => 'k', 'q' => 'k', 'z' => 'j']);
+        if ($w === '') {
+            return '';
+        }
+        $first = $w[0];
+        $rest = preg_replace('/[aeiouyh]/', '', substr($w, 1)) ?? '';
+        return preg_replace('/(.)\1+/', '$1', $first . $rest) ?? ($first . $rest);
     }
 
     private function transliterateDevanagariCore(string $word): string
