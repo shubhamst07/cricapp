@@ -9,6 +9,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UmpireController;
 use App\Http\Controllers\ArticleController;
 use App\Http\Controllers\ReelStudioController;
+use App\Http\Controllers\SeoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', fn () => response('pong', 200)->header('Content-Type', 'text/plain'));
@@ -188,106 +189,13 @@ $legacyArticleImageResponse = function (string $filename) {
 Route::get('/uploads/articles/{filename}', $legacyArticleImageResponse)->where('filename', '[A-Za-z0-9_\-\.]+');
 Route::get('/storage/uploads/articles/{filename}', $legacyArticleImageResponse)->where('filename', '[A-Za-z0-9_\-\.]+');
 
-// Google SEO Sitemap & AdSense ads.txt
-Route::get('/sitemap.xml', function () {
-    $xml = \Illuminate\Support\Facades\Cache::remember('sitemap_xml_v1', 900, function () {
-        $baseUrl = rtrim(config('app.url', 'https://www.cricapp.in'), '/');
-        if (!str_starts_with($baseUrl, 'http')) {
-            $baseUrl = 'https://www.cricapp.in';
-        }
-
-        $urls = [
-            ['loc' => "{$baseUrl}/", 'changefreq' => 'always', 'priority' => '1.0'],
-            ['loc' => "{$baseUrl}/live-scores?section=international", 'changefreq' => 'always', 'priority' => '0.9'],
-            ['loc' => "{$baseUrl}/live-scores?section=local", 'changefreq' => 'always', 'priority' => '0.9'],
-            ['loc' => "{$baseUrl}/articles", 'changefreq' => 'daily', 'priority' => '0.9'],
-            ['loc' => "{$baseUrl}/matches", 'changefreq' => 'hourly', 'priority' => '0.9'],
-            ['loc' => "{$baseUrl}/feed", 'changefreq' => 'hourly', 'priority' => '0.8'],
-            ['loc' => "{$baseUrl}/grounds", 'changefreq' => 'weekly', 'priority' => '0.8'],
-            ['loc' => "{$baseUrl}/umpires", 'changefreq' => 'weekly', 'priority' => '0.8'],
-            ['loc' => "{$baseUrl}/meetups", 'changefreq' => 'daily', 'priority' => '0.8'],
-            ['loc' => "{$baseUrl}/about", 'changefreq' => 'monthly', 'priority' => '0.6'],
-            ['loc' => "{$baseUrl}/contact", 'changefreq' => 'monthly', 'priority' => '0.6'],
-            ['loc' => "{$baseUrl}/privacy-policy", 'changefreq' => 'monthly', 'priority' => '0.5'],
-            ['loc' => "{$baseUrl}/terms-of-service", 'changefreq' => 'monthly', 'priority' => '0.5'],
-        ];
-
-        try {
-            $articles = \App\Models\Article::published()
-                ->select(['slug', 'updated_at', 'created_at', 'published_at'])
-                ->latest('published_at')
-                ->take(500)
-                ->get();
-            foreach ($articles as $art) {
-                $urls[] = [
-                    'loc' => "{$baseUrl}/articles/{$art->slug}",
-                    'lastmod' => ($art->updated_at ?? $art->created_at)?->toAtomString(),
-                    'changefreq' => 'weekly',
-                    'priority' => '0.8',
-                ];
-            }
-
-            $matches = \App\Models\CricketMatch::select(['id', 'updated_at', 'created_at'])
-                ->latest('id')
-                ->take(100)
-                ->get();
-            foreach ($matches as $m) {
-                $urls[] = [
-                    'loc' => "{$baseUrl}/matches/{$m->id}",
-                    'lastmod' => ($m->updated_at ?? $m->created_at)?->toAtomString(),
-                    'changefreq' => 'daily',
-                    'priority' => '0.7',
-                ];
-            }
-
-            $grounds = \App\Models\Ground::select(['id', 'updated_at', 'created_at'])
-                ->latest('id')
-                ->take(100)
-                ->get();
-            foreach ($grounds as $g) {
-                $urls[] = [
-                    'loc' => "{$baseUrl}/grounds/{$g->id}",
-                    'lastmod' => ($g->updated_at ?? $g->created_at)?->toAtomString(),
-                    'changefreq' => 'weekly',
-                    'priority' => '0.7',
-                ];
-            }
-
-            $umpires = \App\Models\UmpireProfile::select(['id', 'updated_at', 'created_at'])
-                ->latest('id')
-                ->take(100)
-                ->get();
-            foreach ($umpires as $u) {
-                $urls[] = [
-                    'loc' => "{$baseUrl}/umpires/{$u->id}",
-                    'lastmod' => ($u->updated_at ?? $u->created_at)?->toAtomString(),
-                    'changefreq' => 'weekly',
-                    'priority' => '0.7',
-                ];
-            }
-        } catch (\Throwable $e) {
-            // ignore partial DB failures during sitemap generation
-        }
-
-        $out = '<?xml version="1.0" encoding="UTF-8"?>';
-        $out .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
-        foreach ($urls as $u) {
-            $out .= '<url>';
-            $out .= '<loc>' . htmlspecialchars($u['loc'], ENT_XML1, 'UTF-8') . '</loc>';
-            if (!empty($u['lastmod'])) {
-                $out .= '<lastmod>' . $u['lastmod'] . '</lastmod>';
-            }
-            $out .= '<changefreq>' . ($u['changefreq'] ?? 'weekly') . '</changefreq>';
-            $out .= '<priority>' . ($u['priority'] ?? '0.8') . '</priority>';
-            $out .= '</url>';
-        }
-        $out .= '</urlset>';
-
-        return $out;
-    });
-
-    return response($xml, 200)->header('Content-Type', 'application/xml; charset=utf-8');
-});
+// Google SEO Sitemaps, RSS Feed, IndexNow Key & AdSense ads.txt
+Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('seo.sitemap');
+Route::get('/news-sitemap.xml', [SeoController::class, 'newsSitemap'])->name('seo.news-sitemap');
+Route::get('/rss.xml', [SeoController::class, 'rssFeed'])->name('seo.rss');
+Route::get('/{key}.txt', [SeoController::class, 'indexNowKey'])
+    ->where('key', '[A-Za-z0-9\-]{20,64}')
+    ->name('seo.indexnow-key');
 
 Route::get('/ads.txt', function () {
     $adsenseId = (string) config('services.adsense.client_id', '');

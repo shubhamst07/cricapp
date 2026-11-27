@@ -22,33 +22,68 @@
 @endpush
 
 @section('schema')
-    <script type="application/ld+json">{!! json_encode(array_filter([
-        '@context' => 'https://schema.org',
-        '@type' => 'NewsArticle',
-        'headline' => $article->title,
-        'description' => $articleDesc,
-        'articleSection' => $article->category,
-        'image' => [$article->cover_image_url],
-        'datePublished' => ($article->published_at ?? $article->created_at)?->toAtomString(),
-        'dateModified' => ($article->updated_at ?? $article->published_at ?? $article->created_at)?->toAtomString(),
-        'author' => [
-            '@type' => 'Person',
-            'name' => $article->author_name ?: 'CricApp Editorial Team',
-        ],
-        'publisher' => [
-            '@type' => 'Organization',
-            'name' => 'CricApp.in',
-            'url' => url('/'),
-            'logo' => [
-                '@type' => 'ImageObject',
-                'url' => url('/icons/icon-512x512.png'),
+    @php
+        $articleNode = array_filter([
+            '@type' => 'NewsArticle',
+            'headline' => $article->title,
+            'description' => $articleDesc,
+            'articleSection' => $article->category,
+            'image' => [$article->cover_image_url],
+            'datePublished' => ($article->published_at ?? $article->created_at)?->toAtomString(),
+            'dateModified' => ($article->updated_at ?? $article->published_at ?? $article->created_at)?->toAtomString(),
+            'author' => [
+                '@type' => 'Person',
+                'name' => $article->author_name ?: 'CricApp Editorial Team',
             ],
-        ],
-        'mainEntityOfPage' => [
-            '@type' => 'WebPage',
-            '@id' => $articleUrl,
-        ],
-    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+            'publisher' => [
+                '@type' => 'Organization',
+                'name' => 'CricApp.in',
+                'url' => url('/'),
+                'logo' => [
+                    '@type' => 'ImageObject',
+                    'url' => url('/icons/icon-512x512.png'),
+                ],
+            ],
+            'mainEntityOfPage' => [
+                '@type' => 'WebPage',
+                '@id' => $articleUrl,
+            ],
+        ]);
+
+        $breadcrumbNode = [
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                [
+                    '@type' => 'ListItem',
+                    'position' => 1,
+                    'name' => 'Home',
+                    'item' => url('/'),
+                ],
+                [
+                    '@type' => 'ListItem',
+                    'position' => 2,
+                    'name' => 'Cricket Articles',
+                    'item' => route('articles.index'),
+                ],
+                [
+                    '@type' => 'ListItem',
+                    'position' => 3,
+                    'name' => $article->category ?: 'News',
+                    'item' => route('articles.index', ['category' => $article->category]),
+                ],
+                [
+                    '@type' => 'ListItem',
+                    'position' => 4,
+                    'name' => $article->title,
+                    'item' => $articleUrl,
+                ],
+            ],
+        ];
+    @endphp
+    <script type="application/ld+json">{!! json_encode([
+        '@context' => 'https://schema.org',
+        '@graph' => [$articleNode, $breadcrumbNode],
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
 @endsection
 
 @section('header')
@@ -63,7 +98,7 @@
             <div class="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
                 <a href="{{ route('articles.index') }}" class="hover:text-amber-500 dark:hover:text-amber-400 transition">Articles</a>
                 <span>›</span>
-                <span class="text-amber-500 dark:text-amber-400 truncate">{{ $article->category }}</span>
+                <a href="{{ route('articles.index', ['category' => $article->category]) }}" class="text-amber-500 dark:text-amber-400 truncate hover:underline">{{ $article->category }}</a>
             </div>
             <h2 class="font-black text-lg sm:text-xl text-slate-900 dark:text-white truncate mt-0.5">
                 {{ $article->title }}
@@ -244,15 +279,17 @@
                 {!! $renderMarkdown($article->content) !!}
             </div>
 
-            <!-- Tags Section -->
+            <!-- Clickable SEO Tags Section -->
             @if($article->tags)
                 <div class="pt-6 border-t border-slate-200 dark:border-white/10 flex items-center gap-2 flex-wrap text-xs">
                     <span class="text-slate-500 dark:text-slate-400 font-bold">🏷️ Tags:</span>
                     @foreach(explode(',', $article->tags) as $tag)
-                        @if(trim($tag))
-                            <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/5 font-mono">
-                                #{{ trim($tag) }}
-                            </span>
+                        @php $cleanTag = trim($tag); @endphp
+                        @if($cleanTag !== '')
+                            <a href="{{ route('articles.index', ['q' => $cleanTag]) }}"
+                               class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-500/15 dark:bg-white/5 dark:hover:bg-amber-500/15 text-slate-700 hover:text-amber-600 dark:text-slate-300 dark:hover:text-amber-300 border border-slate-200 dark:border-white/5 hover:border-amber-500/30 font-mono transition">
+                                #{{ $cleanTag }}
+                            </a>
                         @endif
                     @endforeach
                 </div>

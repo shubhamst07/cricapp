@@ -60,6 +60,7 @@
         @endif
 
         <!-- PWA & Mobile App Meta Tags -->
+        <link rel="alternate" type="application/rss+xml" title="CricApp.in - Cricket News &amp; Match Reports" href="{{ url('/rss.xml') }}">
         <link rel="manifest" href="/manifest.json">
         <meta name="theme-color" content="#0f172a">
         <meta name="mobile-web-app-capable" content="yes">

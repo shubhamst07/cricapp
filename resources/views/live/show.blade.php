@@ -67,24 +67,52 @@
 @section('meta_description', \Illuminate\Support\Str::limit($pageDesc, 160))
 @section('canonical', route('live-scores.show', $match['id'] ?? ''))
 @section('schema')
-    <script type="application/ld+json">{!! json_encode(array_filter([
+    @php
+        $eventNode = array_filter([
+            '@type' => 'SportsEvent',
+            'name' => $teamsName ?: 'Live Cricket Match',
+            'sport' => 'Cricket',
+            'description' => $pageDesc,
+            'url' => route('live-scores.show', $match['id'] ?? ''),
+            'startDate' => $match['dateTimeGMT'] ?? null,
+            'location' => !empty($match['venue']) ? [
+                '@type' => 'Place',
+                'name' => $match['venue'],
+            ] : null,
+            'organizer' => [
+                '@type' => 'Organization',
+                'name' => 'CricApp.in',
+                'url' => url('/'),
+            ],
+        ]);
+        $matchBreadcrumb = [
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                [
+                    '@type' => 'ListItem',
+                    'position' => 1,
+                    'name' => 'Home',
+                    'item' => url('/'),
+                ],
+                [
+                    '@type' => 'ListItem',
+                    'position' => 2,
+                    'name' => 'Live Cricket Scores',
+                    'item' => route('live-scores.index'),
+                ],
+                [
+                    '@type' => 'ListItem',
+                    'position' => 3,
+                    'name' => $teamsName ?: 'Match Scorecard',
+                    'item' => route('live-scores.show', $match['id'] ?? ''),
+                ],
+            ],
+        ];
+    @endphp
+    <script type="application/ld+json">{!! json_encode([
         '@context' => 'https://schema.org',
-        '@type' => 'SportsEvent',
-        'name' => $teamsName ?: 'Live Cricket Match',
-        'sport' => 'Cricket',
-        'description' => $pageDesc,
-        'url' => route('live-scores.show', $match['id'] ?? ''),
-        'startDate' => $match['dateTimeGMT'] ?? null,
-        'location' => !empty($match['venue']) ? [
-            '@type' => 'Place',
-            'name' => $match['venue'],
-        ] : null,
-        'organizer' => [
-            '@type' => 'Organization',
-            'name' => 'CricApp.in',
-            'url' => url('/'),
-        ],
-    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+        '@graph' => [$eventNode, $matchBreadcrumb],
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
 @endsection
 
 @section('content')

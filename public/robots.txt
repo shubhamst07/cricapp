@@ -20,3 +20,5 @@ Disallow: /umpires/register
 Disallow: /inquiries
 
 Sitemap: https://www.cricapp.in/sitemap.xml
+Sitemap: https://www.cricapp.in/news-sitemap.xml
+Sitemap: https://www.cricapp.in/rss.xml

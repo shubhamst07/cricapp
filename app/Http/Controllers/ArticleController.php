@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Article;
 use App\Services\ArticleGeneratorService;
 use App\Services\ImageKitService;
+use App\Services\IndexNowService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -217,7 +218,7 @@ class ArticleController extends Controller
     /**
      * Store a newly created article (Admin only).
      */
-    public function store(Request $request, ImageKitService $imageKit): RedirectResponse
+    public function store(Request $request, ImageKitService $imageKit, IndexNowService $indexNow): RedirectResponse
     {
         $this->authorizeAdmin();
         $this->ensureDatabaseReady();
@@ -269,6 +270,13 @@ class ArticleController extends Controller
         ]);
 
         $this->clearArticleCache();
+        if ($article->status === 'published') {
+            $indexNow->pingUrls([
+                route('articles.show', $article->slug),
+                route('articles.index'),
+                url('/'),
+            ]);
+        }
 
         return redirect()->route('articles.show', $article->slug)
             ->with('success', '🏏 Article published successfully! It is now live for all cricket fans.');
@@ -298,7 +306,7 @@ class ArticleController extends Controller
     /**
      * Update the specified article (Admin only).
      */
-    public function update(Request $request, Article $article, ImageKitService $imageKit): RedirectResponse
+    public function update(Request $request, Article $article, ImageKitService $imageKit, IndexNowService $indexNow): RedirectResponse
     {
         $this->authorizeAdmin();
 
@@ -352,6 +360,12 @@ class ArticleController extends Controller
         ]);
 
         $this->clearArticleCache();
+        if ($article->status === 'published') {
+            $indexNow->pingUrls([
+                route('articles.show', $article->slug),
+                route('articles.index'),
+            ]);
+        }
 
         return redirect()->route('articles.show', $article->slug)
             ->with('success', '✅ Article updated successfully.');
@@ -469,6 +483,9 @@ class ArticleController extends Controller
     {
         Cache::forget('home_top_articles');
         Cache::forget('sitemap_xml_v1');
+        Cache::forget('sitemap_xml_v2');
+        Cache::forget('news_sitemap_xml_v1');
+        Cache::forget('rss_feed_xml_v1');
         for ($p = 1; $p <= 5; $p++) {
             Cache::forget("articles_index_page_{$p}");
         }

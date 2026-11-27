@@ -70,4 +70,8 @@ return [
         'analytics_id' => env('GA_MEASUREMENT_ID', 'G-RBGZ4Z285V'),
     ],
 
+    'indexnow' => [
+        'key' => env('INDEXNOW_KEY', 'cricapp2026seo9f8a7b6c5d4e3f2a1098'),
+    ],
+
 ];
