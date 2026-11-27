@@ -53,6 +53,7 @@
 <div id="reel-studio-root"
      data-project="{{ json_encode($project, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}"
      data-curated-images="{{ json_encode($curatedImages, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}"
+     data-refresh-url="{{ route('reels.refresh') }}"
      data-tts-url="{{ route('reels.tts') }}"
      data-translate-url="{{ route('reels.translate-script') }}"
      data-convert-url="{{ route('reels.convert-mp4') }}"
@@ -153,17 +154,29 @@
 
                 <!-- 2. Storyboard Slides -->
                 <div class="rounded-3xl bg-slate-900/75 border border-white/10 p-5 space-y-4">
-                    <div class="flex items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <h3 class="text-sm font-black uppercase tracking-wider text-white">
                                 🎞️ Reel Storyboard Slides
                             </h3>
                             <p class="text-xs text-slate-400">Edit text, images &amp; spoken lines. Generating AI Voiceover automatically tunes slide timing.</p>
                         </div>
-                        <button type="button" id="btn-add-slide"
-                                class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider transition cursor-pointer">
-                            + Add Slide
-                        </button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" id="btn-refresh-reel"
+                                    title="Nayi script angle aur naye background photos laayein"
+                                    class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-indigo-500/20 transition cursor-pointer">
+                                🔄 Refresh Script &amp; BG
+                            </button>
+                            <button type="button" id="btn-shuffle-bg"
+                                    title="Sirf background photos aur visual theme change karein"
+                                    class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/15 text-slate-200 text-xs font-bold transition cursor-pointer">
+                                🖼️ Change BG
+                            </button>
+                            <button type="button" id="btn-add-slide"
+                                    class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider transition cursor-pointer">
+                                + Add Slide
+                            </button>
+                        </div>
                     </div>
 
                     <div id="reel-slides-list" class="space-y-3"></div>

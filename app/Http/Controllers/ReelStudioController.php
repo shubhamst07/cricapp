@@ -70,6 +70,43 @@ class ReelStudioController extends Controller
     }
 
     /**
+     * Regenerate an alternative Reel script variant & fresh background images.
+     */
+    public function refreshScript(Request $request, ReelScriptService $scriptService)
+    {
+        $this->authorizeAdmin();
+
+        $validated = $request->validate([
+            'article_id' => 'nullable|integer',
+            'variant' => 'required|integer|min:0|max:200',
+            'voice' => 'nullable|string|max:64',
+            'exclude_images' => 'nullable|array|max:20',
+            'exclude_images.*' => 'nullable|string|max:2048',
+        ]);
+
+        $variant = (int) $validated['variant'];
+        $voice = trim((string) ($validated['voice'] ?? 'hi-IN-MadhurNeural'));
+        $excludeImages = array_values(array_map(
+            static fn ($u) => trim((string) $u),
+            (array) ($validated['exclude_images'] ?? [])
+        ));
+
+        $article = !empty($validated['article_id'])
+            ? Article::find((int) $validated['article_id'])
+            : null;
+
+        $project = $article
+            ? $scriptService->buildFromArticle($article, $variant, $voice, $excludeImages)
+            : $scriptService->buildDefaultBlank($variant, $voice, $excludeImages);
+
+        return response()->json([
+            'status' => 'success',
+            'variant' => $variant,
+            'project' => $project,
+        ]);
+    }
+
+    /**
      * Generate free Hindi / Indian-English voiceover MP3.
      * Fallback chain: score-engine HTTP -> in-container python tts_cli.py (edge-tts/gTTS) -> direct Google TTS HTTP.
      */

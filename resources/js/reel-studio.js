@@ -206,6 +206,7 @@ export function initReelStudio(root) {
     }
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const refreshEndpoint = root.getAttribute('data-refresh-url') || '/admin/reels/refresh';
     const ttsEndpoint = root.getAttribute('data-tts-url') || '/admin/reels/tts';
     const translateEndpoint = root.getAttribute('data-translate-url') || '/admin/reels/translate-script';
     const convertEndpoint = root.getAttribute('data-convert-url') || '/admin/reels/convert-mp4';
@@ -216,6 +217,8 @@ export function initReelStudio(root) {
     const canvas = document.getElementById('reel-canvas');
     const ctx = canvas.getContext('2d');
     const slidesListEl = document.getElementById('reel-slides-list');
+    const refreshReelBtn = document.getElementById('btn-refresh-reel');
+    const shuffleBgBtn = document.getElementById('btn-shuffle-bg');
     const addSlideBtn = document.getElementById('btn-add-slide');
     const themeSelect = document.getElementById('reel-theme');
     const voiceSelect = document.getElementById('reel-voice');
@@ -247,6 +250,9 @@ export function initReelStudio(root) {
 
     // Mutable State
     const state = {
+        articleId: initialProject.source_article_id || null,
+        variant: Number(initialProject.variant || 0),
+        bgShuffleStep: 0,
         title: initialProject.title || 'CricApp Reel',
         theme: initialProject.theme || 'stadium',
         voice: initialProject.voice || 'hi-IN-MadhurNeural',
@@ -1286,6 +1292,7 @@ export function initReelStudio(root) {
                     <div class="flex flex-wrap items-center gap-1.5 pt-1">
                         <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Quick Pics:</span>
                         ${curatedOptions}
+                        <button type="button" data-action="cycle-bg" class="px-2 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/35 text-[10px] font-bold text-indigo-300 border border-indigo-500/30 transition cursor-pointer">🔄 Next BG</button>
                     </div>
                 </div>`;
             })
@@ -1349,9 +1356,17 @@ export function initReelStudio(root) {
             state.selectedSlideIndex = Math.max(0, Math.min(state.selectedSlideIndex, state.slides.length - 1));
             renderSlidesEditor();
             renderAt(0);
-        } else if (action === 'pick-curated') {
-            const url = actionEl.getAttribute('data-url') || '';
-            state.slides[idx].image = url;
+        } else if (action === 'pick-curated' || action === 'cycle-bg') {
+            let url = actionEl.getAttribute('data-url') || '';
+            if (action === 'cycle-bg' && curatedImages.length > 0) {
+                const currentUrl = String(state.slides[idx].image || '').trim();
+                const currentIdx = curatedImages.findIndex((c) => c.url === currentUrl);
+                const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % curatedImages.length : idx % curatedImages.length;
+                url = curatedImages[nextIdx]?.url || '';
+            }
+            if (url) {
+                state.slides[idx].image = url;
+            }
             state.selectedSlideIndex = idx;
             renderSlidesEditor();
             const timeline = getTimeline();
@@ -1494,6 +1509,132 @@ export function initReelStudio(root) {
             // Keep existing slides gracefully if offline
         }
     }
+
+    function shuffleBackgroundsOnly() {
+        if (state.recording || !state.slides.length) return;
+
+        const pool = [...new Set([
+            ...curatedImages.map((c) => c.url),
+            ...(Array.isArray(initialProject.slides) ? initialProject.slides.map((s) => s.image) : []),
+        ].filter(Boolean))];
+
+        if (!pool.length) return;
+
+        state.bgShuffleStep += 1;
+        const offset = state.bgShuffleStep % pool.length;
+        const rotated = [...pool.slice(offset), ...pool.slice(0, offset)];
+
+        let prevUrl = '';
+        state.slides.forEach((slide, idx) => {
+            const cur = String(slide.image || '').trim();
+            const picked =
+                rotated.find((u) => u !== cur && u !== prevUrl) ||
+                rotated.find((u) => u !== cur) ||
+                rotated[idx % rotated.length];
+            slide.image = picked;
+            prevUrl = picked;
+        });
+
+        const themeKeys = Object.keys(THEMES);
+        if (themeKeys.length > 1) {
+            const nextTheme = themeKeys[(themeKeys.indexOf(state.theme) + 1) % themeKeys.length];
+            state.theme = nextTheme;
+            if (themeSelect) themeSelect.value = nextTheme;
+        }
+
+        renderSlidesEditor();
+        preloadSlideImages(1500);
+        renderAt(state.playhead);
+        setStatus(`Backgrounds & visual theme (${THEMES[state.theme]?.name || state.theme}) change ho gaye!`, 'success');
+    }
+
+    async function refreshScriptAndBackgrounds() {
+        if (state.recording) return;
+        if (state.playing) {
+            state.playing = false;
+            stopAudioPlayback();
+            if (previewBtn) previewBtn.textContent = '▶ Play Preview';
+        }
+
+        const origLabel = refreshReelBtn ? refreshReelBtn.textContent : '🔄 Refresh Script & BG';
+        if (refreshReelBtn) {
+            refreshReelBtn.disabled = true;
+            refreshReelBtn.textContent = '⏳ Refreshing...';
+        }
+        setStatus('Nayi script aur naye backgrounds generate ho rahe hain...', 'info');
+
+        const currentVoice = voiceSelect?.value || state.voice || 'hi-IN-MadhurNeural';
+        const nextVariant = state.variant + 1;
+
+        try {
+            const resp = await fetch(refreshEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({
+                    article_id: state.articleId,
+                    variant: nextVariant,
+                    voice: currentVoice,
+                    exclude_images: state.slides.map((s) => s.image || ''),
+                }),
+            });
+
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.project || !Array.isArray(data.project.slides) || !data.project.slides.length) {
+                throw new Error(data.message || 'Could not refresh Reel script.');
+            }
+
+            const nextProj = data.project;
+            state.variant = Number(nextProj.variant ?? nextVariant);
+            state.title = nextProj.title || state.title;
+            state.theme = nextProj.theme || state.theme;
+            if (themeSelect) themeSelect.value = state.theme;
+
+            if (captionTextarea && nextProj.social_caption) {
+                captionTextarea.value = nextProj.social_caption;
+            }
+
+            state.slides = nextProj.slides.map((s) => ({
+                ...s,
+                _hinglishBase: String(s.narration || '').trim(),
+                duration: Number(s.duration) || 5.0,
+            }));
+
+            // Drop old voiceover buffers so preview/export matches the new script cleanly
+            state.slideVoiceBuffers = [];
+            state.masterVoiceBuffer = null;
+            if (state.autoVoice) {
+                state.voiceMode = 'ai';
+            }
+            state.selectedSlideIndex = 0;
+            state.playhead = 0.4;
+
+            renderSlidesEditor();
+            preloadSlideImages(1500);
+            renderAt(0.4);
+
+            const wantsHinglish = String(currentVoice).startsWith('hi-');
+            if (wantsHinglish && state.slides.some((s) => !s.narration_hi)) {
+                await syncScriptsToSelectedVoice(currentVoice);
+            } else {
+                updateVoiceBadge(wantsHinglish ? 'New Hinglish Script Ready' : 'New English Script Ready', false);
+                setStatus('Nayi script aur naye background photos load ho gaye! Play Preview ya Generate Voiceover dabayein.', 'success');
+            }
+        } catch (err) {
+            setStatus(err.message || 'Refresh fail hua — dobara try karein.', 'error');
+        } finally {
+            if (refreshReelBtn) {
+                refreshReelBtn.disabled = false;
+                refreshReelBtn.textContent = origLabel;
+            }
+        }
+    }
+
+    refreshReelBtn?.addEventListener('click', refreshScriptAndBackgrounds);
+    shuffleBgBtn?.addEventListener('click', shuffleBackgroundsOnly);
 
     addSlideBtn?.addEventListener('click', () => {
         const fallbackImg = curatedImages[state.slides.length % Math.max(1, curatedImages.length)]?.url || '';

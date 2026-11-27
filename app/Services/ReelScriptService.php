@@ -20,8 +20,8 @@ class ReelScriptService
                 'url' => 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80',
             ],
             [
-                'label' => 'Match Action Pitch',
-                'url' => 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?auto=format&fit=crop&w=1200&q=80',
+                'label' => 'Pitch & Bat Action',
+                'url' => 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&w=1200&q=80',
             ],
             [
                 'label' => 'Batting Crease Focus',
@@ -35,6 +35,112 @@ class ReelScriptService
                 'label' => 'Arena Atmosphere',
                 'url' => 'https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?auto=format&fit=crop&w=1200&q=80',
             ],
+            [
+                'label' => 'Championship Arena',
+                'url' => 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1200&q=80',
+            ],
+        ];
+    }
+
+    /**
+     * Resolve a live, loadable cover URL without falling back to stale local files or dead stock URLs.
+     */
+    private function resolveSafeCoverUrl(Article $article, array $curated): string
+    {
+        $coverUrl = trim((string) $article->cover_image_url);
+        $deadStockUrls = [
+            'photo-1531415074868-036b1c57e3ce',
+        ];
+        foreach ($deadStockUrls as $dead) {
+            if ($coverUrl !== '' && str_contains($coverUrl, $dead)) {
+                return $curated[1] ?? $curated[0] ?? $coverUrl;
+            }
+        }
+        if (Str::startsWith($coverUrl, '/') && !is_file(public_path(ltrim($coverUrl, '/')))) {
+            return $curated[0] ?? $coverUrl;
+        }
+        return $coverUrl !== '' ? $coverUrl : ($curated[0] ?? '');
+    }
+
+    /**
+     * Build non-repeating background URLs across slides that rotate cleanly on every refresh.
+     */
+    private function pickRotatedBackgrounds(int $count, int $variant, string $primaryImage, array $excludeImages = []): array
+    {
+        $curated = array_column($this->curatedImages(), 'url');
+        $pool = array_values(array_unique(array_filter(array_merge([$primaryImage], $curated))));
+        if (empty($pool)) {
+            return array_fill(0, $count, '');
+        }
+
+        if ($variant === 0) {
+            $chosen = [];
+            for ($i = 0; $i < $count; $i++) {
+                if ($i === 0) {
+                    $chosen[] = $primaryImage ?: $pool[0];
+                } elseif ($i === $count - 1) {
+                    $chosen[] = ($curated[0] ?? $pool[0]) !== ($primaryImage ?: '')
+                        ? ($curated[0] ?? $pool[0])
+                        : ($curated[1] ?? $pool[0]);
+                } else {
+                    $chosen[] = $curated[($i + 1) % max(1, count($curated))] ?? $pool[0];
+                }
+            }
+            return $chosen;
+        }
+
+        $poolCount = count($pool);
+        $offset = ($variant * 2 + 1) % $poolCount;
+        $rotated = array_merge(array_slice($pool, $offset), array_slice($pool, 0, $offset));
+
+        $chosen = [];
+        $prevUsed = '';
+        for ($i = 0; $i < $count; $i++) {
+            $excluded = trim((string) ($excludeImages[$i] ?? ''));
+            $pick = '';
+            foreach ($rotated as $candidate) {
+                if ($candidate !== $excluded && $candidate !== $prevUsed && !in_array($candidate, $chosen, true)) {
+                    $pick = $candidate;
+                    break;
+                }
+            }
+            if ($pick === '') {
+                foreach ($rotated as $candidate) {
+                    if ($candidate !== $excluded && $candidate !== $prevUsed) {
+                        $pick = $candidate;
+                        break;
+                    }
+                }
+            }
+            if ($pick === '') {
+                $pick = $rotated[$i % $poolCount];
+            }
+            $chosen[] = $pick;
+            $prevUsed = $pick;
+        }
+
+        return $chosen;
+    }
+
+    /**
+     * Build aligned English / Hindi / Hinglish narration fields for a single slide.
+     */
+    private function buildSlideNarrationPair(string $enRaw, string $hiHint = '', bool $wantsEnglish = false): array
+    {
+        $enSpeech = $this->toSpeechSentence($enRaw);
+        $hiSpeech = ($hiHint !== '' && $this->isMostlyHindi($hiHint))
+            ? $this->toSpeechSentence($hiHint)
+            : $this->translateToHindiFast($enSpeech);
+        $hasHi = $this->isMostlyHindi($hiSpeech);
+        $hinglish = $hasHi ? $this->hindiToHinglish($hiSpeech, $enSpeech) : '';
+
+        return [
+            'narration' => $wantsEnglish
+                ? $enSpeech
+                : ($hinglish !== '' ? $hinglish : $enSpeech),
+            'narration_hinglish' => $hinglish,
+            'narration_hi' => $hasHi ? $hiSpeech : '',
+            'narration_en' => $enSpeech,
         ];
     }
 
@@ -54,39 +160,63 @@ class ReelScriptService
 
     /**
      * Build a structured 5-slide 9:16 Reel storyboard & spoken narration from an Article.
+     * Passing $variant > 0 generates fresh narrative hooks, rotated points & new backgrounds.
      */
-    public function buildFromArticle(Article $article): array
-    {
+    public function buildFromArticle(
+        Article $article,
+        int $variant = 0,
+        string $voice = 'hi-IN-MadhurNeural',
+        array $excludeImages = []
+    ): array {
+        $variant = max(0, $variant);
+        $angle = $variant % 4;
+        $wantsEnglish = Str::startsWith($voice, 'en-');
+
         $title = $this->cleanText($article->title ?? 'Latest Cricket Update');
         $excerpt = $this->cleanText($article->excerpt ?? '');
         $category = strtoupper($this->cleanText($article->category ?: 'CRICKET UPDATE'));
-        $coverUrl = $article->cover_image_url;
         $curated = array_column($this->curatedImages(), 'url');
-        // Ephemeral local uploads from older deploys may not exist on container rebuilds — fall back to crisp cricket photo
-        if (Str::startsWith($coverUrl, '/') && !is_file(public_path(ltrim($coverUrl, '/')))) {
-            $coverUrl = $curated[0] ?? $coverUrl;
-        }
+        $coverUrl = $this->resolveSafeCoverUrl($article, $curated);
 
-        $sections = $this->extractSections((string) ($article->content ?? ''));
-        $middleSlides = array_slice($sections, 0, 3);
+        $allSections = $this->extractSections((string) ($article->content ?? ''));
         $sectionsHi = $this->isMostlyHindi((string) ($article->content_hi ?? ''))
             ? $this->extractSections((string) $article->content_hi)
             : [];
 
-        // Ensure at least 2 content slides even for very short articles
-        if (empty($middleSlides)) {
+        // Select middle sections differently per angle so repeated refreshes surface fresh talking points
+        if (empty($allSections)) {
             $fallbackText = $excerpt !== '' ? $excerpt : $title;
-            $middleSlides = [[
+            $allSections = [[
                 'badge' => 'THE BIG STORY',
                 'headline' => Str::limit($fallbackText, 76, ''),
                 'subtext' => 'Tap the link in bio or search CricApp.in for ball-by-ball details.',
                 'narration' => Str::limit($fallbackText, 180, '.'),
+                'alt_headline' => Str::limit($title, 76, ''),
+                'alt_subtext' => 'Complete match breakdown and tactical details inside.',
+                'alt_narration' => Str::limit($fallbackText, 180, '.'),
+                'sentences' => [$fallbackText],
             ]];
+        }
+
+        $totalSecs = count($allSections);
+        if ($angle === 0 || $totalSecs <= 1) {
+            $middleIndices = range(0, min(2, $totalSecs - 1));
+        } elseif ($angle === 1) {
+            $shifted = array_map(static fn (int $i) => ($i + 1) % $totalSecs, range(0, $totalSecs - 1));
+            $middleIndices = array_slice($shifted, 0, min(3, $totalSecs));
+        } elseif ($angle === 2) {
+            $oddFirst = array_values(array_merge(
+                array_filter(range(0, $totalSecs - 1), static fn ($i) => $i % 2 === 1),
+                array_filter(range(0, $totalSecs - 1), static fn ($i) => $i % 2 === 0)
+            ));
+            $middleIndices = array_slice($oddFirst, 0, min(3, $totalSecs));
+        } else {
+            $middleIndices = array_slice(array_reverse(range(0, $totalSecs - 1)), 0, min(3, $totalSecs));
         }
 
         $hookSub = $excerpt !== ''
             ? Str::limit($excerpt, 105)
-            : ($middleSlides[0]['headline'] ?? 'Full breakdown inside.');
+            : ($allSections[0]['headline'] ?? 'Full breakdown inside.');
 
         $titleHi = $this->isMostlyHindi((string) ($article->title_hi ?? ''))
             ? $this->cleanText((string) $article->title_hi)
@@ -95,69 +225,141 @@ class ReelScriptService
             ? $this->cleanText((string) $article->excerpt_hi)
             : '';
 
-        $slide1En = $this->toSpeechSentence($title . '. ' . $hookSub);
-        $slide1Hi = $titleHi !== ''
-            ? $this->toSpeechSentence($titleHi . ($excerptHi !== '' ? '। ' . $excerptHi : ''))
-            : $this->translateToHindiFast($slide1En);
-        $slide1HasHi = $this->isMostlyHindi($slide1Hi);
-        $slide1Hinglish = $slide1HasHi
-            ? $this->hindiToHinglish($slide1Hi, $slide1En)
-            : '';
-
-        $slides = [];
-        $slides[] = [
-            'badge' => Str::limit($category, 26, ''),
-            'headline' => Str::limit($title, 82),
-            'subtext' => $hookSub,
-            'narration' => $slide1Hinglish !== '' ? $slide1Hinglish : $slide1En,
-            'narration_hinglish' => $slide1Hinglish,
-            'narration_hi' => $slide1HasHi ? $slide1Hi : '',
-            'narration_en' => $slide1En,
-            'image' => $coverUrl,
-            'duration' => 5.5,
-        ];
-
-        foreach ($middleSlides as $idx => $sec) {
-            $bgImage = ($idx % 2 === 1 && isset($curated[$idx])) ? $curated[$idx] : $coverUrl;
-            $enSpeech = $this->toSpeechSentence($sec['narration']);
-            $hiSpeech = isset($sectionsHi[$idx]['narration']) && $this->isMostlyHindi($sectionsHi[$idx]['narration'])
-                ? $this->toSpeechSentence($sectionsHi[$idx]['narration'])
-                : $this->translateToHindiFast($enSpeech);
-            $hasHi = $this->isMostlyHindi($hiSpeech);
-            $hinglishSpeech = $hasHi
-                ? $this->hindiToHinglish($hiSpeech, $enSpeech)
-                : '';
-
-            $slides[] = [
-                'badge' => Str::limit(strtoupper($sec['badge'] ?: 'KEY POINT ' . ($idx + 1)), 26, ''),
-                'headline' => Str::limit($sec['headline'], 78),
-                'subtext' => Str::limit($sec['subtext'], 110),
-                'narration' => $hinglishSpeech !== '' ? $hinglishSpeech : $enSpeech,
-                'narration_hinglish' => $hinglishSpeech,
-                'narration_hi' => $hasHi ? $hiSpeech : '',
-                'narration_en' => $enSpeech,
-                'image' => $bgImage,
-                'duration' => 5.5,
-            ];
+        if ($angle === 0) {
+            $slide1Badge = Str::limit($category, 26, '');
+            $slide1Headline = Str::limit($title, 82);
+            $slide1Sub = $hookSub;
+            $slide1EnRaw = $title . '. ' . $hookSub;
+            $slide1HiHint = $titleHi !== '' ? ($titleHi . ($excerptHi !== '' ? '। ' . $excerptHi : '')) : '';
+        } elseif ($angle === 1) {
+            $leadSec = $allSections[$middleIndices[0]] ?? $allSections[0];
+            $slide1Badge = 'WHY THIS MATTERS';
+            $slide1Headline = Str::limit('Wait Till You Know This: ' . ($leadSec['headline'] ?? $title), 82);
+            $slide1Sub = Str::limit($hookSub, 105);
+            $slide1EnRaw = 'Ever wondered why fans talk about ' . Str::limit($title, 65, '') . '? ' . ($leadSec['subtext'] ?? $hookSub);
+            $slide1HiHint = '';
+        } elseif ($angle === 2) {
+            $slide1Badge = 'CRICKET INSIGHT';
+            $slide1Headline = Str::limit('Quick Breakdown: ' . $title, 82);
+            $slide1Sub = Str::limit(($allSections[$middleIndices[0]]['subtext'] ?? $hookSub), 105);
+            $slide1EnRaw = 'Here is the rapid 30 second cricket breakdown. ' . ($excerpt !== '' ? $excerpt : $title);
+            $slide1HiHint = '';
+        } else {
+            $lastSec = $allSections[$totalSecs - 1];
+            $slide1Badge = 'MUST WATCH 🔥';
+            $slide1Headline = Str::limit($lastSec['headline'] ?? $title, 82);
+            $slide1Sub = Str::limit('Real reason behind ' . Str::limit($title, 68, ''), 105);
+            $slide1EnRaw = 'The biggest turning point in ' . Str::limit($title, 68, '') . '. ' . ($lastSec['subtext'] ?? $hookSub);
+            $slide1HiHint = '';
         }
 
-        $slides[] = [
-            'badge' => 'FOLLOW @CRICAPP.IN',
-            'headline' => 'Full Story & Live Scores',
-            'subtext' => 'Search CricApp.in on Google for ball-by-ball commentary & squad analysis.',
-            'narration' => 'Poori story aur ball-by-ball live updates abhi padhein, CricApp.in par!',
-            'narration_hinglish' => 'Poori story aur ball-by-ball live updates abhi padhein, CricApp.in par!',
-            'narration_hi' => 'पूरी स्टोरी और बॉल-बाय-बॉल लाइव अपडेट्स अभी पढ़ें, CricApp dot in पर।',
-            'narration_en' => 'Read the full story and ball by ball live updates now on CricApp dot in.',
-            'image' => $curated[0] ?? $coverUrl,
-            'duration' => 4.5,
+        $slide1Voice = $this->buildSlideNarrationPair($slide1EnRaw, $slide1HiHint, $wantsEnglish);
+        $slides = [];
+        $slides[] = array_merge([
+            'badge' => $slide1Badge,
+            'headline' => $slide1Headline,
+            'subtext' => $slide1Sub,
+            'image' => $coverUrl,
+            'duration' => 5.5,
+        ], $slide1Voice);
+
+        foreach ($middleIndices as $pos => $secIdx) {
+            $sec = $allSections[$secIdx];
+            $sentences = $sec['sentences'] ?? [];
+
+            if ($angle === 0) {
+                $badgeLabel = $sec['badge'] ?: 'KEY POINT ' . ($pos + 1);
+                $headText = $sec['headline'];
+                $subText = $sec['subtext'];
+                $enRaw = $sec['narration'];
+                $hiHint = $sectionsHi[$secIdx]['narration'] ?? '';
+            } elseif ($angle === 1) {
+                $badgeLabel = 'DETAIL ' . ($pos + 1);
+                $detailLine = $sentences[1] ?? $sentences[0] ?? $sec['subtext'];
+                $headText = $sec['alt_headline'] ?? $sec['headline'];
+                $subText = $detailLine;
+                $enRaw = 'Point ' . ($pos + 1) . ': ' . ($sec['alt_narration'] ?? $detailLine);
+                $hiHint = '';
+            } elseif ($angle === 2) {
+                $badgeLabel = 'TAKEAWAY #' . ($pos + 1);
+                $punchLine = $sentences[0] ?? $sec['subtext'];
+                $secondLine = $sentences[1] ?? '';
+                $headText = $sec['headline'];
+                $subText = $secondLine !== '' ? $secondLine : $punchLine;
+                $enRaw = trim($punchLine . ' ' . $secondLine);
+                $hiHint = '';
+            } else {
+                $badgeLabel = $pos === 0 ? 'THE SECRET' : 'KEY PROOF ' . ($pos + 1);
+                $headText = $sec['headline'];
+                $subText = $sentences[count($sentences) - 1] ?? $sec['subtext'];
+                $enRaw = ($sentences[count($sentences) - 1] ?? $sec['narration']) . ' ' . ($sentences[0] ?? '');
+                $hiHint = '';
+            }
+
+            $voiceFields = $this->buildSlideNarrationPair($enRaw, $hiHint, $wantsEnglish);
+            $slides[] = array_merge([
+                'badge' => Str::limit(strtoupper($badgeLabel), 26, ''),
+                'headline' => Str::limit($headText, 78),
+                'subtext' => Str::limit($subText, 110),
+                'image' => $coverUrl,
+                'duration' => 5.5,
+            ], $voiceFields);
+        }
+
+        $closingCtas = [
+            0 => [
+                'badge' => 'FOLLOW @CRICAPP.IN',
+                'headline' => 'Full Story & Live Scores',
+                'subtext' => 'Search CricApp.in on Google for ball-by-ball commentary & squad analysis.',
+                'en' => 'Read the full story and ball by ball live updates now on CricApp dot in.',
+                'hi' => 'पूरी स्टोरी और बॉल-बाय-बॉल लाइव अपडेट्स अभी पढ़ें, CricApp dot in पर।',
+            ],
+            1 => [
+                'badge' => 'DEEP ANALYSIS',
+                'headline' => 'Read Complete Guide Now',
+                'subtext' => 'Get match reports, pitch breakdowns & fastest live scores on CricApp.in.',
+                'en' => 'Get the full tactical breakdown and live match scores on CricApp dot in.',
+                'hi' => 'पूरा टैक्टिकल विश्लेषण और लाइव मैच स्कोर अभी देखें, CricApp dot in पर।',
+            ],
+            2 => [
+                'badge' => 'CRICKET FANS',
+                'headline' => 'Catch Every Ball Live',
+                'subtext' => 'Follow live scorecards, cricket tips & breaking updates at CricApp.in.',
+                'en' => 'Catch every ball live with fast scorecards and cricket tips on CricApp dot in.',
+                'hi' => 'हर बॉल की लाइव अपडेट और तेज़ स्कोरकार्ड के लिए अभी जुड़ें, CricApp dot in पर।',
+            ],
+            3 => [
+                'badge' => 'YOUR VERDICT?',
+                'headline' => 'Agree Or Disagree?',
+                'subtext' => 'Comment your opinion below & visit CricApp.in for live match scorecards.',
+                'en' => 'Share your opinion in comments and visit CricApp dot in for live scorecards.',
+                'hi' => 'कमेंट्स में अपनी राय बताएं और लाइव स्कोरकार्ड के लिए CricApp dot in पर जाएं।',
+            ],
         ];
+        $cta = $closingCtas[$angle];
+        $ctaVoice = $this->buildSlideNarrationPair($cta['en'], $cta['hi'], $wantsEnglish);
+        $slides[] = array_merge([
+            'badge' => $cta['badge'],
+            'headline' => $cta['headline'],
+            'subtext' => $cta['subtext'],
+            'image' => $coverUrl,
+            'duration' => 4.5,
+        ], $ctaVoice);
+
+        $bgUrls = $this->pickRotatedBackgrounds(count($slides), $variant, $coverUrl, $excludeImages);
+        foreach ($slides as $sIdx => &$sItem) {
+            $sItem['image'] = $bgUrls[$sIdx] ?? $coverUrl;
+        }
+        unset($sItem);
+
+        $themes = ['stadium', 'crimson', 'pitch'];
 
         return [
             'source_article_id' => $article->id,
+            'variant' => $variant,
             'title' => $title,
-            'theme' => 'stadium',
-            'voice' => 'hi-IN-MadhurNeural',
+            'theme' => $themes[$variant % count($themes)],
+            'voice' => $voice,
             'slides' => $slides,
             'social_caption' => $this->buildSocialCaption($article, $title, $excerpt),
             'article_url' => route('articles.show', $article->slug),
@@ -165,65 +367,224 @@ class ReelScriptService
     }
 
     /**
-     * Build a blank starter project when admin opens Reel Studio directly.
+     * Build a blank starter project when admin opens Reel Studio directly or clicks Refresh.
      */
-    public function buildDefaultBlank(): array
-    {
+    public function buildDefaultBlank(
+        int $variant = 0,
+        string $voice = 'hi-IN-MadhurNeural',
+        array $excludeImages = []
+    ): array {
+        $variant = max(0, $variant);
+        $wantsEnglish = Str::startsWith($voice, 'en-');
         $curated = array_column($this->curatedImages(), 'url');
+
+        $templates = [
+            [
+                'title' => 'Breaking Cricket Reel',
+                'caption' => "Latest Cricket Update! Live scores & full breakdown on CricApp.in\n\n#Cricket #CricApp #CricketReels #IPL #TeamIndia #CricketNews",
+                'slides' => [
+                    [
+                        'badge' => 'BREAKING CRICKET',
+                        'headline' => 'Massive Turning Point In Today\'s Thriller!',
+                        'subtext' => 'Watch the top 3 moments that changed the match completely.',
+                        'hinglish' => 'Bada cricket update! Janiye aaj ke thrilling match ke un 3 moments ke baare mein jinhone poora khel palat diya.',
+                        'hi' => 'बड़ा क्रिकेट अपडेट! जानिए आज के रोमांचक मैच के उन तीन पलों के बारे में जिन्होंने पूरा खेल पलट दिया।',
+                        'en' => 'Big cricket update! Here are the 3 moments that completely turned today\'s thriller around.',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'MOMENT 1',
+                        'headline' => 'Powerplay Assault Stuns The Opposition',
+                        'subtext' => 'Clean hitting right from over one put instant scoreboard pressure.',
+                        'hinglish' => 'Sabse pehle powerplay mein toofani batting ne vipakshi team par turant bada dabav bana diya.',
+                        'hi' => 'सबसे पहले पावरप्ले में तूफानी बल्लेबाजी ने विपक्षी टीम पर तुरंत बड़ा दबाव बना दिया।',
+                        'en' => 'First, an explosive powerplay start put the opposition under immediate scoreboard pressure.',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'MOMENT 2',
+                        'headline' => 'Death-Overs Spell Seals The Contest',
+                        'subtext' => 'Pinpoint yorkers and clever slower balls defended the target.',
+                        'hinglish' => 'Iske baad death overs ki sateek yorker bowling ne aakhiri palon mein jeet pakki kar di.',
+                        'hi' => 'इसके बाद डेथ ओवर्स की सटीक यॉर्कर गेंदबाजी ने आखिरी पलों में जीत पक्की कर दी।',
+                        'en' => 'Then came pinpoint death-over yorkers that sealed the contest in the final overs.',
+                        'duration' => 5.0,
+                    ],
+                ],
+            ],
+            [
+                'title' => 'Fast Bowling Tactical Reel',
+                'caption' => "Why Hard-Length Bowling Beats Modern Batters!\n\n#HardLength #FastBowling #CricketTips #CricApp #CricketReels",
+                'slides' => [
+                    [
+                        'badge' => 'BOWLING SECRET',
+                        'headline' => 'Why Hard Length Beats Modern Power Hitters',
+                        'subtext' => 'The 6m to 8m pitch zone that freezes every batter\'s footwork.',
+                        'hinglish' => 'Kya aap jaante hain modern batters ko sabse zyada hard length ball kyun pareshan karti hai?',
+                        'hi' => 'क्या आप जानते हैं आधुनिक बल्लेबाजों को सबसे ज्यादा हार्ड लेंथ गेंद क्यों परेशान करती है?',
+                        'en' => 'Do you know why hard-length deliveries trouble modern power hitters more than bouncers?',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'NO-MAN\'S LAND',
+                        'headline' => 'Neither Full To Drive Nor Short To Pull',
+                        'subtext' => 'Extra steep bounce cramps hands near the bat splice.',
+                        'hinglish' => '6 se 8 meter ki yeh length na drive karne deti hai aur na hi pull shot ke liye room chhodti hai.',
+                        'hi' => 'छह से आठ मीटर की यह लेंथ न ड्राइव करने देती है और न ही पुल शॉट के लिए जगह छोड़ती है।',
+                        'en' => 'Pitching 6 to 8 meters out, it prevents easy front-foot drives and cramps pull shots.',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'HEAVY BALL',
+                        'headline' => 'High Seam Release Extracts Sharp Kick',
+                        'subtext' => 'Hit the deck upright to beat outside edges and build dot-ball pressure.',
+                        'hinglish' => 'Tez seam hit se ball tezi se bounce hoti hai aur लगातार dot balls match palat deti hain.',
+                        'hi' => 'तेज सीम हिट से गेंद तेजी से उछलती है और लगातार डॉट बॉल मैच पलट देती हैं।',
+                        'en' => 'Hitting the deck hard extracts sharp bounce that builds dot-ball pressure and forced mistakes.',
+                        'duration' => 5.0,
+                    ],
+                ],
+            ],
+            [
+                'title' => 'Death Overs Survival Guide',
+                'caption' => "3 Mistakes That Decide Tight Death Overs!\n\n#DeathOvers #T20Cricket #MatchAnalysis #CricApp",
+                'slides' => [
+                    [
+                        'badge' => 'CRICKET IQ',
+                        'headline' => '3 Mistakes That Cost Tight Final Overs',
+                        'subtext' => 'Why small tactical errors turn winning positions into heartbreak.',
+                        'hinglish' => 'Death overs mein yeh 3 chhoti galtiyan aksar jeete hue match ko haar mein badal deti hain.',
+                        'hi' => 'डेथ ओवर्स में ये तीन छोटी गलतियां अक्सर जीते हुए मैच को हार में बदल देती हैं।',
+                        'en' => 'These 3 small tactical mistakes in death overs often turn winning games into heartbreak.',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'MISTAKE #1',
+                        'headline' => 'Bowling Wide Without Field Protection',
+                        'subtext' => 'Giving width with fine leg up gifts easy boundaries.',
+                        'hinglish' => 'Pehli galti: wrong field ke saath predictable line par bowling karna jahan batter wait kar raha ho.',
+                        'hi' => 'पहली गलती: गलत फील्ड के साथ अनुमानित लाइन पर गेंदबाजी करना जहाँ बल्लेबाज इंतजार कर रहा हो।',
+                        'en' => 'Mistake one: bowling predictable lines into a batter\'s hitting arc without boundary protection.',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'MISTAKE #2',
+                        'headline' => 'Panicking After One Boundary',
+                        'subtext' => 'Great finishers target unsettled bowlers who abandon slower balls.',
+                        'hinglish' => 'Doosri galti: ek six padne ke baad plan chhodkar panic length daalna.',
+                        'hi' => 'दूसरी गलती: एक छक्का लगने के बाद प्लान छोड़कर पैनिक लेंथ डालना।',
+                        'en' => 'Mistake two: abandoning clever pace variations right after conceding one big hit.',
+                        'duration' => 5.0,
+                    ],
+                ],
+            ],
+            [
+                'title' => 'Captaincy Chess Masterclass',
+                'caption' => "How Smart Captains Defend Under-Par Totals!\n\n#CricketCaptaincy #Tactics #CricApp #CricketReels",
+                'slides' => [
+                    [
+                        'badge' => 'TACTICAL MASTERCLASS',
+                        'headline' => 'How Captains Defend Low Scores Calmly',
+                        'subtext' => 'Field traps and matchup bowling squeeze chases dry.',
+                        'hinglish' => 'Kam total defend karne ke liye smart captains kaise bowling matchups aur field traps set karte hain?',
+                        'hi' => 'कम स्कोर बचाने के लिए स्मार्ट कप्तान कैसे बॉलिंग मैचअप और फील्ड ट्रैप सेट करते हैं?',
+                        'en' => 'How do sharp captains turn under-par totals into nail-biting victories?',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'STRIKE CHOKE',
+                        'headline' => 'Target Single Options, Force Big Risks',
+                        'subtext' => 'Taking away easy singles forces batters out of rhythm.',
+                        'hinglish' => 'Pehle easy singles band kiye jaate hain taaki set batter bada risk lene par majboor ho.',
+                        'hi' => 'पहले आसान सिंगल बंद किए जाते हैं ताकि सेट बल्लेबाज बड़ा रिस्क लेने पर मजबूर हो।',
+                        'en' => 'First, cutting off easy singles forces set batters to take high-risk aerial shots.',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'PACE OFF TRAP',
+                        'headline' => 'Hold Back Your Best Over For Momentum Shift',
+                        'subtext' => 'One surprise spinner or strike bowler swing breaks partnerships.',
+                        'hinglish' => 'Phir surprise bowler matchup laakar partnership todte hi chase par poora control aa jata hai.',
+                        'hi' => 'फिर सरप्राइज बॉलर मैचअप लाकर साझेदारी तोड़ते ही रन चेज पर पूरा कंट्रोल आ जाता है।',
+                        'en' => 'Then a timely matchup change breaks the stand and swings momentum back completely.',
+                        'duration' => 5.0,
+                    ],
+                ],
+            ],
+            [
+                'title' => 'Run Chase Psychology',
+                'caption' => "Inside The Mind Of A Master Run Chaser!\n\n#RunChase #CricketMindset #ViratKohli #CricApp",
+                'slides' => [
+                    [
+                        'badge' => 'RUN CHASE MINDSET',
+                        'headline' => 'What Separates Legends In Pressure Chases?',
+                        'subtext' => 'Breaking huge targets into calm 3-over mini goals.',
+                        'hinglish' => 'Mushkil run chase mein bade players pressure ke bawajood hamesha shant kaise rehte hain?',
+                        'hi' => 'मुश्किल रन चेज में बड़े खिलाड़ी दबाव के बावजूद हमेशा शांत कैसे रहते हैं?',
+                        'en' => 'How do the greatest finishers stay calm when the required run rate climbs fast?',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'STEP BY STEP',
+                        'headline' => 'Never Chase 60 Runs In One Over',
+                        'subtext' => 'Focus on targeting one weaker matchup per two overs.',
+                        'hinglish' => 'Woh poora target ek saath nahi balki har 2 over ke chhote targets mein baat kar khelte hain.',
+                        'hi' => 'वे पूरा लक्ष्य एक साथ नहीं बल्कि हर दो ओवर के छोटे लक्ष्यों में बांटकर खेलते हैं।',
+                        'en' => 'They break daunting targets into small chunks and target one specific matchup every two overs.',
+                        'duration' => 5.0,
+                    ],
+                    [
+                        'badge' => 'RUNNING GOLD',
+                        'headline' => 'Turn Ones Into Twos Before Death Overs',
+                        'subtext' => 'Fast running keeps dot-ball panic completely away.',
+                        'hinglish' => 'Tez running se 1s ko 2s mein badalna scoreboard ko hamesha control mein rakhta hai.',
+                        'hi' => 'तेज रनिंग से एक रन को दो रन में बदलना स्कोरबोर्ड को हमेशा कंट्रोल में रखता है।',
+                        'en' => 'Hustling ones into twos keeps dot-ball percentage low before the final assault.',
+                        'duration' => 5.0,
+                    ],
+                ],
+            ],
+        ];
+
+        $chosenTpl = $templates[$variant % count($templates)];
+        $slidesRaw = $chosenTpl['slides'];
+        $slidesRaw[] = [
+            'badge' => 'LIVE ON CRICAPP.IN',
+            'headline' => 'Ball-by-Ball Scores & Reports',
+            'subtext' => 'Search CricApp.in on Google for full scorecards & match news.',
+            'hinglish' => 'Sabse tez live cricket scores aur match reports ke liye abhi judein, CricApp.in par!',
+            'hi' => 'सबसे तेज़ लाइव क्रिकेट स्कोर और मैच रिपोर्ट्स के लिए अभी जुड़ें, CricApp dot in पर।',
+            'en' => 'Follow CricApp dot in for fastest live cricket scores and daily match stories.',
+            'duration' => 4.5,
+        ];
+
+        $bgUrls = $this->pickRotatedBackgrounds(count($slidesRaw), $variant, $curated[0] ?? '', $excludeImages);
+        $slides = [];
+        foreach ($slidesRaw as $idx => $s) {
+            $slides[] = [
+                'badge' => $s['badge'],
+                'headline' => $s['headline'],
+                'subtext' => $s['subtext'],
+                'narration' => $wantsEnglish ? $s['en'] : $s['hinglish'],
+                'narration_hinglish' => $s['hinglish'],
+                'narration_hi' => $s['hi'],
+                'narration_en' => $s['en'],
+                'image' => $bgUrls[$idx] ?? ($curated[$idx % max(1, count($curated))] ?? ''),
+                'duration' => $s['duration'],
+            ];
+        }
+
+        $themes = ['stadium', 'crimson', 'pitch'];
 
         return [
             'source_article_id' => null,
-            'title' => 'Breaking Cricket Reel',
-            'theme' => 'stadium',
-            'voice' => 'hi-IN-MadhurNeural',
+            'variant' => $variant,
+            'title' => $chosenTpl['title'],
+            'theme' => $themes[$variant % count($themes)],
+            'voice' => $voice,
             'article_url' => url('/articles'),
-            'social_caption' => "Latest Cricket Update! Live scores & full breakdown on CricApp.in\n\n#Cricket #CricApp #CricketReels #IPL #TeamIndia #CricketNews",
-            'slides' => [
-                [
-                    'badge' => 'BREAKING CRICKET',
-                    'headline' => 'Massive Turning Point In Today\'s Thriller!',
-                    'subtext' => 'Watch the top 3 moments that changed the match completely.',
-                    'narration' => 'Bada cricket update! Janiye aaj ke thrilling match ke un 3 moments ke baare mein jinhone poora khel palat diya.',
-                    'narration_hinglish' => 'Bada cricket update! Janiye aaj ke thrilling match ke un 3 moments ke baare mein jinhone poora khel palat diya.',
-                    'narration_hi' => 'बड़ा क्रिकेट अपडेट! जानिए आज के रोमांचक मैच के उन तीन पलों के बारे में जिन्होंने पूरा खेल पलट दिया।',
-                    'narration_en' => 'Big cricket update! Here are the 3 moments that completely turned today\'s thriller around.',
-                    'image' => $curated[0],
-                    'duration' => 5.0,
-                ],
-                [
-                    'badge' => 'MOMENT 1',
-                    'headline' => 'Powerplay Assault Stuns The Opposition',
-                    'subtext' => 'Clean hitting right from over one put instant scoreboard pressure.',
-                    'narration' => 'Sabse pehle powerplay mein toofani batting ne vipakshi team par turant bada dabav bana diya.',
-                    'narration_hinglish' => 'Sabse pehle powerplay mein toofani batting ne vipakshi team par turant bada dabav bana diya.',
-                    'narration_hi' => 'सबसे पहले पावरप्ले में तूफानी बल्लेबाजी ने विपक्षी टीम पर तुरंत बड़ा दबाव बना दिया।',
-                    'narration_en' => 'First, an explosive powerplay start put the opposition under immediate scoreboard pressure.',
-                    'image' => $curated[1],
-                    'duration' => 5.0,
-                ],
-                [
-                    'badge' => 'MOMENT 2',
-                    'headline' => 'Death-Overs Spell Seals The Contest',
-                    'subtext' => 'Pinpoint yorkers and clever slower balls defended the target.',
-                    'narration' => 'Iske baad death overs ki sateek yorker bowling ne aakhiri palon mein jeet pakki kar di.',
-                    'narration_hinglish' => 'Iske baad death overs ki sateek yorker bowling ne aakhiri palon mein jeet pakki kar di.',
-                    'narration_hi' => 'इसके बाद डेथ ओवर्स की सटीक यॉर्कर गेंदबाजी ने आखिरी पलों में जीत पक्की कर दी।',
-                    'narration_en' => 'Then came pinpoint death-over yorkers that sealed the contest in the final overs.',
-                    'image' => $curated[2],
-                    'duration' => 5.0,
-                ],
-                [
-                    'badge' => 'LIVE ON CRICAPP.IN',
-                    'headline' => 'Ball-by-Ball Scores & Reports',
-                    'subtext' => 'Search CricApp.in on Google for full scorecards & match news.',
-                    'narration' => 'Sabse tez live cricket scores aur match reports ke liye abhi judein, CricApp.in par!',
-                    'narration_hinglish' => 'Sabse tez live cricket scores aur match reports ke liye abhi judein, CricApp.in par!',
-                    'narration_hi' => 'सबसे तेज़ लाइव क्रिकेट स्कोर और मैच रिपोर्ट्स के लिए अभी जुड़ें, CricApp dot in पर।',
-                    'narration_en' => 'Follow CricApp dot in for fastest live cricket scores and daily match stories.',
-                    'image' => $curated[3],
-                    'duration' => 4.5,
-                ],
-            ],
+            'social_caption' => $chosenTpl['caption'],
+            'slides' => $slides,
         ];
     }
 
@@ -260,12 +621,19 @@ class ReelScriptService
                 $narration = trim(($headText !== '' ? $headText . '. ' : '') . $firstSentence . ' ' . $secondSentence);
             }
 
+            $altSub = $secondSentence !== '' ? $secondSentence : $subtext;
+            $altNarration = trim(($secondSentence !== '' ? $secondSentence . ' ' : '') . ($sentences[2] ?? $firstSentence));
+
             if (mb_strlen($headline) >= 6) {
                 $sections[] = [
                     'badge' => $headText !== '' ? $headText : 'MATCH INSIGHT',
                     'headline' => $headline,
                     'subtext' => $subtext !== '' ? $subtext : $headline,
                     'narration' => $narration !== '' ? $narration : $headline,
+                    'alt_headline' => Str::limit($firstSentence !== '' ? $firstSentence : $headline, 72),
+                    'alt_subtext' => $altSub !== '' ? $altSub : $headline,
+                    'alt_narration' => $altNarration !== '' ? $altNarration : $narration,
+                    'sentences' => $sentences,
                 ];
             }
 
