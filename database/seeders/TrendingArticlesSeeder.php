@@ -1393,6 +1393,198 @@ Now, with Arshdeep Singh added to the bowling unit and a refreshed squad taking 
                 'reading_time' => 5,
                 'published_at' => Carbon::create(2026, 11, 28, 4, 30, 0, 'UTC'),
             ],
+
+            [
+                'title' => 'Vaibhav Suryavanshi: How a 15-Year-Old From Bihar Rewrote Cricket\'s Record Books',
+                'title_hi' => 'वैभव सूर्यवंशी: बिहार के 15 वर्षीय बल्लेबाज ने कैसे तोड़ दिए क्रिकेट के बड़े-बड़े रिकॉर्ड',
+                'title_hinglish' => 'Vaibhav Suryavanshi: Bihar ke 15-Saal ke Batter ne Kaise Tod Diye Cricket ke Sabhi Bade Records',
+                'slug' => 'vaibhav-suryavanshi-15-year-old-bihar-cricket-records',
+                'category' => 'Local Stories',
+                'category_hi' => 'स्थानीय व प्रेरणादायक कहानियां',
+                'category_hinglish' => 'Local Stories',
+                'excerpt' => 'From IPL 2025\'s youngest centurion and an Orange Cap 2026 surge to a 52-ball List A double hundred and becoming Bihar\'s youngest T20 captain at 15, explore Vaibhav Suryavanshi\'s historic rise.',
+                'excerpt_hi' => 'आईपीएल के सबसे युवा शतकवीर और IPL 2026 ऑरेंज कैप विजेता बनने से लेकर 52 गेंदों में दोहरा शतक और 15 साल की उम्र में बिहार की कप्तानी तक, जानिए वैभव सूर्यवंशी की ऐतिहासिक कहानी।',
+                'excerpt_hinglish' => 'IPL 2025 century aur IPL 2026 Orange Cap se lekar 52-ball List A double hundred aur 15 ki umar mein Bihar T20 captain banne tak, Vaibhav Suryavanshi ka record-breaking safar.',
+                'content' => 'Cricket is rarely won on whiteboards: it is decided in that breathless microsecond when leather meets willow with fearless clarity. Few modern players capture that spirit better than **Vaibhav Suryavanshi**, the left-handed prodigy from **Bihar** who spent 2025 and 2026 dismantling record books that stood for decades.
+
+Born on March 27, 2011, Suryavanshi did not wait for a slow apprenticeship. From small-town nets in Bihar to packed floodlit stadiums, the teenager forced selectors, franchise scouts, and international bowling attacks to rethink what is possible at 15.
+
+### 1. Shattering IPL History Before Turning 16
+
+After becoming the youngest player ever signed at an IPL auction with Rajasthan Royals, Vaibhav turned hype into unforgettable numbers:
+
+- **Youngest T20 & IPL Centurion (IPL 2025):** At just 14, he stunned Gujarat Titans with an explosive **101 not out off 38 balls**, becoming the youngest batter in men\'s T20 and IPL history to reach three figures.
+- **IPL 2026 Orange Cap Explosion:** Far from suffering second-season pressure, he topped the league charts in 2026 with **776 runs** at a blistering strike rate of **237.30**, clearing the ropes **72 times** to eclipse Chris Gayle\'s long-standing single-season IPL sixes record.
+- **Fearless Powerplay Intent:** Watching how cleanly he takes on new-ball pace reminds fans of [the Rohit Sharma powerplay intent blueprint](/articles/rohit-sharma-t20-powerplay-intent-blueprint), while his rapid progression underlines [how IPL teams scout raw state talent](/articles/ipl-mega-auction-uncapped-indian-players-scouting-blueprint).
+
+### 2. A World-Record List A Double Century & International Milestones
+
+By mid-2026, Vaibhav carried that fearless range onto international and India A stages without changing gears:
+
+- **Breaking Tendulkar\'s India Age Record (July 2026):** At **15 years and 99 days**, he stepped out for his T20I debut against England at Old Trafford, becoming the youngest Indian to feature in international cricket, before hitting a **19-ball fifty** against Zimbabwe and helping India clinch **Asian Games 2026 Gold** at Aichi-Nagoya.
+- **204 Off 53 Balls Against UAE (November 2026):** Representing India A in the ACC Men\'s Asia Cup Rising Stars tournament in Doha, he hammered the **fastest List A double century** in history in **52 balls** (surpassing Chad Bowes\' 103-ball mark), reaching his hundred in **28 balls** and launching **28 sixes** in a single innings.
+
+### 3. Youngest Men\'s T20 Captain for Bihar
+
+Back home in domestic cricket during **November 2026**, Bihar handed Vaibhav leadership for the **Syed Mushtaq Ali Trophy**, making him the youngest captain in men\'s T20 history at **15 years and 232 days**. For young players training on small grounds across India, his journey proves what happens when grassroots hunger meets modern preparation like [the transition from tennis ball to leather ball cricket](/articles/tennis-ball-to-leather-ball-cricket-transition-guide).
+
+Keep tracking rising domestic stars and live match scorecards anytime on [CricApp Live Cricket Scores](/live-scores) and explore more [CricApp Cricket Stories](/articles).',
+                'content_hi' => 'क्रिकेट के बड़े कारनामे अक्सर कागजों पर नहीं बल्कि क्रीज पर निडर होकर खेले गए पलों में बनते हैं। बिहार के 15 वर्षीय बाएं हाथ के बल्लेबाज **वैभव सूर्यवंशी** ने 2025 और 2026 में ऐसा इतिहास रचा है जिसे तोड़ने में दशकों लग जाएंगे।
+
+### 1. आईपीएल में कम उम्र में बड़ा धमाका
+- **सबसे युवा आईपीएल शतक (2025):** राजस्थान रॉयल्स की ओर से खेलते हुए मात्र 14 साल की उम्र में उन्होंने गुजरात टाइटंस के खिलाफ **38 गेंदों में नाबाद 101 रन** ठोक दिए।
+- **IPL 2026 ऑरेंज कैप और छक्कों का रिकॉर्ड:** वैभव ने 2026 सीजन में **237.30 के स्ट्राइक रेट** से **776 रन** बनाए और **72 छक्के** जड़कर क्रिस गेल का एक सीजन में सर्वाधिक छक्कों का रिकॉर्ड तोड़ दिया। उनकी निडर शुरुआत [रोहित शर्मा की पावरप्ले सोच](/articles/rohit-sharma-t20-powerplay-intent-blueprint) की याद दिलाती है।
+
+### 2. अंतरराष्ट्रीय और लिस्ट-ए क्रिकेट में विश्व रिकॉर्ड
+- **सबसे कम उम्र में टीम इंडिया डेब्यू (जुलाई 2026):** 15 साल 99 दिन की उम्र में इंग्लैंड के खिलाफ टी20 डेब्यू कर उन्होंने सचिन तेंदुलकर का ऐतिहासिक उम्र रिकॉर्ड पीछे छोड़ा, फिर जिम्बाब्वे के खिलाफ 19 गेंदों में अर्धशतक जड़ा और 2026 एशियन गेम्स में स्वर्ण पदक जीतने वाली भारतीय टीम का हिस्सा बने।
+- **दोहा में 52 गेंदों में दोहरा शतक (नवंबर 2026):** इंडिया ए के लिए यूएई के खिलाफ उन्होंने महज **53 गेंदों में 204 रन** बनाए—जिसमें 28 गेंदों में शतक, 52 गेंदों में सबसे तेज लिस्ट-ए दोहरा शतक और एक पारी में रिकॉर्ड **28 छक्के** शामिल थे।
+
+### 3. 15 की उम्र में बिहार की टी20 कप्तानी
+नवंबर 2026 में **15 साल 232 दिन** की उम्र में सैयद मुश्ताक अली ट्रॉफी के लिए बिहार का कप्तान बनते ही वे पुरुष टी20 इतिहास के सबसे युवा कप्तान बने। उभरते खिलाड़ियों की ऐसी ही कहानियां और मैच अपडेट्स [CricApp लाइव स्कोर](/live-scores) पर देखते रहें।',
+                'content_hinglish' => 'Bihar ke 15-saal ke left-hander **Vaibhav Suryavanshi** ne 2025 aur 2026 mein domestic, IPL aur international cricket ke bade records tod kar duniya ko hairan kar diya hai.
+
+### Vaibhav Suryavanshi Ke Sabse Bade Records
+- **IPL 2025 aur 2026 Dhamaka:** 14 saal ki umar mein Gujarat Titans ke khilaf **101* off 38 balls** banakar youngest IPL centurion bane, phir IPL 2026 mein **776 runs (237.30 SR, 72 sixes)** ke saath Orange Cap jeet kar Chris Gayle ka record toda.
+- **Youngest India T20I Debut:** July 2026 mein **15 years 99 days** par England ke khilaf debut karke Sachin Tendulkar ka age record paar kiya aur Asian Games Gold squad ka hissa rahe.
+- **Fastest List A Double Century (Nov 2026):** Doha mein India A ke liye UAE ke khilaf sirf **53 balls mein 204 runs** (52-ball 200, 28 sixes) maare.
+- **Youngest T20 Captain:** SMAT 2026 mein Bihar ne unhe 15 saal 232 din ki umar mein captain banaya.
+
+IPL scouting aur rising players ke baare mein aur padhein [how franchises scout raw Indian talent](/articles/ipl-mega-auction-uncapped-indian-players-scouting-blueprint) aur check karein [CricApp Live Scores](/live-scores).',
+                'featured_image' => 'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Shubham Thakur',
+                'tags' => 'Vaibhav Suryavanshi, Bihar Cricket, IPL Records, Indian Cricket, Rising Stars, Local Stories',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 5,
+                'published_at' => Carbon::create(2026, 11, 28, 3, 45, 0, 'UTC'),
+            ],
+
+            [
+                'title' => 'How Did Ben Stokes Enter the IPL Auction Despite the BCCI Ban? The Rule Explained',
+                'title_hi' => 'BCCI बैन के बावजूद बेन स्टोक्स IPL ऑक्शन में कैसे शामिल हुए? जानिए पूरा नियम',
+                'title_hinglish' => 'BCCI Ban ke Baavjood Ben Stokes IPL Auction mein Kaise Aaye? Rule Samjhein',
+                'slug' => 'ben-stokes-ipl-auction-bcci-ban-rule-explained',
+                'category' => 'Tournament News',
+                'category_hi' => 'टूर्नामेंट व आईपीएल न्यूज़',
+                'category_hinglish' => 'Tournament & IPL News',
+                'excerpt' => 'Confused how Ben Stokes registered at a ₹2 crore base price for IPL 2027 despite skipping the 2025 mega-auction while Harry Brook stayed banned? Here is the exact BCCI rule.',
+                'excerpt_hi' => 'जानिए 2025 मेगा ऑक्शन छोड़ने के बाद भी बेन स्टोक्स ₹2 करोड़ बेस प्राइस के साथ IPL 2027 ऑक्शन के लिए कैसे योग्य हो गए, जबकि हैरी ब्रूक पर 2 साल का बैन लगा रहा।',
+                'excerpt_hinglish' => '2025 mega-auction skip karne ke baad Ben Stokes IPL 2027 auction ke liye kaise eligible hue jabki Harry Brook par 2-season ban laga raha—poora BCCI rule detail mein.',
+                'content' => 'When the registration list for the **IPL 2027 mini-auction** surfaced with England Test captain **Ben Stokes** listed in the top ₹2 crore base-price bracket, cricket fans immediately asked one question: wasn\'t Stokes banned under the BCCI rule for overseas players skipping mega-auctions?
+
+The answer lies in the exact wording of the BCCI regulation introduced before the 2025 mega-auction—a critical distinction that separates **not registering at all** from **pulling out after getting picked**.
+
+### The BCCI Rule on Skipping the Mega Auction
+
+Ahead of the 2025 cycle, franchises pressed the BCCI to stop overseas stars from skipping the larger mega-auctions only to cash in during smaller mini-auctions where supply is tighter and bids soar. The BCCI responded with a strict registration rule:
+
+- **One-Year Ineligibility for Non-Registration:** If an overseas player does not register for the mega-auction, they become ineligible to enter **"the following year\'s player auction."**
+- **Workload Choice, Not Contract Breach:** Stokes skipped the 2025 mega-auction registration to manage his body and focus on England\'s red-ball calendar. As a result, the rule barred him from the **2026 mini-auction** cycle.
+
+### Why Ben Stokes Is Eligible for the IPL 2027 Auction
+
+Because the mega-auction skip rule only bars entry into the **immediately following auction year** (2026), sitting out 2026 meant Stokes served the entire cooling-off penalty required under the regulation. Once that one-year window elapsed, the path cleared naturally for him to submit his name for the **IPL 2027 mini-auction** without needing any special rule rewrite.
+
+With teams always chasing proven all-round depth alongside aggressive captains—highlighted by [Rohit Sharma returning as Mumbai Indians captain for IPL 2027](/articles/rohit-sharma-mumbai-indians-captain-ipl-2027-hardik-arshdeep-trade)—a marquee pace-bowling finisher naturally sparks fierce auction room debate.
+
+### Ben Stokes vs Harry Brook: Why One Returned and One Got Banned for 2 Years
+
+Most fan confusion happened because people mixed up two completely different clauses in the BCCI rulebook:
+
+- **Harry Brook (Picked, Then Withdrew = 2-Season Ban):** Brook registered for the 2025 mega-auction, was signed by Delhi Capitals, and then withdrew before the tournament began. Under the BCCI\'s anti-pullout rule, pulling out *after* getting bought in the auction triggers an automatic **2-season ban** from both playing in the IPL and entering auctions.
+- **Ben Stokes (Did Not Register = 1-Auction Sit-Out):** Because Stokes never registered for the 2025 pool in the first place, he broke no franchise commitment and only triggered the single-year restriction covering the 2026 mini-auction.
+
+### What Franchises Weigh Before Bidding on All-Rounders
+
+Even when eligible, franchises balance base price, injury history, and tactical fit carefully—whether bidding for international stars or investing via [how IPL franchises scout uncapped Indian talent](/articles/ipl-mega-auction-uncapped-indian-players-scouting-blueprint) and [death-over variations](/articles/how-to-pick-slower-ball-variations-batting-guide). Track live auction squads and fixtures anytime on [CricApp Live Scores](/live-scores).',
+                'content_hi' => 'जब **IPL 2027 मिनी-ऑक्शन** की सूची में इंग्लैंड के टेस्ट कप्तान **बेन स्टोक्स** का नाम ₹2 करोड़ के टॉप बेस प्राइस में दिखा, तो कई फैंस हैरान रह गए—क्या BCCI नियम के तहत मेगा ऑक्शन छोड़ने वाले विदेशी खिलाड़ियों पर बैन नहीं था? इसका जवाब BCCI के नियम के सटीक शब्दों में छिपा है।
+
+### BCCI का मेगा-ऑक्शन नियम क्या कहता है?
+2025 मेगा-ऑक्शन से पहले BCCI ने नियम बनाया था कि यदि कोई विदेशी खिलाड़ी मेगा ऑक्शन में रजिस्टर नहीं करता है, तो वह **अगले साल के प्लेयर ऑक्शन (2026)** में हिस्सा लेने के लिए अयोग्य होगा। स्टोक्स ने अपने वर्कलोड और टेस्ट क्रिकेट पर ध्यान देने के लिए 2025 में नाम नहीं दिया था—जिसकी सजा के तौर पर वे **2026 के ऑक्शन** से बाहर रहे।
+
+### बेन स्टोक्स IPL 2027 ऑक्शन में कैसे योग्य हुए?
+- **एक साल का कूलिंग-ऑफ पूरा:** नियम केवल "अगले साल के ऑक्शन" (2026) पर रोक लगाता है। 2026 सीजन से बाहर रहने के बाद स्टोक्स ने नियम के अनुसार एक साल का प्रतिबंध पूरा कर लिया, इसलिए **IPL 2027** के लिए उनका रास्ता साफ हो गया।
+
+### बेन स्टोक्स बनाम हैरी ब्रूक: दोनों में अंतर क्यों?
+- **हैरी ब्रूक (2 सीजन का बैन):** ब्रूक ने 2025 ऑक्शन में नाम दिया, दिल्ली कैपिटल्स ने उन्हें खरीदा और बाद में टूर्नामेंट शुरू होने से पहले वे हट गए। खरीदे जाने के बाद नाम वापस लेने पर **2 सीजन का कड़ा बैन** लगता है।
+- **बेन स्टोक्स (रजिस्टर नहीं किया):** उन्होंने किसी फ्रेंचाइजी कॉन्ट्रैक्ट को नहीं तोड़ा था, इसलिए उन पर केवल 2026 के एक ऑक्शन की रोक लागू हुई।
+
+आईपीएल 2027 की अन्य बड़ी खबरों जैसे [रोहित शर्मा की मुंबई इंडियंस कप्तानी में वापसी](/articles/rohit-sharma-mumbai-indians-captain-ipl-2027-hardik-arshdeep-trade) और [लाइव क्रिकेट स्कोर](/live-scores) के लिए जुड़े रहें।',
+                'content_hinglish' => 'IPL 2027 mini-auction mein **Ben Stokes** ka naam ₹2 crore bracket mein dekh kar fans confuse the ki un par BCCI ban kyun nahi laga. Asal mein confusion do alag BCCI rules ko mix karne se hua.
+
+### Stokes vs Harry Brook: Asli Rule Difference
+- **Mega-Auction Skip Rule (Ben Stokes):** BCCI ke rule ke hisab se agar koi overseas player mega-auction (2025) mein register nahi karta, toh woh **sirf agle saal (2026)** ke auction se ineligible hota hai. 2026 miss karke Stokes ka 1-year rule cycle complete ho gaya, isliye woh IPL 2027 ke liye eligible ho gaye.
+- **Post-Auction Pullout Ban (Harry Brook):** Jo player auction mein bikne ke baad tournament se naam wapas leta hai (jaise Brook 2025 mein DC se pick hone ke baad), us par seedha **2 seasons ka strict ban** lagta hai.
+
+IPL 2027 ke saare bade updates jaise [Rohit Sharma MI captaincy return](/articles/rohit-sharma-mumbai-indians-captain-ipl-2027-hardik-arshdeep-trade) aur [live scorecards](/live-scores) CricApp par dekhein.',
+                'featured_image' => 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Shubham Thakur',
+                'tags' => 'Ben Stokes, IPL Auction, BCCI Rule, Harry Brook, IPL 2027, Tournament News',
+                'status' => 'published',
+                'is_featured' => false,
+                'reading_time' => 4,
+                'published_at' => Carbon::create(2026, 11, 28, 4, 15, 0, 'UTC'),
+            ],
+
+            [
+                'title' => 'No Siraj Again at Hagley Oval: Why India Left Out Their Leading WTC Wicket-Taker Against New Zealand',
+                'title_hi' => 'हैगली ओवल में फिर बाहर सिराज: न्यूजीलैंड के खिलाफ भारत ने अपने प्रमुख WTC गेंदबाज को क्यों नहीं खिलाया?',
+                'title_hinglish' => 'Hagley Oval mein Phir Bahar Siraj: New Zealand ke Khilaf India ne Apne Leading WTC Bowler ko Drop Kyun Kiya?',
+                'slug' => 'no-siraj-again-hagley-oval-india-vs-new-zealand-wtc-test',
+                'category' => 'Match Report',
+                'category_hi' => 'मैच रिपोर्ट व अपडेट्स',
+                'category_hinglish' => 'Match Report & Analysis',
+                'excerpt' => 'Mohammed Siraj\'s six-year away Test streak ended at Hagley Oval as Shubman Gill\'s India picked debutant Gurnoor Brar alongside Bumrah, Akash Deep, and Anshul Kamboj in Christchurch.',
+                'excerpt_hi' => 'क्राइस्टचर्च के हैगली ओवल में दूसरे टेस्ट से बाहर रहने के साथ मोहम्मद सिराज का 6 साल पुराना विदेशी टेस्ट सिलसिला टूट गया—जानिए भारत की नई पेस रणनीति की पूरी वजह।',
+                'excerpt_hinglish' => 'Christchurch ke Hagley Oval mein 2nd Test ki playing XI se bahar hote hi Mohammed Siraj ka 6-year away Test streak khatam hua—janiye team selection ki asli wajah.',
+                'content' => 'When India captain **Shubman Gill** won the toss and elected to bowl first under overcast skies at **Hagley Oval, Christchurch** in the **2nd Test against New Zealand (Nov 27 – Dec 1, 2026)**, fans instantly scanned the team sheet for **Mohammed Siraj**—only to find him watching from the sidelines for a second consecutive Test.
+
+Already left out during the drawn series opener in Wellington, Siraj\'s omission at Hagley Oval ended an extraordinary personal milestone: it snapped his **nearly six-year streak** of playing at least one Test in every single overseas series India contested since his debut in December 2020.
+
+### Who India Picked Instead at Hagley Oval
+
+Instead of recalling their experienced workhorse alongside **Jasprit Bumrah**, India\'s management handed a Test cap to young seamer **Gurnoor Brar** (coming in for Prasidh Krishna) to form a pace quartet featuring **Bumrah, Akash Deep, Anshul Kamboj, and Brar**.
+
+At a ground famous for green seam movement early before flattening slightly, pairing high-release bounce with [the hard length in Test cricket](/articles/what-is-hard-length-in-cricket-why-fast-bowlers-use-it) clearly shaped the think tank\'s selection call—much like [reading the cricket pitch before the toss](/articles/how-to-read-cricket-pitch-before-toss-guide) on touring tracks.
+
+### Why Did India Leave Out Siraj Against New Zealand?
+
+While fans and former cricketers immediately debated benching one of India\'s most prolific World Test Championship wicket-takers, bowling coach **Morne Morkel** and team leadership pointed toward three tactical considerations:
+
+- **Searching for Extra Seam & Bounce Profile:** After India failed to bowl New Zealand out in Wellington, selectors leaned toward taller hit-the-deck options and fresh seam angles that complement [Jasprit Bumrah\'s hyperextension and steep bounce](/articles/jasprit-bumrah-hyperextension-explained-extra-speed-bounce).
+- **Managing Form & Workload Combinations:** In a high-stakes WTC cycle following gruelling overseas tours like [Australia\'s fast bowling conditions](/articles/border-gavaskar-trophy-australia-fast-bowling-conditions), management prioritized testing new pace depth alongside Bumrah rather than sticking strictly with hierarchy.
+- **Tactical Bowling Depth vs Experience:** Leaving Siraj out removes fierce old-ball aggression and endurance spells if Christchurch flattens out on Days 3 and 4—making the gamble high-risk if New Zealand\'s middle order bats deep.
+
+### What Happens Next in the Series?
+
+Whether Gill\'s gamble with debutant Gurnoor Brar and a young pace pack pays off depends on how quickly India strike with the new Duke-style seam movement at Hagley Oval. Follow every session, live scorecard, and wicket update on [CricApp Live Cricket Scores](/live-scores) and read full breakdowns on [CricApp Cricket News](/articles).',
+                'content_hi' => 'क्राइस्टचर्च के **हैगली ओवल** में न्यूजीलैंड के खिलाफ **दूसरे टेस्ट (27 नवंबर - 1 दिसंबर 2026)** में जब कप्तान **शुभमन गिल** ने टॉस जीतकर पहले गेंदबाजी चुनी, तो हर किसी की नजर प्लेइंग XI में **मोहम्मद सिराज** के नाम पर थी—लेकिन सिराज लगातार दूसरे टेस्ट से बाहर रहे।
+
+वेलिंग्टन में ड्रॉ हुए पहले टेस्ट के बाद हैगली ओवल में भी मौका न मिलने से दिसंबर 2020 में डेब्यू के बाद से हर विदेशी टेस्ट सीरीज में कम से कम एक मैच खेलने का उनका लगभग **6 साल पुराना रिकॉर्ड** टूट गया।
+
+### भारत ने प्लेइंग XI में क्या बदलाव किया?
+टीम प्रबंधन ने प्रसिद्ध कृष्णा की जगह युवा तेज गेंदबाज **गुरनूर बरार** को टेस्ट डेब्यू कराया। इस तरह भारत ने **जसप्रीत बुमराह**, **आकाश दीप**, **अंशुल कंबोज** और **गुरनूर बरार** के तेज गेंदबाजी आक्रमण पर भरोसा जताया।
+
+### सिराज को बाहर रखने के पीछे क्या वजहें रहीं?
+- **अतिरिक्त उछाल और सीम की तलाश:** वेलिंग्टन में न्यूजीलैंड को ऑलआउट न कर पाने के बाद गेंदबाजी कोच **मॉर्न मोर्कल** और टीम प्रबंधन ने क्राइस्टचर्च की पिच पर [हार्ड लेंथ और अतिरिक्त बाउंस](/articles/what-is-hard-length-in-cricket-why-fast-bowlers-use-it) वाले विकल्पों को आजमाया।
+- **नई पेस बेंच की परीक्षा:** [बुमराह के अनोखे एक्शन और तीखे बाउंस](/articles/jasprit-bumrah-hyperextension-explained-extra-speed-bounce) के साथ नए तेज गेंदबाजों को विदेशी परिस्थितियों में परखना WTC रणनीति का हिस्सा रहा, हालांकि अनुभवी सिराज को बाहर रखने पर क्रिकेट विशेषज्ञों ने कड़े सवाल भी उठाए।
+
+न्यूजीलैंड के खिलाफ इस दूसरे टेस्ट का लाइव स्कोरकार्ड और हर सेशन की अपडेट [CricApp लाइव स्कोर](/live-scores) पर देखते रहें।',
+                'content_hinglish' => 'Christchurch ke **Hagley Oval** mein New Zealand ke khilaf **2nd Test (Nov 27 – Dec 1, 2026)** mein captain **Shubman Gill** ne toss jeet kar bowling chuni, par playing XI mein **Mohammed Siraj** ko lagaatar doosre Test mein jagah nahi mili. Isse December 2020 ke baad har overseas Test series khelne ka Siraj ka 6-year streak toot gaya.
+
+### Siraj Ki Jagah Kaun Khela Aur Kya Thi Wajah
+- **Gurnoor Brar Ka Test Debut:** India ne Prasidh Krishna ki jagah debutant **Gurnoor Brar** ko chance diya, jo **Jasprit Bumrah, Akash Deep aur Anshul Kamboj** ke saath pace attack sambhalenge.
+- **Management Strategy:** Wellington mein NZ ko all-out na kar paane ke baad bowling coach **Morne Morkel** aur leadership ne extra bounce aur [hard length bowling](/articles/what-is-hard-length-in-cricket-why-fast-bowlers-use-it) options par daav lagaya—jahan [Bumrah ke extra speed & bounce](/articles/jasprit-bumrah-hyperextension-explained-extra-speed-bounce) ke saath naye seamers ki test ho rahi hai.
+
+IND vs NZ 2nd Test ke har session aur scorecard ke liye dekhein [CricApp Live Scores](/live-scores).',
+                'featured_image' => 'https://images.unsplash.com/photo-1512719994953-eabf50895df7?auto=format&fit=crop&w=1200&q=80',
+                'author_name' => 'Shubham Thakur',
+                'tags' => 'Mohammed Siraj, IND vs NZ, Hagley Oval, WTC, Shubman Gill, Gurnoor Brar, Test Cricket',
+                'status' => 'published',
+                'is_featured' => true,
+                'reading_time' => 5,
+                'published_at' => Carbon::create(2026, 11, 28, 4, 45, 0, 'UTC'),
+            ],
         ];
     }
 }
