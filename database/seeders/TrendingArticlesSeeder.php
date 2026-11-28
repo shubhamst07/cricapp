@@ -32,12 +32,22 @@ class TrendingArticlesSeeder extends Seeder
                 continue;
             }
 
+            $updates = [];
             if (isset($backlinkMigrations[$data['slug']]) && !str_contains((string) $existing->content, $backlinkMigrations[$data['slug']])) {
-                $existing->update([
-                    'content' => $data['content'],
-                    'content_hi' => $data['content_hi'],
-                    'content_hinglish' => $data['content_hinglish'],
-                ]);
+                $updates['content'] = $data['content'];
+                $updates['content_hi'] = $data['content_hi'];
+                $updates['content_hinglish'] = $data['content_hinglish'];
+            }
+
+            $curImg = (string) ($existing->featured_image ?? '');
+            $seedImg = (string) ($data['featured_image'] ?? '');
+            $hasDeadCur = str_contains($curImg, '036b1c57e3ce');
+            if ($seedImg !== '' && ((str_contains($seedImg, 'ik.imagekit.io') && !str_contains($curImg, 'ik.imagekit.io')) || $hasDeadCur)) {
+                $updates['featured_image'] = $seedImg;
+            }
+
+            if (!empty($updates)) {
+                $existing->update($updates);
             }
         }
     }
@@ -161,7 +171,7 @@ True reverse swing ke liye ball ka ek hemisphere completely dry aur rough rehna 
 1. **5 km/h extra pace:** Reverse swing ke liye airspeed higher honi chahiye (125+ km/h) taaki boundary-layer turbulence create ho sake.
 2. **Slightly wider crease angle:** Crease ke thode bahar se aane par ball naturally angle create karti hai aur late inward hoop karti hai.
 3. **Fuller length by half a yard:** Reverse swing air mein batter ke paas late hoti hai, isliye good length ball straight nikal jayegi. Yorker aur toe-crushing full length target karein.',
-                'featured_image' => 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&w=1200&q=80',
                 'author_name' => 'Coach Vikram',
                 'tags' => 'Fast Bowling, Reverse Swing, Pace, Seam Position, SG Ball',
                 'status' => 'published',
@@ -223,7 +233,7 @@ November mein subah 9 baje match start hota hai toh freezing mountain winds leat
 
 ### Mountain Tournaments ka Passion
 Solan, Shimla, Mandi aur Dharamshala mein local teams heavy kitbags utha kar 5 km steep trek karke match khelne aati hain. Aur ab CricApp par live scorecard ke through ye grassroots heroes digital ban rahe hain.',
-                'featured_image' => 'https://images.unsplash.com/photo-1512719994953-eabf50895df7?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795671074_uL1L1Gbs_K4gjJb1pW.webp?updatedAt=1795671077590',
                 'author_name' => 'Shubham Thakur',
                 'tags' => 'Himachal Cricket, Shimla, Grassroots, High Altitude, Ridge Ground',
                 'status' => 'published',
@@ -283,7 +293,7 @@ Bad ball par four lagne par bowler mentally reset kar leta hai. Lekin jab 6 imma
 
 ### Club Cricketers ke liye Advice
 Mid overs mein dot balls kill momentum. 40 dot balls khelne wali team ko 45 singles aur 10 doubles nikalne wali disciplined team easily beat kar sakti hai.',
-                'featured_image' => 'https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795671850_5W9Bed3z_DCk1m7RJ8.jpeg?updatedAt=1795671851392',
                 'author_name' => 'CricApp Editorial',
                 'tags' => 'Virat Kohli, Strike Rotation, Batting Masterclass, Running Between Wickets, ODI Cricket',
                 'status' => 'published',
@@ -408,7 +418,7 @@ Crease ke andar zyada peeche khade rehne se swinging deliveries par LBW aur clea
 
 ### 3. Slogging Across the Line
 Off-stump ki 125 km/h red ball ko cross bat swipe karne par off-stump ud jaata hai. V shape mein straight khelein.',
-                'featured_image' => 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&w=1200&q=80',
                 'author_name' => 'Coach Vikram',
                 'tags' => 'Tennis Cricket, Leather Ball, Batting Technique, Cricket Fundamentals, Coaching',
                 'status' => 'published',
@@ -590,7 +600,7 @@ Jab keeper stumps ke paas khada hota hai:
 - Elbows soft rakhein aur ball ko chest tak aane dein.
 - Weight balls of feet par ho quick lateral reflex ke liye.
 - Head level off-stump bail ke line mein align rakhein.',
-                'featured_image' => 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795671024_6dkPR3Uy_LxbpD_AwL.webp?updatedAt=1795671027528',
                 'author_name' => 'Rahul Rawat (Club Wicketkeeper)',
                 'tags' => 'Wicketkeeping, MS Dhoni, Gloves Craft, Cricket Skills, Fielding',
                 'status' => 'published',
@@ -1014,7 +1024,7 @@ After 8 hours of mallet work, test the bat in the nets using old, soft leather b
 1. **Raw Linseed Oil:** 1 teaspoon oil soft cloth se face aur edges par apply karein. Handle aur splice par oil kabhi na lagayein.
 2. **Mallet Knocking (4-6 Hours):** Edges ko 45-degree angle par hit karke fibers compress karein. 90-degree direct blow na maarein.
 3. **Old Ball Nets First:** Pehle 2-3 sessions old leather ball se knock-in verify karein.',
-                'featured_image' => 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&w=1200&q=80',
                 'author_name' => 'Coach Vikram',
                 'tags' => 'English Willow, Cricket Bat, Bat Knocking, Equipment Care, Cricket Gear',
                 'status' => 'published',
@@ -1249,7 +1259,7 @@ Next time you follow [upcoming cricket scores and bowling spells](/live-scores) 
 - **Big Shots Par Brake:** [Live cricket scorecards](/live-scores) par run rate control karne ke liye pacers 6m-8m zone par stick karte hain.
 
 T20 perspective ke liye padhein [why T20 franchises love hard-length pacers](/articles/what-is-the-hard-length-in-t20-cricket-explained) aur [how batters pick slower variations early](/articles/how-to-pick-slower-ball-variations-batting-guide).',
-                'featured_image' => 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795841427_ilHTuYpu_KAEkMPeI9.webp?updatedAt=1795841430416',
                 'author_name' => 'Shubham Thakur',
                 'tags' => 'Hard Length in Cricket, Fast Bowling, Pace Bowling, Bowling Lengths, Batting Tactics, Cricket Tips',
                 'status' => 'published',
@@ -1324,7 +1334,7 @@ Every spell Bumrah bowls proves fast bowling is not just about running further�
 - **Closer Release Point:** Ball stumps ke zyada paas release hoti hai, isliye batter ko reaction time kam milta hai aur normal good length par bhi steep bounce aata hai.
 
 Junior bowlers ko isse kyun copy nahi karna chahiye aur fitness par kaise focus karein, padhein [Bumrah biomechanics safety guide](/articles/jasprit-bumrah-bowling-action-biomechanics-breakdown) aur dekhein [CricApp Live Scores](/live-scores).',
-                'featured_image' => 'https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795841392_c5MfNLpH_1Qp7-bVGg.webp?updatedAt=1795841396062',
                 'author_name' => 'Shubham Thakur',
                 'tags' => 'Jasprit Bumrah, Bumrah Hyperextension, Fast Bowling Biomechanics, Extra Pace, Pace Bowling, Indian Cricket',
                 'status' => 'published',
@@ -1385,7 +1395,7 @@ Now, with Arshdeep Singh added to the bowling unit and a refreshed squad taking 
 - **5-Time Champion Skipper Ki Wapsi:** Nita Ambani aur Akash Ambani ne 2013, 2015, 2017, 2019 aur 2020 ke champion captain Rohit ko wapas command di—padhein [Rohit Sharma powerplay intent blueprint](/articles/rohit-sharma-t20-powerplay-intent-blueprint).
 - **Bumrah + Arshdeep Pace Attack:** Wankhede par [Jasprit Bumrah](/articles/jasprit-bumrah-bowling-action-biomechanics-breakdown) ke saath Arshdeep ki left-arm swing aur death yorkers MI ke liye game-changer hongi.
 - **IPL 2027 Squad Clarity:** Ab MI management [hard-length bowling](/articles/what-is-the-hard-length-in-t20-cricket-explained) aur [uncapped Indian scouting blueprint](/articles/ipl-mega-auction-uncapped-indian-players-scouting-blueprint) ke saath fresh plan bana sakti hai. Dekhte rahein [CricApp Live Scores](/live-scores).',
-                'featured_image' => 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795841365_mmWeH2Bo_MwTU2yf3A.webp?updatedAt=1795841368172',
                 'author_name' => 'Shubham Thakur',
                 'tags' => 'Rohit Sharma, Mumbai Indians, IPL 2027, Hardik Pandya, Arshdeep Singh, Tournament News',
                 'status' => 'published',
@@ -1450,7 +1460,7 @@ Keep tracking rising domestic stars and live match scorecards anytime on [CricAp
 - **Youngest T20 Captain:** SMAT 2026 mein Bihar ne unhe 15 saal 232 din ki umar mein captain banaya.
 
 IPL scouting aur rising players ke baare mein aur padhein [how franchises scout raw Indian talent](/articles/ipl-mega-auction-uncapped-indian-players-scouting-blueprint) aur check karein [CricApp Live Scores](/live-scores).',
-                'featured_image' => 'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795670274_x4E5klek_oRfwXFEeE.webp?updatedAt=1795670277260',
                 'author_name' => 'Shubham Thakur',
                 'tags' => 'Vaibhav Suryavanshi, Bihar Cricket, IPL Records, Indian Cricket, Rising Stars, Local Stories',
                 'status' => 'published',
@@ -1517,7 +1527,7 @@ Even when eligible, franchises balance base price, injury history, and tactical 
 - **Post-Auction Pullout Ban (Harry Brook):** Jo player auction mein bikne ke baad tournament se naam wapas leta hai (jaise Brook 2025 mein DC se pick hone ke baad), us par seedha **2 seasons ka strict ban** lagta hai.
 
 IPL 2027 ke saare bade updates jaise [Rohit Sharma MI captaincy return](/articles/rohit-sharma-mumbai-indians-captain-ipl-2027-hardik-arshdeep-trade) aur [live scorecards](/live-scores) CricApp par dekhein.',
-                'featured_image' => 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795670105_ubJFTMQo_c5-KCruqA.webp?updatedAt=1795670107921',
                 'author_name' => 'Shubham Thakur',
                 'tags' => 'Ben Stokes, IPL Auction, BCCI Rule, Harry Brook, IPL 2027, Tournament News',
                 'status' => 'published',
@@ -1577,7 +1587,7 @@ Whether Gill\'s gamble with debutant Gurnoor Brar and a young pace pack pays off
 - **Management Strategy:** Wellington mein NZ ko all-out na kar paane ke baad bowling coach **Morne Morkel** aur leadership ne extra bounce aur [hard length bowling](/articles/what-is-hard-length-in-cricket-why-fast-bowlers-use-it) options par daav lagaya—jahan [Bumrah ke extra speed & bounce](/articles/jasprit-bumrah-hyperextension-explained-extra-speed-bounce) ke saath naye seamers ki test ho rahi hai.
 
 IND vs NZ 2nd Test ke har session aur scorecard ke liye dekhein [CricApp Live Scores](/live-scores).',
-                'featured_image' => 'https://images.unsplash.com/photo-1512719994953-eabf50895df7?auto=format&fit=crop&w=1200&q=80',
+                'featured_image' => 'https://ik.imagekit.io/muuqkim6d/cricapp/articles/art_1795758260_dHQIWp8p_y3aJwU3Ws.webp?updatedAt=1795758263792',
                 'author_name' => 'Shubham Thakur',
                 'tags' => 'Mohammed Siraj, IND vs NZ, Hagley Oval, WTC, Shubman Gill, Gurnoor Brar, Test Cricket',
                 'status' => 'published',

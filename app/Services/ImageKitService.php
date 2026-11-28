@@ -36,10 +36,16 @@ class ImageKitService
 
         try {
             $authHeader = 'Basic ' . base64_encode($this->privateKey . ':');
-            $request = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Authorization' => $authHeader,
-            ]);
+            $curlOptions = defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')
+                ? ['curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4]]
+                : [];
+            $request = Http::withOptions($curlOptions)
+                ->connectTimeout(5)
+                ->timeout(25)
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                    'Authorization' => $authHeader,
+                ]);
 
             if ($file instanceof UploadedFile) {
                 $ext = $file->getClientOriginalExtension() ?: 'jpg';
