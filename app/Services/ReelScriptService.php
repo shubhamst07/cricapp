@@ -125,14 +125,24 @@ class ReelScriptService
     /**
      * Build aligned English / Hindi / Hinglish narration fields for a single slide.
      */
-    private function buildSlideNarrationPair(string $enRaw, string $hiHint = '', bool $wantsEnglish = false): array
-    {
+    private function buildSlideNarrationPair(
+        string $enRaw,
+        string $hiHint = '',
+        bool $wantsEnglish = false,
+        string $hinglishHint = ''
+    ): array {
         $enSpeech = $this->toSpeechSentence($enRaw);
         $hiSpeech = ($hiHint !== '' && $this->isMostlyHindi($hiHint))
             ? $this->toSpeechSentence($hiHint)
             : $this->translateToHindiFast($enSpeech);
         $hasHi = $this->isMostlyHindi($hiSpeech);
-        $hinglish = $hasHi ? $this->hindiToHinglish($hiSpeech, $enSpeech) : '';
+
+        $cleanHinglishHint = $hinglishHint !== '' ? $this->toSpeechSentence($hinglishHint) : '';
+        if ($cleanHinglishHint !== '' && !$this->isDevanagari($cleanHinglishHint)) {
+            $hinglish = $cleanHinglishHint;
+        } else {
+            $hinglish = $hasHi ? $this->hindiToHinglish($hiSpeech, $enSpeech) : '';
+        }
 
         return [
             'narration' => $wantsEnglish
@@ -182,18 +192,24 @@ class ReelScriptService
         $sectionsHi = $this->isMostlyHindi((string) ($article->content_hi ?? ''))
             ? $this->extractSections((string) $article->content_hi)
             : [];
+        $rawHinglishContent = trim((string) ($article->content_hinglish ?? ''));
+        $sectionsHinglish = ($rawHinglishContent !== '' && !$this->isDevanagari($rawHinglishContent))
+            ? $this->extractSections($rawHinglishContent)
+            : [];
+        $hasAlignedHinglish = !empty($sectionsHinglish) && count($sectionsHinglish) === count($allSections);
 
         // Select middle sections differently per angle so repeated refreshes surface fresh talking points
         if (empty($allSections)) {
             $fallbackText = $excerpt !== '' ? $excerpt : $title;
+            $fallbackSpeech = $this->toSpeechSentence($fallbackText, 240);
             $allSections = [[
                 'badge' => 'THE BIG STORY',
-                'headline' => Str::limit($fallbackText, 76, ''),
+                'headline' => $this->smartTrimText($fallbackText, 76, ''),
                 'subtext' => 'Tap the link in bio or search CricApp.in for ball-by-ball details.',
-                'narration' => Str::limit($fallbackText, 180, '.'),
-                'alt_headline' => Str::limit($title, 76, ''),
+                'narration' => $fallbackSpeech,
+                'alt_headline' => $this->smartTrimText($title, 76, ''),
                 'alt_subtext' => 'Complete match breakdown and tactical details inside.',
-                'alt_narration' => Str::limit($fallbackText, 180, '.'),
+                'alt_narration' => $fallbackSpeech,
                 'sentences' => [$fallbackText],
             ]];
         }
@@ -215,7 +231,7 @@ class ReelScriptService
         }
 
         $hookSub = $excerpt !== ''
-            ? Str::limit($excerpt, 105)
+            ? $this->smartTrimText($excerpt, 115)
             : ($allSections[0]['headline'] ?? 'Full breakdown inside.');
 
         $titleHi = $this->isMostlyHindi((string) ($article->title_hi ?? ''))
@@ -224,36 +240,45 @@ class ReelScriptService
         $excerptHi = $this->isMostlyHindi((string) ($article->excerpt_hi ?? ''))
             ? $this->cleanText((string) $article->excerpt_hi)
             : '';
+        $titleHinglish = $this->cleanText((string) ($article->title_hinglish ?? ''));
+        $excerptHinglish = $this->cleanText((string) ($article->excerpt_hinglish ?? ''));
 
+        $slide1HinglishHint = '';
         if ($angle === 0) {
-            $slide1Badge = Str::limit($category, 26, '');
-            $slide1Headline = Str::limit($title, 82);
+            $slide1Badge = $this->smartTrimText($category, 26, '');
+            $slide1Headline = $this->smartTrimText($title, 82);
             $slide1Sub = $hookSub;
-            $slide1EnRaw = $title . '. ' . $hookSub;
-            $slide1HiHint = $titleHi !== '' ? ($titleHi . ($excerptHi !== '' ? '। ' . $excerptHi : '')) : '';
+            $titleEnd = preg_match('/[.!?।]$/u', $title) ? ' ' : '. ';
+            $slide1EnRaw = $title . ($excerpt !== '' ? $titleEnd . $excerpt : '');
+            $titleHiEnd = preg_match('/[.!?।]$/u', $titleHi) ? ' ' : '। ';
+            $slide1HiHint = $titleHi !== '' ? ($titleHi . ($excerptHi !== '' ? $titleHiEnd . $excerptHi : '')) : '';
+            if ($titleHinglish !== '' && !$this->isDevanagari($titleHinglish)) {
+                $titleHnEnd = preg_match('/[.!?।]$/u', $titleHinglish) ? ' ' : '. ';
+                $slide1HinglishHint = $titleHinglish . ($excerptHinglish !== '' ? $titleHnEnd . $excerptHinglish : '');
+            }
         } elseif ($angle === 1) {
             $leadSec = $allSections[$middleIndices[0]] ?? $allSections[0];
             $slide1Badge = 'WHY THIS MATTERS';
-            $slide1Headline = Str::limit('Wait Till You Know This: ' . ($leadSec['headline'] ?? $title), 82);
-            $slide1Sub = Str::limit($hookSub, 105);
-            $slide1EnRaw = 'Ever wondered why fans talk about ' . Str::limit($title, 65, '') . '? ' . ($leadSec['subtext'] ?? $hookSub);
+            $slide1Headline = $this->smartTrimText('Wait Till You Know This: ' . ($leadSec['headline'] ?? $title), 82);
+            $slide1Sub = $this->smartTrimText($hookSub, 115);
+            $slide1EnRaw = 'Ever wondered why fans talk about ' . $this->smartTrimText($title, 70, '') . '? ' . ($leadSec['subtext'] ?? $hookSub);
             $slide1HiHint = '';
         } elseif ($angle === 2) {
             $slide1Badge = 'CRICKET INSIGHT';
-            $slide1Headline = Str::limit('Quick Breakdown: ' . $title, 82);
-            $slide1Sub = Str::limit(($allSections[$middleIndices[0]]['subtext'] ?? $hookSub), 105);
+            $slide1Headline = $this->smartTrimText('Quick Breakdown: ' . $title, 82);
+            $slide1Sub = $this->smartTrimText(($allSections[$middleIndices[0]]['subtext'] ?? $hookSub), 115);
             $slide1EnRaw = 'Here is the rapid 30 second cricket breakdown. ' . ($excerpt !== '' ? $excerpt : $title);
             $slide1HiHint = '';
         } else {
             $lastSec = $allSections[$totalSecs - 1];
             $slide1Badge = 'MUST WATCH 🔥';
-            $slide1Headline = Str::limit($lastSec['headline'] ?? $title, 82);
-            $slide1Sub = Str::limit('Real reason behind ' . Str::limit($title, 68, ''), 105);
-            $slide1EnRaw = 'The biggest turning point in ' . Str::limit($title, 68, '') . '. ' . ($lastSec['subtext'] ?? $hookSub);
+            $slide1Headline = $this->smartTrimText($lastSec['headline'] ?? $title, 82);
+            $slide1Sub = $this->smartTrimText('Real reason behind ' . $this->smartTrimText($title, 70, ''), 115);
+            $slide1EnRaw = 'The biggest turning point in ' . $this->smartTrimText($title, 70, '') . '. ' . ($lastSec['subtext'] ?? $hookSub);
             $slide1HiHint = '';
         }
 
-        $slide1Voice = $this->buildSlideNarrationPair($slide1EnRaw, $slide1HiHint, $wantsEnglish);
+        $slide1Voice = $this->buildSlideNarrationPair($slide1EnRaw, $slide1HiHint, $wantsEnglish, $slide1HinglishHint);
         $slides = [];
         $slides[] = array_merge([
             'badge' => $slide1Badge,
@@ -266,13 +291,20 @@ class ReelScriptService
         foreach ($middleIndices as $pos => $secIdx) {
             $sec = $allSections[$secIdx];
             $sentences = $sec['sentences'] ?? [];
+            $hinglishHint = '';
 
             if ($angle === 0) {
-                $badgeLabel = $sec['badge'] ?: 'KEY POINT ' . ($pos + 1);
+                $rawBadge = trim((string) ($sec['badge'] ?? ''));
+                $badgeLabel = ($rawBadge !== '' && mb_strlen($rawBadge, 'UTF-8') <= 24)
+                    ? $rawBadge
+                    : 'KEY POINT ' . ($pos + 1);
                 $headText = $sec['headline'];
                 $subText = $sec['subtext'];
                 $enRaw = $sec['narration'];
                 $hiHint = $sectionsHi[$secIdx]['narration'] ?? '';
+                if ($hasAlignedHinglish) {
+                    $hinglishHint = $sectionsHinglish[$secIdx]['narration'] ?? '';
+                }
             } elseif ($angle === 1) {
                 $badgeLabel = 'DETAIL ' . ($pos + 1);
                 $detailLine = $sentences[1] ?? $sentences[0] ?? $sec['subtext'];
@@ -296,11 +328,11 @@ class ReelScriptService
                 $hiHint = '';
             }
 
-            $voiceFields = $this->buildSlideNarrationPair($enRaw, $hiHint, $wantsEnglish);
+            $voiceFields = $this->buildSlideNarrationPair($enRaw, $hiHint, $wantsEnglish, $hinglishHint);
             $slides[] = array_merge([
-                'badge' => Str::limit(strtoupper($badgeLabel), 26, ''),
-                'headline' => Str::limit($headText, 78),
-                'subtext' => Str::limit($subText, 110),
+                'badge' => $this->smartTrimText(strtoupper($badgeLabel), 24, ''),
+                'headline' => $this->smartTrimText($headText, 78),
+                'subtext' => $this->smartTrimText($subText, 115),
                 'image' => $coverUrl,
                 'duration' => 5.5,
             ], $voiceFields);
@@ -594,43 +626,44 @@ class ReelScriptService
     private function extractSections(string $markdown): array
     {
         $sections = [];
-        $lines = preg_split('/\R+/', $markdown) ?: [];
+        $lines = preg_split('/\R+/u', $markdown) ?: [];
 
         $currentHeading = '';
         $currentBody = [];
 
         $flush = function () use (&$currentHeading, &$currentBody, &$sections) {
-            $bodyText = $this->cleanText(implode(' ', $currentBody));
+            $bodyText = $this->cleanText(implode("\n", $currentBody));
             $headText = $this->cleanText($currentHeading);
 
             if ($headText === '' && $bodyText === '') {
                 return;
             }
 
-            $sentences = preg_split('/(?<=[.!?])\s+/', $bodyText, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $sentences = $this->splitCleanSentences($bodyText);
             $firstSentence = $sentences[0] ?? $headText;
             $secondSentence = $sentences[1] ?? '';
 
-            $headline = $headText !== '' ? $headText : Str::limit($firstSentence, 72);
+            $headline = $headText !== '' ? $headText : $this->smartTrimText($firstSentence, 72);
             $subtext = $headText !== '' ? $firstSentence : ($secondSentence !== '' ? $secondSentence : $bodyText);
-            $headNorm = mb_strtolower(rtrim($headText, '.!?: '), 'UTF-8');
-            $firstNorm = mb_strtolower(rtrim($firstSentence, '.!?: '), 'UTF-8');
+            $headNorm = mb_strtolower(rtrim($headText, '.!?:। '), 'UTF-8');
+            $firstNorm = mb_strtolower(rtrim($firstSentence, '.!?:। '), 'UTF-8');
             if ($headNorm !== '' && ($headNorm === $firstNorm || str_starts_with($firstNorm, $headNorm))) {
                 $narration = trim($firstSentence . ' ' . $secondSentence);
             } else {
-                $narration = trim(($headText !== '' ? $headText . '. ' : '') . $firstSentence . ' ' . $secondSentence);
+                $headingSep = ($headText !== '' && preg_match('/[?!.।]$/u', $headText)) ? ' ' : '. ';
+                $narration = trim(($headText !== '' ? $headText . $headingSep : '') . $firstSentence . ' ' . $secondSentence);
             }
 
             $altSub = $secondSentence !== '' ? $secondSentence : $subtext;
             $altNarration = trim(($secondSentence !== '' ? $secondSentence . ' ' : '') . ($sentences[2] ?? $firstSentence));
 
-            if (mb_strlen($headline) >= 6) {
+            if (mb_strlen($headline, 'UTF-8') >= 6) {
                 $sections[] = [
                     'badge' => $headText !== '' ? $headText : 'MATCH INSIGHT',
                     'headline' => $headline,
                     'subtext' => $subtext !== '' ? $subtext : $headline,
                     'narration' => $narration !== '' ? $narration : $headline,
-                    'alt_headline' => Str::limit($firstSentence !== '' ? $firstSentence : $headline, 72),
+                    'alt_headline' => $this->smartTrimText($firstSentence !== '' ? $firstSentence : $headline, 72),
                     'alt_subtext' => $altSub !== '' ? $altSub : $headline,
                     'alt_narration' => $altNarration !== '' ? $altNarration : $narration,
                     'sentences' => $sentences,
@@ -647,7 +680,7 @@ class ReelScriptService
                 continue;
             }
 
-            if (preg_match('/^#{1,4}\s+(.+)$/', $line, $m)) {
+            if (preg_match('/^#{1,4}\s+(.+)$/u', $line, $m)) {
                 $flush();
                 $currentHeading = $m[1];
                 continue;
@@ -665,28 +698,133 @@ class ReelScriptService
         return $sections;
     }
 
+    private function splitCleanSentences(string $text): array
+    {
+        $clean = trim($text);
+        if ($clean === '') {
+            return [];
+        }
+        // Protect numbered prefixes like "1. Shattering..." from splitting on the period
+        $protected = preg_replace('/(^|\s)(\d{1,2})\.\s+/u', '$1$2__DOTNUM__ ', $clean) ?? $clean;
+        $parts = preg_split('/(?<!\d)(?<=[.!?।])\s+/u', $protected, -1, PREG_SPLIT_NO_EMPTY) ?: [$protected];
+        return array_map(static fn (string $s) => str_replace('__DOTNUM__', '.', $s), $parts);
+    }
+
+    /**
+     * Trim text on whole-word boundaries (never cutting a word mid-letter) and strip dangling connectors.
+     */
+    private function smartTrimText(string $text, int $maxChars, string $suffix = '...'): string
+    {
+        $clean = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+        if ($clean === '' || mb_strlen($clean, 'UTF-8') <= $maxChars) {
+            return $clean;
+        }
+
+        $suffixLen = mb_strlen($suffix, 'UTF-8');
+        $budget = max(12, $maxChars - $suffixLen);
+        $slice = mb_substr($clean, 0, $budget, 'UTF-8');
+        $nextChar = mb_substr($clean, $budget, 1, 'UTF-8');
+
+        // Roll back to the previous word boundary if we stopped inside a word
+        if ($nextChar !== '' && !preg_match('/^[\s.,!?;:\-–—।)]/u', $nextChar)) {
+            $lastSpace = mb_strrpos($slice, ' ', 0, 'UTF-8');
+            if ($lastSpace !== false && $lastSpace >= (int) floor($budget * 0.45)) {
+                $slice = mb_substr($slice, 0, $lastSpace, 'UTF-8');
+            }
+        }
+
+        // Remove dangling connectors/punctuation left at the tail after trimming
+        $slice = rtrim($slice, " \t\n\r\0\x0B,;:-–—/&(");
+        // Strip a dangling bullet/list lead-in cut right after a colon (e.g. "considerations: Searching")
+        $slice = preg_replace('/:\s+\S{1,20}$/u', '', $slice) ?? $slice;
+        $slice = preg_replace('/\s+(?:and|or|the|of|with|for|to|in|on|at|a|an|his|her|their|its|as|ke|ka|ki|aur|ya)$/iu', '', $slice) ?? $slice;
+        $slice = rtrim($slice, " \t\n\r\0\x0B,;:-–—/&(");
+
+        if ($slice === '') {
+            $slice = trim(mb_substr($clean, 0, $budget, 'UTF-8'));
+        }
+
+        return $suffix !== '' ? ($slice . $suffix) : $slice;
+    }
+
     private function cleanText(string $text): string
     {
         $text = strip_tags($text);
         // Strip markdown images & links keeping label text
-        $text = preg_replace('/!\[[^\]]*\]\([^)]+\)/', ' ', $text);
-        $text = preg_replace('/\[([^\]]+)\]\([^)]+\)/', '$1', $text);
+        $text = preg_replace('/!\[[^\]]*\]\([^)]+\)/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\[([^\]]+)\]\([^)]+\)/u', '$1', $text) ?? $text;
         // Strip markdown emphasis/code markers
         $text = str_replace(['**', '__', '`', '###', '##', '#', '>', '•'], ' ', $text);
-        $text = preg_replace('/^\s*[-*+]\s+/m', '', $text);
+        $text = preg_replace('/^\s*[-*+]\s+/mu', '', $text) ?? $text;
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $text = preg_replace('/\s+/u', ' ', $text);
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+([,.;!?।])/u', '$1', $text) ?? $text;
         return trim((string) $text);
     }
 
-    private function toSpeechSentence(string $text): string
+    private function toSpeechSentence(string $text, int $maxChars = 285): string
     {
         $clean = $this->cleanText($text);
-        $clean = preg_replace('/CricApp\.in/i', 'CricApp dot in', $clean);
+        $clean = preg_replace('/CricApp\.in/iu', 'CricApp dot in', $clean) ?? $clean;
         // Remove emojis / pictographs so neural TTS doesn't read symbol names awkwardly
-        $clean = preg_replace('/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]/u', '', (string) $clean);
-        $clean = preg_replace('/\s+/', ' ', (string) $clean);
-        return Str::limit(trim((string) $clean), 210, '.');
+        $clean = preg_replace('/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]/u', '', (string) $clean) ?? $clean;
+        $clean = trim(preg_replace('/\s+/u', ' ', (string) $clean) ?? '');
+        $clean = preg_replace('/([!?।])\.+/u', '$1', $clean) ?? $clean;
+
+        if ($clean === '') {
+            return '';
+        }
+
+        // Collect complete sentences within the speaking window so words never get cut mid-word (e.g. "tr." / "n.")
+        $sentences = $this->splitCleanSentences($clean);
+        $picked = '';
+        foreach ($sentences as $idx => $sentence) {
+            $candidate = $picked === '' ? $sentence : ($picked . ' ' . $sentence);
+            if (mb_strlen($candidate, 'UTF-8') <= $maxChars) {
+                $picked = $candidate;
+                continue;
+            }
+            if ($picked === '') {
+                $picked = $this->trimOverlongSpeech($sentence, $maxChars);
+            } elseif ($idx === 1 && mb_strlen($picked, 'UTF-8') <= 85) {
+                // First sentence was only a heading — include the main point trimmed on a complete clause or word boundary
+                $picked = $this->trimOverlongSpeech($candidate, $maxChars);
+            }
+            break;
+        }
+
+        $out = trim($picked !== '' ? $picked : $this->trimOverlongSpeech($clean, $maxChars));
+        $out = preg_replace('/([!?।])\.+$/u', '$1', $out) ?? $out;
+        if ($out !== '' && !preg_match('/[.!?।]$/u', $out)) {
+            $out .= $this->isMostlyHindi($out) ? '।' : '.';
+        }
+
+        return $out;
+    }
+
+    /**
+     * Prefer trimming an overlong sentence at a natural clause boundary (: ; — ,) before falling back to word boundary.
+     */
+    private function trimOverlongSpeech(string $text, int $maxChars): string
+    {
+        $clean = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+        if ($clean === '' || mb_strlen($clean, 'UTF-8') <= $maxChars) {
+            return $clean;
+        }
+
+        $window = mb_substr($clean, 0, $maxChars, 'UTF-8');
+        $minThreshold = (int) floor($maxChars * 0.45);
+        foreach ([': ', '; ', '—', ', '] as $delim) {
+            $pos = mb_strrpos($window, $delim, 0, 'UTF-8');
+            if ($pos !== false && $pos >= $minThreshold) {
+                $candidate = rtrim(mb_substr($window, 0, $pos, 'UTF-8'), " \t\n\r\0\x0B,;:-–—");
+                if (mb_strlen($candidate, 'UTF-8') >= 40) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return $this->smartTrimText($clean, $maxChars, '');
     }
 
     public function isDevanagari(string $text): bool
@@ -966,8 +1104,31 @@ class ReelScriptService
             'महेंद्र सिंह धोनी' => 'MS Dhoni',
             'रिषभ पंत' => 'Rishabh Pant',
             'केएल राहुल' => 'KL Rahul',
+            'निलामी' => 'auction',
             'नीलामी' => 'auction',
             'ऑक्शन' => 'auction',
+            'ट्रेड' => 'trade',
+            'नवंबर' => 'November',
+            'दिसंबर' => 'December',
+            'जनवरी' => 'January',
+            'अक्टूबर' => 'October',
+            'अर्शदीप सिंह' => 'Arshdeep Singh',
+            'अर्शदीप' => 'Arshdeep',
+            'लिस्ट-ए' => 'List A',
+            'लिस्ट ए' => 'List A',
+            'स्विंग' => 'swing',
+            'बाउंस' => 'bounce',
+            'हार्ड लेंथ' => 'hard length',
+            'प्लेइंग' => 'playing',
+            'टॉस' => 'toss',
+            'ऑलआउट' => 'all out',
+            'ऑल-आउट' => 'all out',
+            'डालने' => 'daalne',
+            'कोच' => 'coach',
+            'पिच' => 'pitch',
+            'लीग' => 'league',
+            'सीजन' => 'season',
+            'फैंस' => 'fans',
             'फ्रेंचाइजियों' => 'franchises',
             'फ्रेंचाइजी' => 'franchise',
             'रोमांचक' => 'thrilling',
@@ -1209,13 +1370,16 @@ class ReelScriptService
             } elseif ($wasDevanagari && strlen($lower) >= 4 && !empty($englishLoanwords)) {
                 $romanSkel = $this->consonantSkeleton($lower);
                 foreach ($englishLoanwords as $engLower => $engOrig) {
+                    if ($lower[0] !== $engLower[0] && !($lower[0] === 'p' && $engLower[0] === 'f')) {
+                        continue;
+                    }
                     $engClean = rtrim($engLower, 's');
                     $engSkel = $this->consonantSkeleton($engLower);
                     $engCleanSkel = $this->consonantSkeleton($engClean);
                     similar_text($lower, $engLower, $pct);
                     if (
                         (strlen($romanSkel) >= 5 && ($romanSkel === $engSkel || $romanSkel === $engCleanSkel)) ||
-                        ($pct >= 72.0 && abs(strlen($engLower) - strlen($lower)) <= 2)
+                        ($pct >= 80.0 && abs(strlen($engLower) - strlen($lower)) <= 2)
                     ) {
                         $roman = isset($englishProper[$engLower]) ? $engOrig : strtolower($engOrig);
                         break;
@@ -1307,7 +1471,7 @@ class ReelScriptService
         }
 
         $hashtags = array_values(array_unique($hashtags));
-        $summaryLine = $excerpt !== '' ? Str::limit($excerpt, 140) : 'Full analysis & live updates inside.';
+        $summaryLine = $excerpt !== '' ? $this->smartTrimText($excerpt, 140) : 'Full analysis & live updates inside.';
 
         return "{$title}\n\n{$summaryLine}\n\nRead full breakdown on CricApp.in:\n" .
             route('articles.show', $article->slug) .
