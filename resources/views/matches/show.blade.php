@@ -9,24 +9,20 @@
 @section('meta_description', \Illuminate\Support\Str::limit($mDesc, 160))
 @section('canonical', route('matches.show', $match))
 @section('schema')
-    <script type="application/ld+json">{!! json_encode(array_filter([
+    @php
+        $schemaService = app(\App\Services\StructuredDataService::class);
+        $matchUrl = route('matches.show', $match);
+        $eventNode = $schemaService->buildSportsEventForLocalMatch($match, $mTitle, $mDesc, $matchUrl);
+        $matchBreadcrumb = $schemaService->buildBreadcrumbList([
+            ['name' => 'Home', 'url' => url('/')],
+            ['name' => 'Local Matches', 'url' => route('matches.index')],
+            ['name' => $mTitle, 'url' => $matchUrl],
+        ]);
+    @endphp
+    <script type="application/ld+json">{!! json_encode([
         '@context' => 'https://schema.org',
-        '@type' => 'SportsEvent',
-        'name' => $mTitle,
-        'sport' => 'Cricket',
-        'description' => $mDesc,
-        'url' => route('matches.show', $match),
-        'startDate' => optional($match->match_date)->toAtomString(),
-        'location' => !empty($match->venue) ? [
-            '@type' => 'Place',
-            'name' => $match->venue,
-        ] : null,
-        'organizer' => [
-            '@type' => 'Organization',
-            'name' => 'CricApp.in',
-            'url' => url('/'),
-        ],
-    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+        '@graph' => [$eventNode, $matchBreadcrumb],
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
 @endsection
 
 @section('header')

@@ -68,46 +68,19 @@
 @section('canonical', route('live-scores.show', $match['id'] ?? ''))
 @section('schema')
     @php
-        $eventNode = array_filter([
-            '@type' => 'SportsEvent',
-            'name' => $teamsName ?: 'Live Cricket Match',
-            'sport' => 'Cricket',
-            'description' => $pageDesc,
-            'url' => route('live-scores.show', $match['id'] ?? ''),
-            'startDate' => $match['dateTimeGMT'] ?? null,
-            'location' => !empty($match['venue']) ? [
-                '@type' => 'Place',
-                'name' => $match['venue'],
-            ] : null,
-            'organizer' => [
-                '@type' => 'Organization',
-                'name' => 'CricApp.in',
-                'url' => url('/'),
-            ],
+        $schemaService = app(\App\Services\StructuredDataService::class);
+        $matchUrl = route('live-scores.show', $match['id'] ?? '');
+        $eventNode = $schemaService->buildSportsEventForLiveMatch(
+            $match,
+            $teamsName ?: 'Live Cricket Match',
+            $pageDesc,
+            $matchUrl
+        );
+        $matchBreadcrumb = $schemaService->buildBreadcrumbList([
+            ['name' => 'Home', 'url' => url('/')],
+            ['name' => 'Live Cricket Scores', 'url' => route('live-scores.index')],
+            ['name' => $teamsName ?: 'Match Scorecard', 'url' => $matchUrl],
         ]);
-        $matchBreadcrumb = [
-            '@type' => 'BreadcrumbList',
-            'itemListElement' => [
-                [
-                    '@type' => 'ListItem',
-                    'position' => 1,
-                    'name' => 'Home',
-                    'item' => url('/'),
-                ],
-                [
-                    '@type' => 'ListItem',
-                    'position' => 2,
-                    'name' => 'Live Cricket Scores',
-                    'item' => route('live-scores.index'),
-                ],
-                [
-                    '@type' => 'ListItem',
-                    'position' => 3,
-                    'name' => $teamsName ?: 'Match Scorecard',
-                    'item' => route('live-scores.show', $match['id'] ?? ''),
-                ],
-            ],
-        ];
     @endphp
     <script type="application/ld+json">{!! json_encode([
         '@context' => 'https://schema.org',
