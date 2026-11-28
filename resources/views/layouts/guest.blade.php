@@ -19,6 +19,7 @@
         @if($googleSiteVerification)
             <meta name="google-site-verification" content="{{ $googleSiteVerification }}">
         @endif
+        <meta name="p:domain_verify" content="d27f1dab4f1097be198ea72c58f63db3"/>
 
         <!-- PWA & Favicon -->
         <link rel="icon" type="image/x-icon" href="/favicon.ico">

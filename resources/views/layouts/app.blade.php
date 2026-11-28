@@ -23,6 +23,7 @@
         @if($googleSiteVerification)
             <meta name="google-site-verification" content="{{ $googleSiteVerification }}">
         @endif
+        <meta name="p:domain_verify" content="d27f1dab4f1097be198ea72c58f63db3"/>
 
         <!-- Open Graph & Social SEO -->
         <meta property="og:site_name" content="CricApp.in">
