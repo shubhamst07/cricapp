@@ -8,6 +8,7 @@ use App\Services\CricketDataService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 class MatchPostController extends Controller
 {
@@ -35,6 +36,11 @@ class MatchPostController extends Controller
         return false;
     }
 
+    protected function forgetMatchPostsCache(string $matchId): void
+    {
+        Cache::forget("match_posts_feed_{$matchId}");
+    }
+
     /**
      * Get social posts for a match.
      */
@@ -42,23 +48,31 @@ class MatchPostController extends Controller
     {
         $isAdmin = $this->checkIsAdmin($request);
 
-        // Auto-approve any older pending posts so everything is direct live
+        // One-time hourly safety sweep for legacy pending posts instead of an UPDATE on every read
         try {
-            MatchPost::where('is_approved', false)->update(['is_approved' => true]);
+            Cache::remember('match_posts_auto_approved_once', 3600, function () {
+                MatchPost::where('is_approved', false)->update(['is_approved' => true]);
+                return true;
+            });
         } catch (\Throwable $e) {}
 
-        $posts = MatchPost::where('match_id', $matchId)
-            ->latest()
-            ->take(60)
-            ->get();
-
-        // If no posts exist yet, auto-seed customized posts for THIS specific match
-        if ($posts->isEmpty()) {
-            $this->seedStarterPosts($matchId, $cricket);
-            $posts = MatchPost::where('match_id', $matchId)
+        $posts = Cache::remember("match_posts_feed_{$matchId}", 30, function () use ($matchId, $cricket) {
+            $items = MatchPost::where('match_id', $matchId)
                 ->latest()
+                ->take(60)
                 ->get();
-        }
+
+            // If no posts exist yet, auto-seed customized posts for THIS specific match
+            if ($items->isEmpty()) {
+                $this->seedStarterPosts($matchId, $cricket);
+                $items = MatchPost::where('match_id', $matchId)
+                    ->latest()
+                    ->take(60)
+                    ->get();
+            }
+
+            return $items;
+        });
 
         return response()->json([
             'status' => 'success',
@@ -224,6 +238,8 @@ class MatchPostController extends Controller
             'content_hn' => $contentHn,
         ]);
 
+        $this->forgetMatchPostsCache($matchId);
+
         $message = 'Live commentary published directly to over! ⚡';
 
         return response()->json([
@@ -249,6 +265,7 @@ class MatchPostController extends Controller
         }
 
         $post->update(['is_approved' => true]);
+        $this->forgetMatchPostsCache((string) $post->match_id);
 
         return response()->json([
             'status' => 'success',
@@ -268,7 +285,9 @@ class MatchPostController extends Controller
 
         $post = MatchPost::find($id);
         if ($post) {
+            $matchId = (string) $post->match_id;
             $post->delete();
+            $this->forgetMatchPostsCache($matchId);
         }
 
         return response()->json([
@@ -288,6 +307,7 @@ class MatchPostController extends Controller
         }
 
         $post->increment('likes_count');
+        $this->forgetMatchPostsCache((string) $post->match_id);
 
         return response()->json([
             'status' => 'success',
@@ -340,6 +360,7 @@ class MatchPostController extends Controller
             'avatar_color' => $avatarColor,
             'comment' => $validated['comment'],
         ]);
+        $this->forgetMatchPostsCache((string) $post->match_id);
 
         return response()->json([
             'status' => 'success',

@@ -107,35 +107,48 @@ class ArticleController extends Controller
      */
     public function show(string $slug): View
     {
-        $article = Article::where('slug', $slug)->firstOrFail();
+        $article = Cache::remember("article_detail_{$slug}", 300, function () use ($slug) {
+            return Article::where('slug', $slug)->firstOrFail();
+        });
 
-        // Increment views count safely
-        try {
-            $article->increment('views_count');
-        } catch (\Throwable $e) {
-            // ignore
+        // Skip view increments for automated crawlers / bots to avoid unnecessary DB writes
+        $userAgent = (string) request()->userAgent();
+        $isCrawler = $userAgent !== '' && preg_match('/bot|crawl|spider|slurp|facebookexternalhit|whatsapp|lighthouse|headless/i', $userAgent);
+        if (!$isCrawler) {
+            try {
+                Article::where('id', $article->id)->increment('views_count');
+            } catch (\Throwable $e) {
+                // ignore
+            }
         }
 
-        // Related articles (same category or recent, excluding current)
+        // Related articles (narrow projection excluding heavy multi-language content columns, cached 5m)
         $relatedArticles = collect();
         try {
-            $relatedArticles = Article::published()
-                ->where('id', '!=', $article->id)
-                ->where(function ($q) use ($article) {
-                    $q->where('category', $article->category)
-                      ->orWhere('is_featured', true);
-                })
-                ->latest('published_at')
-                ->take(3)
-                ->get();
-
-            if ($relatedArticles->isEmpty()) {
-                $relatedArticles = Article::published()
+            $relatedColumns = ['id', 'title', 'slug', 'category', 'excerpt', 'featured_image', 'author_name', 'reading_time', 'published_at', 'is_featured'];
+            $relatedArticles = Cache::remember("article_related_{$article->id}", 300, function () use ($article, $relatedColumns) {
+                $items = Article::published()
+                    ->select($relatedColumns)
                     ->where('id', '!=', $article->id)
+                    ->where(function ($q) use ($article) {
+                        $q->where('category', $article->category)
+                          ->orWhere('is_featured', true);
+                    })
                     ->latest('published_at')
                     ->take(3)
                     ->get();
-            }
+
+                if ($items->isEmpty()) {
+                    $items = Article::published()
+                        ->select($relatedColumns)
+                        ->where('id', '!=', $article->id)
+                        ->latest('published_at')
+                        ->take(3)
+                        ->get();
+                }
+
+                return $items;
+            });
         } catch (\Throwable $e) {
             Log::warning('Related articles query error: ' . $e->getMessage());
         }
@@ -269,7 +282,7 @@ class ArticleController extends Controller
             'published_at' => $validated['status'] === 'published' ? Carbon::now() : null,
         ]);
 
-        $this->clearArticleCache();
+        $this->clearArticleCache($article->slug, $article->id);
         if ($article->status === 'published') {
             $indexNow->pingUrls([
                 route('articles.show', $article->slug),
@@ -359,7 +372,7 @@ class ArticleController extends Controller
             'published_at' => $article->published_at ?: Carbon::now(),
         ]);
 
-        $this->clearArticleCache();
+        $this->clearArticleCache($article->slug, $article->id);
         if ($article->status === 'published') {
             $indexNow->pingUrls([
                 route('articles.show', $article->slug),
@@ -407,6 +420,7 @@ class ArticleController extends Controller
 
         if (!empty($updateData)) {
             $article->update($updateData);
+            $this->clearArticleCache($article->slug, $article->id);
         }
 
         return response()->json(['success' => true]);
@@ -420,7 +434,7 @@ class ArticleController extends Controller
         $this->authorizeAdmin();
 
         $article->delete();
-        $this->clearArticleCache();
+        $this->clearArticleCache($article->slug, $article->id);
 
         return redirect()->route('articles.index')
             ->with('success', 'Article deleted successfully.');
@@ -479,13 +493,19 @@ class ArticleController extends Controller
     /**
      * Invalidate cached article lists and homepage showcase.
      */
-    protected function clearArticleCache(): void
+    protected function clearArticleCache(?string $slug = null, ?int $articleId = null): void
     {
         Cache::forget('home_top_articles');
         Cache::forget('sitemap_xml_v1');
         Cache::forget('sitemap_xml_v2');
         Cache::forget('news_sitemap_xml_v1');
         Cache::forget('rss_feed_xml_v1');
+        if ($slug) {
+            Cache::forget("article_detail_{$slug}");
+        }
+        if ($articleId) {
+            Cache::forget("article_related_{$articleId}");
+        }
         for ($p = 1; $p <= 5; $p++) {
             Cache::forget("articles_index_page_{$p}");
         }

@@ -326,7 +326,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
         }
     };
 
-    // Live Ball-by-Ball Commentary Polling (Every 8 seconds)
+    // Live Ball-by-Ball Commentary Polling (Every 12 seconds)
     useEffect(() => {
         if (matchId && (!realCommentary || realCommentary.length === 0)) {
             fetchCommentary();
@@ -339,7 +339,7 @@ export default function MatchDetailApp({ initialMatch, initialScorecard, initial
             if (isMatchLive || activeTab === 'commentary') {
                 fetchMatchScore();
             }
-        }, 8000);
+        }, 12000);
 
         return () => clearInterval(pollTimer);
     }, [matchId, match?.status, match?.status_text, activeTab]);

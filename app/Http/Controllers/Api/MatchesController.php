@@ -203,14 +203,9 @@ class MatchesController extends Controller
     public function show(string $matchId, CricketDataService $cricket): JsonResponse
     {
         try {
-            if (str_starts_with($matchId, 'local_')) {
+            if (CricketMatch::isLocalMatchId($matchId)) {
                 $localId = (int) str_replace('local_', '', $matchId);
                 $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])->find($localId);
-                if ($localMatch) {
-                    return response()->json($localMatch->formatForLiveCenter(auth()->id(), auth()->user()->phone ?? null));
-                }
-            } elseif (is_numeric($matchId)) {
-                $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players', 'user'])->find((int) $matchId);
                 if ($localMatch) {
                     return response()->json($localMatch->formatForLiveCenter(auth()->id(), auth()->user()->phone ?? null));
                 }
@@ -251,7 +246,7 @@ class MatchesController extends Controller
     public function scorecard(string $matchId, CricketDataService $cricket): JsonResponse
     {
         try {
-            if (str_starts_with($matchId, 'local_') || (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists())) {
+            if (CricketMatch::isLocalMatchId($matchId)) {
                 $localId = (int) str_replace('local_', '', $matchId);
                 $localMatch = CricketMatch::with(['scores', 'players', 'team1Players', 'team2Players'])->find($localId);
                 if ($localMatch) {
@@ -340,7 +335,7 @@ class MatchesController extends Controller
     public function commentary(string $matchId, CricketDataService $cricket): JsonResponse
     {
         try {
-            if (str_starts_with($matchId, 'local_') || (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists())) {
+            if (CricketMatch::isLocalMatchId($matchId)) {
                 $localId = (int) str_replace('local_', '', $matchId);
                 $localMatch = CricketMatch::with(['scores', 'players'])->find($localId);
                 if ($localMatch) {

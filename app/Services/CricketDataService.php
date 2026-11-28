@@ -851,7 +851,7 @@ class CricketDataService
     public function getMatchCommentary(string $matchId): array
     {
         $cacheKey = $this->cacheKey("commentary_{$matchId}");
-        return Cache::remember($cacheKey, 6, function () use ($matchId) {
+        return Cache::remember($cacheKey, 10, function () use ($matchId) {
             $fresh = null;
 
             // 1. Try local service first
@@ -930,10 +930,11 @@ class CricketDataService
         }
         unset($item);
 
-        // Save / Upsert each incoming over to TiDB / MySQL and local file storage
+        // Save / Upsert only changed overs to Database and local file storage
         $storedOvers = $this->loadStoredOvers($matchId);
 
         $aiService = new \App\Services\AiCommentaryService();
+        $anyChanged = false;
 
         foreach ($incomingGroups as $overKey => $items) {
             $existingItems = $storedOvers[$overKey]['deliveries'] ?? [];
@@ -1009,6 +1010,15 @@ class CricketDataService
                 return $timeB <=> $timeA;
             });
 
+            $newHash = md5(json_encode($merged, JSON_UNESCAPED_UNICODE));
+            $prevHash = $storedOvers[$overKey]['db_hash']
+                ?? (!empty($existingItems) ? md5(json_encode($existingItems, JSON_UNESCAPED_UNICODE)) : null);
+
+            if ($newHash === $prevHash) {
+                continue;
+            }
+
+            $anyChanged = true;
             $storedOvers[$overKey] = [
                 'match_id' => $matchId,
                 'over_key' => (string) $overKey,
@@ -1020,10 +1030,11 @@ class CricketDataService
                 'batting_team' => $batTeam,
                 'summary' => $summary,
                 'deliveries' => $merged,
+                'db_hash' => $newHash,
                 'updated_at' => now()->toIso8601String(),
             ];
 
-            // 1. Try Upserting into TiDB / MySQL Database
+            // 1. Persist changed/new over to Database
             try {
                 \App\Models\MatchOver::updateOrCreate(
                     ['match_id' => $matchId, 'over_key' => (string) $overKey],
@@ -1044,10 +1055,16 @@ class CricketDataService
         }
 
         // Backfill early overs if missing (e.g. user opened match mid-innings, or server was idle during overs 1-4)
+        $countBeforeBackfill = count($storedOvers);
         $this->backfillMissingOversFromHighlights($matchId, $storedOvers, $minisInning);
+        if (count($storedOvers) !== $countBeforeBackfill) {
+            $anyChanged = true;
+        }
 
-        // 2. Persist to storage/app/overs/{matchId}.json as permanent file backup
-        $this->saveStoredOversToFile($matchId, $storedOvers);
+        // 2. Persist to storage/app/overs/{matchId}.json only when overs actually changed
+        if ($anyChanged) {
+            $this->saveStoredOversToFile($matchId, $storedOvers);
+        }
 
         // 3. Assemble all deliveries from all saved overs:
         // Sort primarily by inning DESCENDING (Inning 2 before Inning 1),
@@ -1084,52 +1101,57 @@ class CricketDataService
     private function loadStoredOvers(string $matchId): array
     {
         $overs = [];
-
-        // 1. Try reading from Database (TiDB / MySQL)
-        try {
-            $dbOvers = \App\Models\MatchOver::where('match_id', $matchId)->get();
-            if ($dbOvers->isNotEmpty()) {
-                foreach ($dbOvers as $row) {
-                    $k = (string) $row->over_key;
-                    // Ignore old legacy keys without inning prefix to prevent multi-innings pollution
-                    if (!str_starts_with($k, 'i')) {
-                        continue;
-                    }
-                    $overs[$k] = [
-                        'match_id' => $row->match_id,
-                        'over_key' => $k,
-                        'over_number' => $row->over_number,
-                        'inning' => (int) ($row->inning ?? 1),
-                        'batting_team' => $row->batting_team,
-                        'runs' => (int) $row->runs,
-                        'wickets' => (int) $row->wickets,
-                        'bowler' => $row->bowler,
-                        'summary' => $row->summary,
-                        'deliveries' => is_array($row->deliveries) ? $row->deliveries : (json_decode($row->deliveries, true) ?: []),
-                    ];
-                }
-            }
-        } catch (\Throwable $e) {
-            // DB fallback
-        }
-
-        // 2. Also merge with file backup if exists
         $filePath = storage_path("app/overs/{$matchId}.json");
+        $hasLocalFile = false;
+
+        // 1. Read from fast local disk file first to avoid repeated multi-MB database egress
         if (file_exists($filePath)) {
             $fileData = json_decode(@file_get_contents($filePath), true);
             if (is_array($fileData)) {
+                $hasLocalFile = true;
                 foreach ($fileData as $k => $v) {
                     $kStr = (string) $k;
-                    // Ignore old legacy keys without inning prefix
+                    // Ignore old legacy keys without inning prefix to prevent multi-innings pollution
                     if (!str_starts_with($kStr, 'i')) {
                         continue;
                     }
-                    if (!isset($overs[$kStr])) {
-                        $overs[$kStr] = $v;
-                    } else {
-                        $overs[$kStr]['deliveries'] = $this->mergeDeliveries($overs[$kStr]['deliveries'] ?? [], $v['deliveries'] ?? []);
-                    }
+                    $overs[$kStr] = $v;
                 }
+            }
+        }
+
+        // 2. Hydrate from Database ONLY when local file does not exist yet (e.g. cold container restart)
+        $hydratedKey = "match_overs_db_hydrated_{$matchId}";
+        if (!$hasLocalFile && !Cache::has($hydratedKey)) {
+            try {
+                $dbOvers = \App\Models\MatchOver::where('match_id', $matchId)->get();
+                Cache::put($hydratedKey, true, 3600);
+                if ($dbOvers->isNotEmpty()) {
+                    foreach ($dbOvers as $row) {
+                        $k = (string) $row->over_key;
+                        // Ignore old legacy keys without inning prefix to prevent multi-innings pollution
+                        if (!str_starts_with($k, 'i')) {
+                            continue;
+                        }
+                        $deliveries = is_array($row->deliveries) ? $row->deliveries : (json_decode($row->deliveries, true) ?: []);
+                        $overs[$k] = [
+                            'match_id' => $row->match_id,
+                            'over_key' => $k,
+                            'over_number' => $row->over_number,
+                            'inning' => (int) ($row->inning ?? 1),
+                            'batting_team' => $row->batting_team,
+                            'runs' => (int) $row->runs,
+                            'wickets' => (int) $row->wickets,
+                            'bowler' => $row->bowler,
+                            'summary' => $row->summary,
+                            'deliveries' => $deliveries,
+                            'db_hash' => md5(json_encode($deliveries, JSON_UNESCAPED_UNICODE)),
+                        ];
+                    }
+                    $this->saveStoredOversToFile($matchId, $overs);
+                }
+            } catch (\Throwable $e) {
+                // DB fallback
             }
         }
 

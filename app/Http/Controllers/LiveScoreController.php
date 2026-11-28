@@ -216,16 +216,9 @@ class LiveScoreController extends Controller
     public function show(string $matchId, CricketDataService $cricket, Request $request)
     {
         // Redirect local platform matches directly to matches.show
-        if (str_starts_with($matchId, 'local_')) {
+        if (CricketMatch::isLocalMatchId($matchId)) {
             $localId = str_replace('local_', '', $matchId);
             return redirect()->route('matches.show', $localId);
-        }
-        try {
-            if (is_numeric($matchId) && CricketMatch::where('id', $matchId)->exists()) {
-                return redirect()->route('matches.show', $matchId);
-            }
-        } catch (\Throwable $e) {
-            // Ignore DB check if offline or unreachable
         }
 
         $forceRefresh = $request->get('refresh') === 'true';

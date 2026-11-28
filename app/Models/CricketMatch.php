@@ -6,12 +6,46 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class CricketMatch extends Model
 {
     use HasFactory;
 
     protected $table = 'matches';
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => Cache::forget('local_match_ids_set'));
+        static::deleted(fn () => Cache::forget('local_match_ids_set'));
+    }
+
+    /**
+     * Cached list of local platform match primary IDs to avoid per-poll DB EXISTS checks.
+     */
+    public static function localMatchIds(): array
+    {
+        try {
+            return Cache::remember('local_match_ids_set', 120, fn () => static::pluck('id')->all());
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Check whether a route matchId refers to a local platform match without querying DB each poll.
+     */
+    public static function isLocalMatchId(string|int $matchId): bool
+    {
+        $idStr = (string) $matchId;
+        if (str_starts_with($idStr, 'local_')) {
+            return true;
+        }
+        if (!is_numeric($idStr)) {
+            return false;
+        }
+        return in_array((int) $idStr, static::localMatchIds(), true);
+    }
 
     protected $fillable = [
         'user_id',
