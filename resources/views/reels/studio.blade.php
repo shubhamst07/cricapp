@@ -50,18 +50,38 @@
 @endsection
 
 @section('content')
+@php
+    $social = $socialStatus ?? ['instagram' => [], 'youtube' => []];
+    $igConnected = !empty($social['instagram']['connected']);
+    $ytConnected = !empty($social['youtube']['connected']);
+    $igOAuthReady = !empty($social['instagram']['oauth_ready']);
+    $ytOAuthReady = !empty($social['youtube']['oauth_ready']);
+    $returnQuery = ['return_to' => url()->full()];
+@endphp
 <div id="reel-studio-root"
      data-project="{{ json_encode($project, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}"
      data-curated-images="{{ json_encode($curatedImages, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}"
+     data-social-status="{{ json_encode($social, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}"
      data-refresh-url="{{ route('reels.refresh') }}"
      data-tts-url="{{ route('reels.tts') }}"
      data-translate-url="{{ route('reels.translate-script') }}"
      data-convert-url="{{ route('reels.convert-mp4') }}"
+     data-publish-url="{{ route('reels.publish') }}"
      data-proxy-url="{{ route('reels.proxy-image') }}"
      data-studio-url="{{ route('reels.index') }}"
      class="py-6 sm:py-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        @if(session('social_success'))
+            <div class="mb-5 px-4 py-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs sm:text-sm font-bold flex items-center justify-between gap-3">
+                <span>✅ {{ session('social_success') }}</span>
+            </div>
+        @endif
+        @if(session('social_error'))
+            <div class="mb-5 px-4 py-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs sm:text-sm font-bold">
+                ⚠️ {{ session('social_error') }}
+            </div>
+        @endif
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
             <!-- Left Column: Storyboard Slides + Voiceover + Caption -->
@@ -256,6 +276,100 @@
                                 class="px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs sm:text-sm font-black tracking-wide shadow-lg shadow-amber-500/25 transition cursor-pointer">
                             🎬 Export Reel Video
                         </button>
+                    </div>
+
+                    <!-- 1-Click Publish to Instagram Reels & YouTube Shorts -->
+                    <div class="rounded-2xl bg-slate-950/85 border border-indigo-500/25 p-4 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs font-black uppercase tracking-wider text-indigo-300">🚀 1-Click Auto-Post</span>
+                            <span class="text-[10px] text-slate-400 font-semibold">Auto-converts MP4 &amp; publishes</span>
+                        </div>
+
+                        <div class="space-y-2 text-xs">
+                            <!-- Instagram Channel Row -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-900/90 border border-white/10 px-3 py-2">
+                                <label class="inline-flex items-center gap-2 font-bold {{ $igConnected ? 'text-pink-300 cursor-pointer' : 'text-slate-500 cursor-not-allowed' }}">
+                                    <input type="checkbox" id="pub-check-instagram" value="instagram"
+                                           @checked($igConnected) @disabled(!$igConnected)
+                                           class="rounded text-pink-500 bg-slate-950 border-white/20">
+                                    <span>Instagram Reels</span>
+                                </label>
+                                <div class="flex items-center gap-2">
+                                    @if($igConnected)
+                                        <span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                                            {{ $social['instagram']['account_name'] ?? 'Connected' }}
+                                        </span>
+                                        <form method="POST" action="{{ route('social.instagram.disconnect', $returnQuery) }}">
+                                            @csrf
+                                            <button type="submit" class="text-[10px] font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer">Disconnect</button>
+                                        </form>
+                                    @elseif($igOAuthReady)
+                                        <a href="{{ route('social.instagram.connect', $returnQuery) }}"
+                                           class="px-2.5 py-1 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-[10px] font-black uppercase tracking-wider transition">
+                                            Connect IG
+                                        </a>
+                                    @else
+                                        <span class="text-[10px] text-amber-400 font-semibold">Set META_APP_ID/SECRET</span>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <!-- YouTube Channel Row -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-900/90 border border-white/10 px-3 py-2">
+                                <label class="inline-flex items-center gap-2 font-bold {{ $ytConnected ? 'text-rose-300 cursor-pointer' : 'text-slate-500 cursor-not-allowed' }}">
+                                    <input type="checkbox" id="pub-check-youtube" value="youtube"
+                                           @checked($ytConnected) @disabled(!$ytConnected)
+                                           class="rounded text-rose-500 bg-slate-950 border-white/20">
+                                    <span>YouTube Shorts</span>
+                                </label>
+                                <div class="flex items-center gap-2">
+                                    @if($ytConnected)
+                                        <span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                                            {{ $social['youtube']['account_name'] ?? 'Connected' }}
+                                        </span>
+                                        <form method="POST" action="{{ route('social.youtube.disconnect', $returnQuery) }}">
+                                            @csrf
+                                            <button type="submit" class="text-[10px] font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer">Disconnect</button>
+                                        </form>
+                                    @elseif($ytOAuthReady)
+                                        <a href="{{ route('social.youtube.connect', $returnQuery) }}"
+                                           class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider transition">
+                                            Connect YT
+                                        </a>
+                                    @else
+                                        <span class="text-[10px] text-amber-400 font-semibold">Set YOUTUBE_CLIENT_ID/SECRET</span>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <select id="pub-youtube-privacy"
+                                    class="px-2.5 py-2 rounded-xl bg-slate-900 border border-white/10 text-[11px] font-bold text-slate-200">
+                                <option value="public" selected>YT: Public</option>
+                                <option value="unlisted">YT: Unlisted</option>
+                                <option value="private">YT: Private</option>
+                            </select>
+                            <button type="button" id="btn-publish-social"
+                                    @disabled(!$igConnected && !$ytConnected)
+                                    class="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-400 hover:to-amber-400 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-500/20 transition cursor-pointer">
+                                🚀 1-Click Auto-Post Reel
+                            </button>
+                        </div>
+
+                        @if(!$igConnected)
+                            <details class="text-[11px] text-slate-400 pt-1">
+                                <summary class="cursor-pointer font-semibold text-slate-300 hover:text-white">Or paste Meta Graph Token manually (quick connect)</summary>
+                                <form method="POST" action="{{ route('social.instagram.manual-token', $returnQuery) }}" class="mt-2 flex items-center gap-2">
+                                    @csrf
+                                    <input type="password" name="access_token" required placeholder="Paste Meta User/Page Access Token..."
+                                           class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-white/10 text-xs text-white">
+                                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold cursor-pointer">Save</button>
+                                </form>
+                            </details>
+                        @endif
+
+                        <div id="reel-social-results" class="hidden space-y-1.5 text-xs"></div>
                     </div>
 
                     <!-- Status Notification -->

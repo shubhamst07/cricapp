@@ -39,9 +39,11 @@ class ImageKitService
             $curlOptions = defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')
                 ? ['curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4]]
                 : [];
+            $isVideoUpload = ($file instanceof UploadedFile && preg_match('/\.(mp4|webm|mov|mkv)$/i', (string) $file->getClientOriginalName()))
+                || (is_string($file) && preg_match('/\.(mp4|webm|mov|mkv)$/i', (string) ($fileName ?: $file)));
             $request = Http::withOptions($curlOptions)
                 ->connectTimeout(5)
-                ->timeout(25)
+                ->timeout($isVideoUpload ? 90 : 25)
                 ->withHeaders([
                     'Accept' => 'application/json',
                     'Authorization' => $authHeader,

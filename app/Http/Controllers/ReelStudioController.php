@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Article;
 use App\Services\ReelScriptService;
+use App\Services\SocialPublishService;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -23,7 +25,7 @@ class ReelStudioController extends Controller
     /**
      * Standalone CricApp Reel Studio page.
      */
-    public function index(Request $request, ReelScriptService $scriptService)
+    public function index(Request $request, ReelScriptService $scriptService, SocialPublishService $social)
     {
         $this->authorizeAdmin();
 
@@ -46,13 +48,14 @@ class ReelStudioController extends Controller
             'recentArticles' => $recentArticles,
             'curatedImages' => $scriptService->curatedImages(),
             'voiceOptions' => $scriptService->voiceOptions(),
+            'socialStatus' => $social->getStatusSummary(),
         ]);
     }
 
     /**
      * 1-Click Article-to-Reel preloaded Studio page.
      */
-    public function forArticle(Article $article, ReelScriptService $scriptService)
+    public function forArticle(Article $article, ReelScriptService $scriptService, SocialPublishService $social)
     {
         $this->authorizeAdmin();
 
@@ -66,6 +69,7 @@ class ReelStudioController extends Controller
             'recentArticles' => $recentArticles,
             'curatedImages' => $scriptService->curatedImages(),
             'voiceOptions' => $scriptService->voiceOptions(),
+            'socialStatus' => $social->getStatusSummary(),
         ]);
     }
 
@@ -281,7 +285,7 @@ class ReelStudioController extends Controller
 
     /**
      * Transcode recorded WebM/MP4 canvas stream to Instagram/YouTube compatible H.264/AAC MP4.
-     * Falls back to direct in-container ffmpeg binary if score-engine port 6020 is down.
+     * Uses fast stream remux when input is already MP4 and falls back safely to local ffmpeg or score-engine.
      */
     public function convertMp4(Request $request)
     {
@@ -293,31 +297,208 @@ class ReelStudioController extends Controller
         ]);
 
         if (function_exists('set_time_limit')) {
-            @set_time_limit(120);
+            @set_time_limit(150);
         }
 
-        $file = $request->file('video');
         $maxDuration = min(max((int) ($validated['max_duration'] ?? 90), 5), 120);
-        $engineUrl = rtrim((string) config('services.cricket.local_url', 'http://127.0.0.1:6020'), '/');
+        $mp4 = $this->ensureMp4Path($request->file('video'), $maxDuration);
 
-        // 1. Try score-engine HTTP /convert-mp4 if reachable
-        $stream = fopen($file->getRealPath(), 'rb');
+        try {
+            if (!empty($mp4['error'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $mp4['error'],
+                ], $mp4['status'] ?? 500);
+            }
+
+            $mp4Bytes = file_get_contents($mp4['path']);
+            return response($mp4Bytes, 200, [
+                'Content-Type' => 'video/mp4',
+                'Content-Disposition' => 'attachment; filename="cricapp-reel-' . now()->format('Ymd-His') . '.mp4"',
+                'Cache-Control' => 'no-store',
+            ]);
+        } finally {
+            if (!empty($mp4['cleanup']) && !empty($mp4['path']) && is_file($mp4['path'])) {
+                @unlink($mp4['path']);
+            }
+        }
+    }
+
+    /**
+     * 1-Click Publish rendered Reel MP4 to connected Instagram Reels & YouTube Shorts accounts.
+     */
+    public function publishSocial(Request $request, SocialPublishService $social)
+    {
+        $this->authorizeAdmin();
+
+        $validated = $request->validate([
+            'video' => 'required|file|max:61440',
+            'platforms' => 'required|array|min:1',
+            'platforms.*' => 'in:instagram,youtube',
+            'title' => 'nullable|string|max:160',
+            'caption' => 'nullable|string|max:2200',
+            'privacy' => 'nullable|in:public,unlisted,private',
+            'max_duration' => 'nullable|integer|min:5|max:120',
+        ]);
+
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(180);
+        }
+
+        $maxDuration = min(max((int) ($validated['max_duration'] ?? 90), 5), 120);
+        $mp4 = $this->ensureMp4Path($request->file('video'), $maxDuration);
+
+        try {
+            if (!empty($mp4['error'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $mp4['error'],
+                    'results' => [],
+                ], $mp4['status'] ?? 500);
+            }
+
+            $caption = trim((string) ($validated['caption'] ?? ''));
+            $title = trim((string) ($validated['title'] ?? ''));
+            if ($title === '' && $caption !== '') {
+                $title = Str::limit(strtok($caption, "\n") ?: $caption, 92, '');
+            }
+            $privacy = (string) ($validated['privacy'] ?? config('services.youtube.default_privacy', 'public'));
+
+            preg_match_all('/#([A-Za-z0-9_]+)/', $caption, $tagMatches);
+            $tags = $tagMatches[1] ?? [];
+
+            $platforms = array_values(array_unique((array) $validated['platforms']));
+            $results = [];
+            $successCount = 0;
+
+            foreach ($platforms as $platform) {
+                try {
+                    if ($platform === 'instagram') {
+                        $res = $social->publishInstagramReel($mp4['path'], $caption !== '' ? $caption : $title);
+                        $results['instagram'] = array_merge(['ok' => true], $res);
+                        $successCount++;
+                    } elseif ($platform === 'youtube') {
+                        $res = $social->publishYouTubeShort(
+                            $mp4['path'],
+                            $title,
+                            $caption !== '' ? $caption : $title,
+                            $tags,
+                            $privacy
+                        );
+                        $results['youtube'] = array_merge(['ok' => true], $res);
+                        $successCount++;
+                    }
+                } catch (\Throwable $e) {
+                    $results[$platform] = [
+                        'ok' => false,
+                        'message' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            return response()->json([
+                'status' => $successCount > 0 ? 'success' : 'error',
+                'results' => $results,
+            ], $successCount > 0 ? 200 : 422);
+        } finally {
+            if (!empty($mp4['cleanup']) && !empty($mp4['path']) && is_file($mp4['path'])) {
+                @unlink($mp4['path']);
+            }
+        }
+    }
+
+    /**
+     * Guarantee an H.264/AAC faststart MP4 file path from uploaded browser WebM or MP4.
+     */
+    protected function ensureMp4Path(UploadedFile $file, int $maxDuration = 90): array
+    {
+        $realPath = $file->getRealPath();
+        if (!$realPath || !is_file($realPath)) {
+            return ['path' => '', 'cleanup' => false, 'error' => 'Uploaded video could not be read.', 'status' => 422];
+        }
+
+        $origExt = strtolower((string) ($file->getClientOriginalExtension() ?: pathinfo((string) $file->getClientOriginalName(), PATHINFO_EXTENSION)));
+        $finder = new ExecutableFinder();
+        $ffmpegBin = $finder->find('ffmpeg', null, ['/usr/bin', '/usr/local/bin']);
+
+        if ($ffmpegBin) {
+            $outputPath = sys_get_temp_dir() . '/cricapp-reel-' . uniqid('', true) . '.mp4';
+
+            // Fast path: browser already recorded native MP4 -> copy H.264 video stream & ensure AAC + faststart in <1s
+            if ($origExt === 'mp4') {
+                $remux = new Process([
+                    $ffmpegBin,
+                    '-y',
+                    '-i', $realPath,
+                    '-t', (string) $maxDuration,
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-b:a', '128k',
+                    '-ar', '44100',
+                    '-movflags', '+faststart',
+                    $outputPath,
+                ]);
+                $remux->setTimeout(30);
+                $remux->run();
+
+                if ($remux->isSuccessful() && is_file($outputPath) && filesize($outputPath) > 4096) {
+                    return ['path' => $outputPath, 'cleanup' => true, 'error' => null, 'status' => 200];
+                }
+                @unlink($outputPath);
+            }
+
+            // Full transcode path (WebM or fallback re-encode)
+            $process = new Process([
+                $ffmpegBin,
+                '-y',
+                '-i', $realPath,
+                '-t', (string) $maxDuration,
+                '-vf', 'scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=#050b16,setsar=1',
+                '-r', '30',
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-crf', '24',
+                '-pix_fmt', 'yuv420p',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-ar', '44100',
+                '-threads', '2',
+                '-movflags', '+faststart',
+                $outputPath,
+            ]);
+            $process->setTimeout(110);
+            $process->run();
+
+            if ($process->isSuccessful() && is_file($outputPath) && filesize($outputPath) > 4096) {
+                return ['path' => $outputPath, 'cleanup' => true, 'error' => null, 'status' => 200];
+            }
+            @unlink($outputPath);
+
+            return [
+                'path' => '',
+                'cleanup' => false,
+                'error' => 'FFmpeg could not convert video: ' . Str::limit($process->getErrorOutput(), 160),
+                'status' => 500,
+            ];
+        }
+
+        // Secondary fallback: score-engine HTTP /convert-mp4 if ffmpeg binary isn't local
+        $engineUrl = rtrim((string) config('services.cricket.local_url', 'http://127.0.0.1:6020'), '/');
+        $stream = fopen($realPath, 'rb');
         if ($stream !== false) {
             try {
                 $response = Http::connectTimeout(2)
-                    ->timeout(60)
-                    ->attach('video', $stream, 'cricapp-reel.webm')
+                    ->timeout(90)
+                    ->attach('video', $stream, 'cricapp-reel.' . ($origExt ?: 'webm'))
                     ->post($engineUrl . '/convert-mp4', ['max_duration' => $maxDuration]);
 
                 if ($response->ok() && str_contains(strtolower((string) $response->header('Content-Type')), 'video/mp4')) {
-                    return response($response->body(), 200, [
-                        'Content-Type' => 'video/mp4',
-                        'Content-Disposition' => 'attachment; filename="cricapp-reel-' . now()->format('Ymd-His') . '.mp4"',
-                        'Cache-Control' => 'no-store',
-                    ]);
+                    $outputPath = sys_get_temp_dir() . '/cricapp-reel-' . uniqid('', true) . '.mp4';
+                    file_put_contents($outputPath, $response->body());
+                    return ['path' => $outputPath, 'cleanup' => true, 'error' => null, 'status' => 200];
                 }
             } catch (\Throwable $e) {
-                // Fall through to local ffmpeg binary
+                // Fall through to unavailable response
             } finally {
                 if (is_resource($stream)) {
                     fclose($stream);
@@ -325,57 +506,16 @@ class ReelStudioController extends Controller
             }
         }
 
-        // 2. Fallback: Run local/container ffmpeg directly via Process
-        $finder = new ExecutableFinder();
-        $ffmpegBin = $finder->find('ffmpeg', null, ['/usr/bin', '/usr/local/bin']);
-        if (!$ffmpegBin) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'MP4 converter is unavailable in this environment; using native browser video instead.',
-            ], 501);
+        if ($origExt === 'mp4') {
+            return ['path' => $realPath, 'cleanup' => false, 'error' => null, 'status' => 200];
         }
 
-        $outputPath = sys_get_temp_dir() . '/cricapp-reel-' . uniqid('', true) . '.mp4';
-        try {
-            $process = new Process([
-                $ffmpegBin,
-                '-y',
-                '-i', $file->getRealPath(),
-                '-t', (string) $maxDuration,
-                '-vf', 'scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=#050b16,setsar=1',
-                '-r', '30',
-                '-c:v', 'libx264',
-                '-preset', 'ultrafast',
-                '-crf', '23',
-                '-pix_fmt', 'yuv420p',
-                '-c:a', 'aac',
-                '-b:a', '128k',
-                '-ar', '44100',
-                '-threads', '1',
-                '-movflags', '+faststart',
-                $outputPath,
-            ]);
-            $process->setTimeout(90);
-            $process->run();
-
-            if (!$process->isSuccessful() || !is_file($outputPath) || filesize($outputPath) === 0) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'FFmpeg could not convert video: ' . Str::limit($process->getErrorOutput(), 160),
-                ], 500);
-            }
-
-            $mp4Bytes = file_get_contents($outputPath);
-            return response($mp4Bytes, 200, [
-                'Content-Type' => 'video/mp4',
-                'Content-Disposition' => 'attachment; filename="cricapp-reel-' . now()->format('Ymd-His') . '.mp4"',
-                'Cache-Control' => 'no-store',
-            ]);
-        } finally {
-            if (is_file($outputPath)) {
-                @unlink($outputPath);
-            }
-        }
+        return [
+            'path' => '',
+            'cleanup' => false,
+            'error' => 'MP4 converter is unavailable in this environment; using native browser video instead.',
+            'status' => 501,
+        ];
     }
 
     /**

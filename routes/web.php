@@ -224,7 +224,18 @@ Route::middleware('auth')->group(function () {
     Route::post('/admin/reels/tts', [ReelStudioController::class, 'generateTts'])->name('reels.tts');
     Route::post('/admin/reels/translate-script', [ReelStudioController::class, 'translateScript'])->name('reels.translate-script');
     Route::post('/admin/reels/convert-mp4', [ReelStudioController::class, 'convertMp4'])->name('reels.convert-mp4');
+    Route::post('/admin/reels/publish', [ReelStudioController::class, 'publishSocial'])->name('reels.publish');
     Route::get('/admin/reels/proxy-image', [ReelStudioController::class, 'proxyImage'])->name('reels.proxy-image');
+
+    // Social Auto-Publish OAuth Connections (Instagram Reels & YouTube Shorts)
+    Route::get('/admin/social/instagram/connect', [\App\Http\Controllers\SocialAuthController::class, 'connectInstagram'])->name('social.instagram.connect');
+    Route::get('/admin/social/instagram/callback', [\App\Http\Controllers\SocialAuthController::class, 'callbackInstagram'])->name('social.instagram.callback');
+    Route::post('/admin/social/instagram/token', [\App\Http\Controllers\SocialAuthController::class, 'saveInstagramManualToken'])->name('social.instagram.manual-token');
+    Route::post('/admin/social/instagram/disconnect', [\App\Http\Controllers\SocialAuthController::class, 'disconnectInstagram'])->name('social.instagram.disconnect');
+
+    Route::get('/admin/social/youtube/connect', [\App\Http\Controllers\SocialAuthController::class, 'connectYouTube'])->name('social.youtube.connect');
+    Route::get('/admin/social/youtube/callback', [\App\Http\Controllers\SocialAuthController::class, 'callbackYouTube'])->name('social.youtube.callback');
+    Route::post('/admin/social/youtube/disconnect', [\App\Http\Controllers\SocialAuthController::class, 'disconnectYouTube'])->name('social.youtube.disconnect');
 });
 
 require __DIR__.'/auth.php';

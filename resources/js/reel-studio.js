@@ -210,6 +210,7 @@ export function initReelStudio(root) {
     const ttsEndpoint = root.getAttribute('data-tts-url') || '/admin/reels/tts';
     const translateEndpoint = root.getAttribute('data-translate-url') || '/admin/reels/translate-script';
     const convertEndpoint = root.getAttribute('data-convert-url') || '/admin/reels/convert-mp4';
+    const publishEndpoint = root.getAttribute('data-publish-url') || '/admin/reels/publish';
     const proxyEndpoint = root.getAttribute('data-proxy-url') || '/admin/reels/proxy-image';
     const studioBaseUrl = root.getAttribute('data-studio-url') || '/admin/reels';
 
@@ -247,6 +248,11 @@ export function initReelStudio(root) {
     const exportVideoPreview = document.getElementById('reel-export-video');
     const exportDownloadLink = document.getElementById('reel-export-download');
     const voiceStatusBadge = document.getElementById('reel-voice-status');
+    const publishSocialBtn = document.getElementById('btn-publish-social');
+    const pubCheckIg = document.getElementById('pub-check-instagram');
+    const pubCheckYt = document.getElementById('pub-check-youtube');
+    const pubYtPrivacy = document.getElementById('pub-youtube-privacy');
+    const socialResultsBox = document.getElementById('reel-social-results');
 
     // Mutable State
     const state = {
@@ -281,6 +287,7 @@ export function initReelStudio(root) {
         slideVoiceBuffers: [], // Array<{ buffer: AudioBuffer|null, boundaries: Array, text: string, cacheKey: string }>
         masterVoiceBuffer: null,
         customMusicBuffer: null,
+        exportedVideo: null,
         micRecorder: null,
         micChunks: [],
         imageCache: new Map(),
@@ -1042,20 +1049,19 @@ export function initReelStudio(root) {
         }
     }
 
+    function invalidateExportedVideo() {
+        state.exportedVideo = null;
+    }
+
     function pickBestRecorderMime() {
-        const candidates = state.convertMp4
-            ? [
-                'video/webm;codecs=vp9,opus',
-                'video/webm;codecs=vp8,opus',
-                'video/webm',
-                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-            ]
-            : [
-                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-                'video/webm;codecs=vp9,opus',
-                'video/webm;codecs=vp8,opus',
-                'video/webm',
-            ];
+        const candidates = [
+            'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+            'video/mp4;codecs=avc1',
+            'video/mp4',
+            'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=vp9,opus',
+            'video/webm',
+        ];
         for (const m of candidates) {
             if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) {
                 return m;
@@ -1064,8 +1070,11 @@ export function initReelStudio(root) {
         return '';
     }
 
-    async function exportReelVideo() {
-        if (state.recording) return;
+    async function exportReelVideo(options = {}) {
+        const shouldDownload = options && typeof options === 'object' && 'autoDownload' in options
+            ? Boolean(options.autoDownload)
+            : true;
+        if (state.recording) return null;
         if (state.playing) {
             state.playing = false;
             stopAudioPlayback();
@@ -1074,7 +1083,7 @@ export function initReelStudio(root) {
 
         if (typeof canvas.captureStream !== 'function' || typeof MediaRecorder === 'undefined') {
             setStatus('Your browser does not support HTML5 Canvas video recording. Try Chrome, Edge, or Brave.', 'error');
-            return;
+            return null;
         }
 
         state.recording = true;
@@ -1209,22 +1218,124 @@ export function initReelStudio(root) {
                 exportResultBox.classList.remove('hidden');
             }
 
-            // Trigger immediate download for convenience
-            const autoA = document.createElement('a');
-            autoA.href = blobUrl;
-            autoA.download = fileName;
-            document.body.appendChild(autoA);
-            autoA.click();
-            autoA.remove();
+            const durationCeil = Math.ceil(timeline.total + 2);
+            state.exportedVideo = { blob: finalBlob, ext: finalExt, duration: durationCeil };
+
+            // Trigger immediate download for convenience when Export button clicked directly
+            if (shouldDownload) {
+                const autoA = document.createElement('a');
+                autoA.href = blobUrl;
+                autoA.download = fileName;
+                document.body.appendChild(autoA);
+                autoA.click();
+                autoA.remove();
+            }
+            return state.exportedVideo;
         } catch (err) {
             console.error(err);
             setStatus(`Export failed: ${err.message || 'Unknown error'}`, 'error');
+            return null;
         } finally {
             state.recording = false;
             state.playhead = 0.4;
             renderAt(0.4);
             exportBtn.disabled = false;
             exportBtn.textContent = origText;
+        }
+    }
+
+    async function publishToSocialPlatforms() {
+        if (!publishSocialBtn || state.recording) return;
+        const platforms = [];
+        if (pubCheckIg && pubCheckIg.checked && !pubCheckIg.disabled) platforms.push('instagram');
+        if (pubCheckYt && pubCheckYt.checked && !pubCheckYt.disabled) platforms.push('youtube');
+
+        if (!platforms.length) {
+            setStatus('Select Instagram or YouTube first (connect at least one channel above).', 'warn');
+            return;
+        }
+
+        const origLabel = publishSocialBtn.textContent;
+        publishSocialBtn.disabled = true;
+        publishSocialBtn.textContent = '⏳ Rendering & Publishing...';
+        if (socialResultsBox) {
+            socialResultsBox.innerHTML = '';
+            socialResultsBox.classList.add('hidden');
+        }
+
+        try {
+            let rendered = state.exportedVideo;
+            if (!rendered || !rendered.blob) {
+                setStatus('Step 1/2: Rendering 9:16 Reel with voiceover & audio...', 'info');
+                rendered = await exportReelVideo({ autoDownload: false });
+            }
+            if (!rendered || !rendered.blob) {
+                return;
+            }
+
+            publishSocialBtn.textContent = '🚀 Uploading to IG/YT...';
+            setStatus(`Step 2/2: Uploading MP4 & publishing to ${platforms.join(' & ')} (may take ~25-45s)...`, 'info');
+
+            const caption = (captionTextarea?.value || state.title || '').trim();
+            const headlineTitle = (state.slides[0]?.headline || state.title || 'CricApp Live Cricket').trim();
+            const form = new FormData();
+            form.append('video', rendered.blob, `cricapp-reel.${rendered.ext || 'mp4'}`);
+            platforms.forEach((p) => form.append('platforms[]', p));
+            form.append('title', headlineTitle);
+            form.append('caption', caption);
+            form.append('privacy', pubYtPrivacy?.value || 'public');
+            form.append('max_duration', String(rendered.duration || 90));
+
+            const resp = await fetch(publishEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: form,
+            });
+            const data = await resp.json().catch(() => ({}));
+            const results = data.results || {};
+            const lines = [];
+
+            if (results.instagram) {
+                if (results.instagram.ok) {
+                    const igUrl = escapeHtml(results.instagram.url || 'https://www.instagram.com/cricapp_official/reels/');
+                    lines.push(`<div class="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 font-bold flex items-center justify-between gap-2"><span>✅ Instagram Reel Published!</span><a href="${igUrl}" target="_blank" rel="noopener" class="underline text-emerald-300">Open Reel ↗</a></div>`);
+                } else {
+                    lines.push(`<div class="px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-200">⚠️ Instagram failed: ${escapeHtml(results.instagram.message || 'Unknown error')}</div>`);
+                }
+            }
+
+            if (results.youtube) {
+                if (results.youtube.ok) {
+                    const ytUrl = escapeHtml(results.youtube.url || 'https://studio.youtube.com');
+                    const privTag = results.youtube.privacy ? ` (${escapeHtml(results.youtube.privacy)})` : '';
+                    lines.push(`<div class="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 font-bold flex items-center justify-between gap-2"><span>✅ YouTube Short Uploaded${privTag}!</span><a href="${ytUrl}" target="_blank" rel="noopener" class="underline text-emerald-300">Watch Short ↗</a></div>`);
+                } else {
+                    lines.push(`<div class="px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-200">⚠️ YouTube failed: ${escapeHtml(results.youtube.message || 'Unknown error')}</div>`);
+                }
+            }
+
+            if (!lines.length) {
+                lines.push(`<div class="px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-200">⚠️ ${escapeHtml(data.message || 'Auto-post failed.')}</div>`);
+            }
+
+            if (socialResultsBox) {
+                socialResultsBox.innerHTML = lines.join('');
+                socialResultsBox.classList.remove('hidden');
+            }
+
+            const anyOk = Object.values(results).some((r) => r && r.ok);
+            setStatus(
+                anyOk ? 'Auto-Post complete! Links niche Social results me ready hain.' : (data.message || 'Auto-Post failed — error details niche dekhein.'),
+                anyOk ? 'success' : 'error'
+            );
+        } catch (err) {
+            setStatus(`Auto-Post error: ${err.message || 'Network failure'}`, 'error');
+        } finally {
+            publishSocialBtn.disabled = false;
+            publishSocialBtn.textContent = origLabel;
         }
     }
 
@@ -1309,6 +1420,7 @@ export function initReelStudio(root) {
 
         state.selectedSlideIndex = idx;
         state.slides[idx][field] = field === 'duration' ? Number(e.target.value) || 5.0 : e.target.value;
+        invalidateExportedVideo();
 
         const timeline = getTimeline();
         const seg = timeline.segments[idx];
@@ -1544,6 +1656,7 @@ export function initReelStudio(root) {
 
         renderSlidesEditor();
         preloadSlideImages(1500);
+        invalidateExportedVideo();
         renderAt(state.playhead);
         setStatus(`Backgrounds & visual theme (${THEMES[state.theme]?.name || state.theme}) change ho gaye!`, 'success');
     }
@@ -1614,6 +1727,7 @@ export function initReelStudio(root) {
 
             renderSlidesEditor();
             preloadSlideImages(1500);
+            invalidateExportedVideo();
             renderAt(0.4);
 
             const wantsHinglish = String(currentVoice).startsWith('hi-');
@@ -1666,11 +1780,13 @@ export function initReelStudio(root) {
         state.voice = nextVoice;
         state.voiceMode = 'ai';
         state.slideVoiceBuffers = [];
+        invalidateExportedVideo();
         await syncScriptsToSelectedVoice(nextVoice);
     });
 
     themeSelect?.addEventListener('change', () => {
         state.theme = themeSelect.value;
+        invalidateExportedVideo();
         renderAt(state.playhead);
     });
 
@@ -1712,10 +1828,17 @@ export function initReelStudio(root) {
         renderAt(state.playhead);
     });
 
-    generateTtsBtn?.addEventListener('click', () => generateAllSlidesTts(true));
-    recordMicBtn?.addEventListener('click', toggleMicRecording);
+    generateTtsBtn?.addEventListener('click', () => {
+        invalidateExportedVideo();
+        return generateAllSlidesTts(true);
+    });
+    recordMicBtn?.addEventListener('click', () => {
+        invalidateExportedVideo();
+        return toggleMicRecording();
+    });
     previewBtn?.addEventListener('click', togglePreviewPlayback);
     exportBtn?.addEventListener('click', exportReelVideo);
+    publishSocialBtn?.addEventListener('click', publishToSocialPlatforms);
 
     clearVoiceBtn?.addEventListener('click', () => {
         state.slideVoiceBuffers = [];

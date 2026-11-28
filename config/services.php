@@ -74,4 +74,20 @@ return [
         'key' => env('INDEXNOW_KEY', 'cricapp2026seo9f8a7b6c5d4e3f2a1098'),
     ],
 
+    'meta' => [
+        'app_id' => env('META_APP_ID'),
+        'app_secret' => env('META_APP_SECRET'),
+        'graph_version' => env('META_GRAPH_VERSION', 'v22.0'),
+        'redirect_uri' => env('META_REDIRECT_URI'),
+        'instagram_account_id' => env('INSTAGRAM_ACCOUNT_ID'),
+        'instagram_access_token' => env('INSTAGRAM_ACCESS_TOKEN'),
+    ],
+
+    'youtube' => [
+        'client_id' => env('YOUTUBE_CLIENT_ID', env('GOOGLE_CLIENT_ID')),
+        'client_secret' => env('YOUTUBE_CLIENT_SECRET', env('GOOGLE_CLIENT_SECRET')),
+        'redirect_uri' => env('YOUTUBE_REDIRECT_URI'),
+        'default_privacy' => env('YOUTUBE_DEFAULT_PRIVACY', 'public'),
+    ],
+
 ];
