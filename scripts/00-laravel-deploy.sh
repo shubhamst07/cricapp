@@ -27,6 +27,7 @@ php artisan db:migrate-sqlite-to-pgsql 2>&1 || true
 
 echo "Seeding starter articles and admin users if needed..."
 php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --database=pgsql --force 2>&1 || true
+php artisan db:seed --class="Database\\Seeders\\DatabaseSeeder" --database=sqlite --force 2>&1 || true
 
 echo "Ensuring full Hindi and Hinglish translations for all articles..."
 php artisan articles:fix-translations 2>&1 || true

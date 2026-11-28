@@ -524,16 +524,16 @@ class ArticleController extends Controller
     protected function ensureStarterArticles(): void
     {
         try {
-            Cache::remember('articles_starter_seeded', 86400, function () {
+            Cache::remember('articles_starter_seeded_v2', 86400, function () {
                 if (!Schema::hasTable('articles')) {
                     return false;
                 }
 
-                if (Article::count() >= 20) {
+                $starters = \Database\Seeders\TrendingArticlesSeeder::getTrendingArticles();
+
+                if (Article::count() >= count($starters)) {
                     return true;
                 }
-
-                $starters = \Database\Seeders\TrendingArticlesSeeder::getTrendingArticles();
 
                 foreach ($starters as $s) {
                     Article::firstOrCreate(
